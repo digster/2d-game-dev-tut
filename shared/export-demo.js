@@ -1,33 +1,104 @@
 // ===================================
 // EXPORT DEMO FEATURE
-// Generates standalone HTML files from code examples
+// Generates standalone HTML files from code examples.
+// Language-aware: exports JS or TS based on the active code tab.
+// TS exports embed Sucrase to strip types at runtime in the browser.
 // ===================================
 
-/**
- * Generates a complete, self-contained HTML file for a demo
- * @param {string} demoId - The demo identifier (e.g., 'raycasting')
- * @param {string[]} deps - Array of dependency names (e.g., ['vector2d', 'clearCanvas'])
- * @returns {string} Complete HTML document as a string
- */
-function generateStandaloneHTML(demoId, deps) {
-    const config = DEMO_HTML[demoId];
-    const demoCode = DEMO_CODE[demoId];
+const SUCRASE_CDN = 'https://unpkg.com/sucrase@3.34.0/dist/browser/sucrase.min.js';
 
-    if (!config || !demoCode) {
-        console.error(`Demo '${demoId}' not found in DEMO_HTML or DEMO_CODE`);
+/**
+ * Generates a complete, self-contained HTML file for a demo.
+ * @param {string} demoId - The demo identifier (e.g., 'raycasting')
+ * @param {string[]} deps  - Dependency names (e.g., ['vector2d', 'clearCanvas'])
+ * @param {'js'|'ts'} lang - Active language tab
+ * @returns {string|null}  - HTML document, or null if the demo is missing
+ */
+function generateStandaloneHTML(demoId, deps, lang) {
+    const config = (typeof DEMO_HTML !== 'undefined') ? DEMO_HTML[demoId] : null;
+    if (!config) {
+        console.error(`Demo '${demoId}' not found in DEMO_HTML`);
         return null;
     }
 
-    // Gather dependency code
+    // Pick the right code/dep tables for this language. If a TS bundle
+    // for this specific demo (or dependency) hasn't been authored yet,
+    // fall back per-entry to the JS version so the export still works.
+    let demoCode = (lang === 'ts' && typeof DEMO_CODE_TS !== 'undefined') ? DEMO_CODE_TS[demoId] : undefined;
+    let effectiveLang = lang;
+    if (!demoCode) {
+        if (lang === 'ts') {
+            console.info(`No TS bundle for demo '${demoId}', falling back to JS for export.`);
+            effectiveLang = 'js';
+        }
+        demoCode = DEMO_CODE[demoId];
+    }
+    if (!demoCode) {
+        console.error(`Demo '${demoId}' not found in DEMO_CODE`);
+        return null;
+    }
+
+    const depTable = (effectiveLang === 'ts' && typeof DEPENDENCY_BUNDLES_TS !== 'undefined') ? DEPENDENCY_BUNDLES_TS : DEPENDENCY_BUNDLES;
     const depCode = deps
-        .map(d => DEPENDENCY_BUNDLES[d])
+        .map(d => depTable[d] || DEPENDENCY_BUNDLES[d])    // per-dep fallback to JS
         .filter(Boolean)
         .join('\n\n');
 
-    // Generate controls HTML
+    // Re-bind lang for the rest of the generator so the script block,
+    // badge, and label all reflect the language we actually have code for.
+    lang = effectiveLang;
+
     const controlsHTML = config.controls
         .map(c => `<button id="${c.id}">${c.text}</button>`)
         .join('\n            ');
+
+    // The runnable script section depends on language:
+    //   - JS: regular <script> with the JS source inline (works as before).
+    //   - TS: an inert <script type="text/typescript"> source block plus
+    //         a small bootstrap that loads Sucrase, strips types, and runs.
+    const scriptBlock = (lang === 'ts')
+        ? `<!-- TypeScript source (kept verbatim for readability) -->
+    <script type="text/typescript" id="ts-source">
+// ========== Dependencies (TypeScript) ==========
+${depCode}
+
+// ========== Demo Code (TypeScript) ==========
+${demoCode}
+    </script>
+
+    <!-- Bootstrap: fetch Sucrase, strip TS types, evaluate. -->
+    <script>
+    (function () {
+        const tsSrc = document.getElementById('ts-source').textContent;
+        const s = document.createElement('script');
+        s.src = '${SUCRASE_CDN}';
+        s.onload = function () {
+            try {
+                const out = window.Sucrase.transform(tsSrc, { transforms: ['typescript'] });
+                // eslint-disable-next-line no-new-func
+                new Function(out.code)();
+            } catch (e) {
+                console.error('TypeScript transform failed:', e);
+                document.body.insertAdjacentHTML('beforeend',
+                    '<pre style="color:#ff7b72;background:#0d1117;padding:16px;border-radius:8px;">'
+                    + 'TS compile error: ' + (e && e.message ? e.message : String(e)) + '</pre>');
+            }
+        };
+        s.onerror = function () {
+            console.error('Failed to load Sucrase from CDN');
+        };
+        document.head.appendChild(s);
+    })();
+    </script>`
+        : `<script>
+// ========== Dependencies ==========
+${depCode}
+
+// ========== Demo Code ==========
+${demoCode}
+    </script>`;
+
+    const langLabel = lang === 'ts' ? 'TypeScript' : 'JavaScript';
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -48,10 +119,7 @@ function generateStandaloneHTML(demoId, deps) {
             align-items: center;
             padding: 20px;
         }
-        h2 {
-            color: #4fc3f7;
-            margin-bottom: 20px;
-        }
+        h2 { color: #4fc3f7; margin-bottom: 20px; }
         canvas {
             border: 2px solid #4fc3f7;
             background: #0d1117;
@@ -76,31 +144,25 @@ function generateStandaloneHTML(demoId, deps) {
             font-size: 14px;
             transition: all 0.2s;
         }
-        button:hover {
-            background: #29b6f6;
-            transform: translateY(-2px);
-        }
-        #info {
-            color: #8b949e;
-            font-size: 0.95em;
-            margin-top: 10px;
-        }
-        .footer {
-            margin-top: 30px;
-            color: #555;
-            font-size: 0.85em;
-        }
-        .footer a {
-            color: #4fc3f7;
-            text-decoration: none;
-        }
-        .footer a:hover {
-            text-decoration: underline;
+        button:hover { background: #29b6f6; transform: translateY(-2px); }
+        #info { color: #8b949e; font-size: 0.95em; margin-top: 10px; }
+        .footer { margin-top: 30px; color: #555; font-size: 0.85em; }
+        .footer a { color: #4fc3f7; text-decoration: none; }
+        .footer a:hover { text-decoration: underline; }
+        .lang-badge {
+            display: inline-block;
+            margin-left: 10px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            background: ${lang === 'ts' ? '#3178c6' : '#f7df1e'};
+            color: ${lang === 'ts' ? '#ffffff' : '#000000'};
+            font-size: 0.7em;
+            vertical-align: middle;
         }
     </style>
 </head>
 <body>
-    <h2>${config.title}</h2>
+    <h2>${config.title}<span class="lang-badge">${langLabel}</span></h2>
     <canvas id="canvas" width="${config.canvas.width}" height="${config.canvas.height}"></canvas>
     <div class="controls">
         ${controlsHTML}
@@ -110,40 +172,37 @@ function generateStandaloneHTML(demoId, deps) {
         Exported from <a href="https://github.com/your-repo/2d-game-dev-tut">Game Dev Math Guide</a>
     </div>
 
-    <script>
-// ========== Dependencies ==========
-${depCode}
-
-// ========== Demo Code ==========
-${demoCode}
-    </script>
+    ${scriptBlock}
 </body>
 </html>`;
 }
 
 /**
- * Injects export buttons into code sections with data-demo-id attributes
+ * Injects export buttons into code sections with data-demo-id attributes.
  */
 function initExportButtons() {
     document.querySelectorAll('details[data-demo-id]').forEach(details => {
         const demoId = details.dataset.demoId;
         const deps = (details.dataset.deps || '').split(',').filter(Boolean);
         const summary = details.querySelector('summary');
-
         if (!summary) return;
 
-        // Create export button
         const btn = document.createElement('button');
         btn.className = 'export-demo-btn';
         btn.innerHTML = '📋 Export';
-        btn.title = 'Copy complete working demo to clipboard';
+        btn.title = 'Copy complete working demo to clipboard (uses the active JS/TS tab)';
 
         btn.onclick = async (e) => {
             e.preventDefault();
             e.stopPropagation();
 
+            // Look up the active language for this details block.
+            const lang = (typeof window.getActiveLang === 'function')
+                ? window.getActiveLang(details)
+                : 'js';
+
             try {
-                const html = generateStandaloneHTML(demoId, deps);
+                const html = generateStandaloneHTML(demoId, deps, lang);
                 if (!html) {
                     btn.innerHTML = '✗ Not found';
                     setTimeout(() => btn.innerHTML = '📋 Export', 2000);
@@ -151,7 +210,7 @@ function initExportButtons() {
                 }
 
                 await navigator.clipboard.writeText(html);
-                btn.innerHTML = '✓ Copied!';
+                btn.innerHTML = lang === 'ts' ? '✓ Copied (TS)!' : '✓ Copied (JS)!';
                 btn.classList.add('success');
                 setTimeout(() => {
                     btn.innerHTML = '📋 Export';
@@ -168,5 +227,4 @@ function initExportButtons() {
     });
 }
 
-// Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', initExportButtons);

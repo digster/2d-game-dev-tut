@@ -9,6 +9,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -58,8 +59,12 @@
 
             <details data-demo-id="steering" data-deps="vector2d,clearCanvas,randomFloat">
                 <summary>📝 Click to see: Steering Behavior Implementation</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">class SteeringEntity {
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class SteeringEntity {
     constructor(x, y) {
         this.position = new Vector2D(x, y);
         this.velocity = new Vector2D(0, 0);
@@ -117,6 +122,82 @@
         this.position.add(this.velocity);
     }
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Vector2D is assumed to be defined elsewhere; declare its shape here
+// so this snippet stands on its own.
+interface Vector2D {
+    x: number;
+    y: number;
+    add(v: Vector2D): Vector2D;
+    subtract(v: Vector2D): Vector2D;
+    multiply(scalar: number): Vector2D;
+    normalize(): Vector2D;
+    length(): number;
+    limit(max: number): Vector2D;
+}
+declare const Vector2D: { new (x: number, y: number): Vector2D };
+declare function map(v: number, a1: number, a2: number, b1: number, b2: number): number;
+
+class SteeringEntity {
+    position: Vector2D;
+    velocity: Vector2D;
+    maxSpeed = 5;
+    maxForce = 0.2;
+
+    constructor(x: number, y: number) {
+        this.position = new Vector2D(x, y);
+        this.velocity = new Vector2D(0, 0);
+    }
+
+    // Seek: Move toward target
+    seek(target: Vector2D): Vector2D {
+        const desired = target.subtract(this.position);
+        desired.normalize().multiply(this.maxSpeed);
+
+        const steer = desired.subtract(this.velocity);
+        steer.limit(this.maxForce);
+
+        return steer;
+    }
+
+    // Arrive: Slow down when close to target
+    arrive(target: Vector2D, slowingRadius: number = 100): Vector2D {
+        const desired = target.subtract(this.position);
+        const distance = desired.length();
+
+        if (distance &lt; slowingRadius) {
+            // Scale speed based on distance
+            const speed = map(distance, 0, slowingRadius, 0, this.maxSpeed);
+            desired.normalize().multiply(speed);
+        } else {
+            desired.normalize().multiply(this.maxSpeed);
+        }
+
+        const steer = desired.subtract(this.velocity);
+        steer.limit(this.maxForce);
+
+        return steer;
+    }
+
+    // Flee: Move away from threat
+    flee(threat: Vector2D): Vector2D {
+        const desired = this.position.subtract(threat);
+        desired.normalize().multiply(this.maxSpeed);
+
+        const steer = desired.subtract(this.velocity);
+        steer.limit(this.maxForce);
+
+        return steer;
+    }
+
+    applyForce(force: Vector2D): void {
+        this.velocity.add(force);
+        this.velocity.limit(this.maxSpeed);
+    }
+
+    update(): void {
+        this.position.add(this.velocity);
+    }
+}</code></pre>
                 </div>
             </details>
 
@@ -161,8 +242,12 @@
 
             <details data-demo-id="quaternion" data-deps="vector2d,clearCanvas">
                 <summary>📝 Click to see: Quaternion Implementation (Simplified)</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">class Quaternion {
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class Quaternion {
     constructor(x = 0, y = 0, z = 0, w = 1) {
         this.x = x;
         this.y = y;
@@ -254,6 +339,107 @@
         return this;
     }
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// 3D vector for axis-angle rotations
+interface Vec3 { x: number; y: number; z: number }
+declare function lerp(a: number, b: number, t: number): number;
+
+class Quaternion {
+    x: number;
+    y: number;
+    z: number;
+    w: number;
+
+    constructor(x: number = 0, y: number = 0, z: number = 0, w: number = 1) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+        this.w = w;
+    }
+
+    // Create quaternion from axis-angle rotation
+    static fromAxisAngle(axis: Vec3, angle: number): Quaternion {
+        const halfAngle = angle / 2;
+        const s = Math.sin(halfAngle);
+
+        return new Quaternion(
+            axis.x * s,
+            axis.y * s,
+            axis.z * s,
+            Math.cos(halfAngle)
+        );
+    }
+
+    // Create from Euler angles (in radians)
+    static fromEuler(pitch: number, yaw: number, roll: number): Quaternion {
+        const cy = Math.cos(yaw * 0.5);
+        const sy = Math.sin(yaw * 0.5);
+        const cp = Math.cos(pitch * 0.5);
+        const sp = Math.sin(pitch * 0.5);
+        const cr = Math.cos(roll * 0.5);
+        const sr = Math.sin(roll * 0.5);
+
+        return new Quaternion(
+            sr * cp * cy - cr * sp * sy,
+            cr * sp * cy + sr * cp * sy,
+            cr * cp * sy - sr * sp * cy,
+            cr * cp * cy + sr * sp * sy
+        );
+    }
+
+    // Multiply two quaternions (combine rotations)
+    multiply(q: Quaternion): Quaternion {
+        return new Quaternion(
+            this.w * q.x + this.x * q.w + this.y * q.z - this.z * q.y,
+            this.w * q.y - this.x * q.z + this.y * q.w + this.z * q.x,
+            this.w * q.z + this.x * q.y - this.y * q.x + this.z * q.w,
+            this.w * q.w - this.x * q.x - this.y * q.y - this.z * q.z
+        );
+    }
+
+    // Spherical linear interpolation (smooth rotation)
+    static slerp(q1: Quaternion, q2: Quaternion, t: number): Quaternion {
+        let dot = q1.x * q2.x + q1.y * q2.y + q1.z * q2.z + q1.w * q2.w;
+
+        // If negative dot, negate one quaternion
+        if (dot &lt; 0) {
+            q2 = new Quaternion(-q2.x, -q2.y, -q2.z, -q2.w);
+            dot = -dot;
+        }
+
+        // If very close, use linear interpolation
+        if (dot > 0.9995) {
+            return new Quaternion(
+                lerp(q1.x, q2.x, t),
+                lerp(q1.y, q2.y, t),
+                lerp(q1.z, q2.z, t),
+                lerp(q1.w, q2.w, t)
+            ).normalize();
+        }
+
+        const theta = Math.acos(dot);
+        const sinTheta = Math.sin(theta);
+
+        const w1 = Math.sin((1 - t) * theta) / sinTheta;
+        const w2 = Math.sin(t * theta) / sinTheta;
+
+        return new Quaternion(
+            q1.x * w1 + q2.x * w2,
+            q1.y * w1 + q2.y * w2,
+            q1.z * w1 + q2.z * w2,
+            q1.w * w1 + q2.w * w2
+        );
+    }
+
+    normalize(): this {
+        const len = Math.sqrt(this.x * this.x + this.y * this.y +
+                              this.z * this.z + this.w * this.w);
+        this.x /= len;
+        this.y /= len;
+        this.z /= len;
+        this.w /= len;
+        return this;
+    }
+}</code></pre>
                 </div>
             </details>
 
@@ -293,8 +479,12 @@
 
             <details data-demo-id="bezier" data-deps="vector2d,clearCanvas">
                 <summary>📝 Click to see: Bézier Curve Implementation</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">// Quadratic Bezier: 3 points (start, control, end)
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Quadratic Bezier: 3 points (start, control, end)
 function quadraticBezier(p0, p1, p2, t) {
     const x = (1 - t) * (1 - t) * p0.x +
               2 * (1 - t) * t * p1.x +
@@ -309,6 +499,45 @@ function quadraticBezier(p0, p1, p2, t) {
 
 // Cubic Bezier: 4 points (start, control1, control2, end)
 function cubicBezier(p0, p1, p2, p3, t) {
+    const u = 1 - t;
+    const tt = t * t;
+    const uu = u * u;
+    const uuu = uu * u;
+    const ttt = tt * t;
+
+    const x = uuu * p0.x +
+              3 * uu * t * p1.x +
+              3 * u * tt * p2.x +
+              ttt * p3.x;
+
+    const y = uuu * p0.y +
+              3 * uu * t * p1.y +
+              3 * u * tt * p2.y +
+              ttt * p3.y;
+
+    return new Vector2D(x, y);
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface Point2D { x: number; y: number }
+interface Vector2D extends Point2D {}
+declare const Vector2D: { new (x: number, y: number): Vector2D };
+
+// Quadratic Bezier: 3 points (start, control, end)
+function quadraticBezier(p0: Point2D, p1: Point2D, p2: Point2D, t: number): Vector2D {
+    const x = (1 - t) * (1 - t) * p0.x +
+              2 * (1 - t) * t * p1.x +
+              t * t * p2.x;
+
+    const y = (1 - t) * (1 - t) * p0.y +
+              2 * (1 - t) * t * p1.y +
+              t * t * p2.y;
+
+    return new Vector2D(x, y);
+}
+
+// Cubic Bezier: 4 points (start, control1, control2, end)
+function cubicBezier(
+    p0: Point2D, p1: Point2D, p2: Point2D, p3: Point2D, t: number
+): Vector2D {
     const u = 1 - t;
     const tt = t * t;
     const uu = u * u;
@@ -375,8 +604,12 @@ function cubicBezier(p0, p1, p2, p3, t) {
 
             <details data-demo-id="astar" data-deps="vector2d,clearCanvas">
                 <summary>📝 Click to see: A* Implementation (Simplified)</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">class Node {
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class Node {
     constructor(x, y) {
         this.x = x;
         this.y = y;
@@ -433,6 +666,73 @@ function astar(start, goal, grid) {
 }
 
 function heuristic(a, b) {
+    // Manhattan distance
+    return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">type Grid = Node[][];
+declare function getNeighbors(node: Node, grid: Grid): Node[];
+declare function reconstructPath(node: Node): Node[];
+
+class Node {
+    x: number;
+    y: number;
+    g = 0;             // Cost from start
+    h = 0;             // Heuristic (estimated cost to goal)
+    f = 0;             // Total cost (g + h)
+    parent: Node | null = null;
+
+    constructor(x: number, y: number) {
+        this.x = x;
+        this.y = y;
+    }
+}
+
+function astar(start: Node, goal: Node, grid: Grid): Node[] {
+    const openSet: Node[] = [start];
+    const closedSet: Node[] = [];
+
+    while (openSet.length > 0) {
+        // Find node with lowest f score
+        let current = openSet[0];
+        for (let i = 1; i &lt; openSet.length; i++) {
+            if (openSet[i].f &lt; current.f) {
+                current = openSet[i];
+            }
+        }
+
+        // Found the goal!
+        if (current === goal) {
+            return reconstructPath(current);
+        }
+
+        // Move current from open to closed
+        openSet.splice(openSet.indexOf(current), 1);
+        closedSet.push(current);
+
+        // Check all neighbors
+        const neighbors = getNeighbors(current, grid);
+        for (const neighbor of neighbors) {
+            if (closedSet.includes(neighbor)) continue;
+
+            const tempG = current.g + 1;  // Distance to neighbor
+
+            if (!openSet.includes(neighbor)) {
+                openSet.push(neighbor);
+            } else if (tempG >= neighbor.g) {
+                continue;  // Not a better path
+            }
+
+            neighbor.g = tempG;
+            neighbor.h = heuristic(neighbor, goal);
+            neighbor.f = neighbor.g + neighbor.h;
+            neighbor.parent = current;
+        }
+    }
+
+    return [];  // No path found
+}
+
+function heuristic(a: Node, b: Node): number {
     // Manhattan distance
     return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 }</code></pre>
@@ -1431,6 +1731,8 @@ const nearbyEnemies = spatialHash
     <!-- Export Demo Feature -->
     <script src="shared/dependency-bundles.js"></script>
     <script src="shared/demo-bundles.js"></script>
+    <script src="shared/demo-bundles-ts.js"></script>
+    <script src="shared/code-tabs.js"></script>
     <script src="shared/export-demo.js"></script>
 
     <!-- Page-specific JavaScript -->

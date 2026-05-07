@@ -9,6 +9,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -102,9 +103,22 @@
 
             <details>
                 <summary>📝 Click to see: The Simplest Vector (Step 1)</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">class Vector2D {
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class Vector2D {
     constructor(x, y) {
+        this.x = x;  // Horizontal position
+        this.y = y;  // Vertical position
+    }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">class Vector2D {
+    x: number;
+    y: number;
+
+    constructor(x: number, y: number) {
         this.x = x;  // Horizontal position
         this.y = y;  // Vertical position
     }
@@ -113,11 +127,22 @@
 
                 <div class="example-box">
                     <h4>🎮 Using it in a game:</h4>
-                    <pre><code class="language-javascript">// Create a player at position (100, 200)
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Create a player at position (100, 200)
 let playerPosition = new Vector2D(100, 200);
 
 // Create an enemy at position (300, 150)
 let enemyPosition = new Vector2D(300, 150);</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Create a player at position (100, 200)
+let playerPosition: Vector2D = new Vector2D(100, 200);
+
+// Create an enemy at position (300, 150)
+let enemyPosition: Vector2D = new Vector2D(300, 150);</code></pre>
+                    </div>
                 </div>
             </details>
 
@@ -128,8 +153,12 @@ let enemyPosition = new Vector2D(300, 150);</code></pre>
 
             <details>
                 <summary>📝 Click to see: Adding Movement (Step 2)</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">class Vector2D {
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class Vector2D {
     constructor(x, y) {
         this.x = x;
         this.y = y;
@@ -142,11 +171,32 @@ let enemyPosition = new Vector2D(300, 150);</code></pre>
         return this;        // Allow chaining
     }
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">class Vector2D {
+    x: number;
+    y: number;
+
+    constructor(x: number, y: number) {
+        this.x = x;
+        this.y = y;
+    }
+
+    // Add another vector to this one
+    add(other: Vector2D): this {
+        this.x += other.x;  // Move horizontally
+        this.y += other.y;  // Move vertically
+        return this;        // Allow chaining
+    }
+}</code></pre>
                 </div>
 
                 <div class="example-box">
                     <h4>🎮 Moving the player:</h4>
-                    <pre><code class="language-javascript">// Player starts at (100, 100)
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Player starts at (100, 100)
 let player = new Vector2D(100, 100);
 
 // Player presses 'W' key - move up
@@ -154,6 +204,15 @@ let movement = new Vector2D(0, -5);  // Up is negative Y!
 player.add(movement);
 
 // Now player is at (100, 95) - moved up 5 pixels!</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Player starts at (100, 100)
+let player: Vector2D = new Vector2D(100, 100);
+
+// Player presses 'W' key - move up
+let movement: Vector2D = new Vector2D(0, -5);  // Up is negative Y!
+player.add(movement);
+
+// Now player is at (100, 95) - moved up 5 pixels!</code></pre>
+                    </div>
                 </div>
             </details>
 
@@ -1912,6 +1971,8 @@ class SpiralMissile extends HomingMissile {
     <!-- Export Demo Feature -->
     <script src="shared/dependency-bundles.js"></script>
     <script src="shared/demo-bundles.js"></script>
+    <script src="shared/demo-bundles-ts.js"></script>
+    <script src="shared/code-tabs.js"></script>
     <script src="shared/export-demo.js"></script>
 
     <!-- Page-specific JavaScript -->

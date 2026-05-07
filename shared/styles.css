@@ -574,3 +574,61 @@ button.export-demo-btn.success:hover {
     background: #1e5631 !important;
     transform: none;
 }
+
+/* ===================================
+   CODE TABS (JavaScript / TypeScript)
+   - Tab strip sits at the top of .code-container
+   - Inactive panes use display:none so the container collapses to the
+     active pane and Prism doesn't paint hidden content twice.
+   =================================== */
+.code-tabs {
+    display: flex;
+    gap: 4px;
+    margin: -20px -20px 14px -20px;     /* pull flush against .code-container edges */
+    padding: 0 12px;
+    border-bottom: 1px solid #30363d;
+    background: #161b22;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+}
+
+button.code-tab {
+    background: transparent !important;
+    color: #8b949e !important;
+    border: none !important;
+    border-bottom: 2px solid transparent !important;
+    padding: 10px 16px !important;
+    font-size: 0.85em !important;
+    font-weight: 600 !important;
+    cursor: pointer;
+    text-transform: none !important;
+    letter-spacing: normal !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+button.code-tab:hover {
+    color: #c9d1d9 !important;
+    background: rgba(79, 195, 247, 0.05) !important;
+    transform: none;
+}
+
+button.code-tab.active {
+    color: #4fc3f7 !important;
+    border-bottom-color: #4fc3f7 !important;
+}
+
+button.code-tab[data-lang="ts"].active {
+    color: #3178c6 !important;                /* TS brand blue */
+    border-bottom-color: #3178c6 !important;
+}
+
+.code-pane {
+    display: none;
+    margin: 0;
+}
+
+.code-pane.active {
+    display: block;
+}
