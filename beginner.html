@@ -223,8 +223,18 @@ player.add(movement);
 
             <details>
                 <summary>📝 Click to see: Measuring Distance (Step 3)</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">distance(other) {
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">distance(other) {
+    // Use Pythagorean theorem: √(dx² + dy²)
+    let dx = other.x - this.x;  // Horizontal distance
+    let dy = other.y - this.y;  // Vertical distance
+    return Math.sqrt(dx * dx + dy * dy);
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">distance(other: Vector2D): number {
     // Use Pythagorean theorem: √(dx² + dy²)
     let dx = other.x - this.x;  // Horizontal distance
     let dy = other.y - this.y;  // Vertical distance
@@ -238,7 +248,12 @@ player.add(movement);
 
                 <div class="example-box">
                     <h4>🎮 Collision detection:</h4>
-                    <pre><code class="language-javascript">let bullet = new Vector2D(150, 150);
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">let bullet = new Vector2D(150, 150);
 let enemy = new Vector2D(155, 148);
 
 let distance = bullet.distance(enemy);  // About 5.4 pixels
@@ -246,6 +261,15 @@ let distance = bullet.distance(enemy);  // About 5.4 pixels
 if (distance < 10) {  // Hit radius = 10 pixels
     console.log("💥 Hit!");
 }</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">let bullet: Vector2D = new Vector2D(150, 150);
+let enemy: Vector2D = new Vector2D(155, 148);
+
+let distance: number = bullet.distance(enemy);  // About 5.4 pixels
+
+if (distance &lt; 10) {  // Hit radius = 10 pixels
+    console.log("💥 Hit!");
+}</code></pre>
+                    </div>
                 </div>
             </details>
 
@@ -399,8 +423,12 @@ animate();</code></pre>
 
             <details data-demo-id="normalize" data-deps="vector2d,clearCanvas,drawGrid,clamp">
                 <summary>📝 Click to see: Normalization Code</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">normalize() {
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">normalize() {
     let length = this.length();
     if (length > 0) {
         this.x /= length;  // Divide by length
@@ -412,11 +440,28 @@ animate();</code></pre>
 length() {
     return Math.sqrt(this.x * this.x + this.y * this.y);
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">normalize(): this {
+    let length = this.length();
+    if (length > 0) {
+        this.x /= length;  // Divide by length
+        this.y /= length;
+    }
+    return this;
+}
+
+length(): number {
+    return Math.sqrt(this.x * this.x + this.y * this.y);
+}</code></pre>
                 </div>
 
                 <div class="example-box">
                     <h4>🎮 Constant Speed Movement:</h4>
-                    <pre><code class="language-javascript">// Get input direction (could be diagonal!)
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Get input direction (could be diagonal!)
 let direction = new Vector2D(
     input.right - input.left,    // -1, 0, or 1
     input.down - input.up
@@ -431,6 +476,26 @@ direction.multiply(speed);
 
 // Add to player position
 player.add(direction);</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface InputState { left: number; right: number; up: number; down: number }
+declare const input: InputState;
+declare const player: Vector2D;
+
+// Get input direction (could be diagonal!)
+let direction: Vector2D = new Vector2D(
+    input.right - input.left,    // -1, 0, or 1
+    input.down - input.up
+);
+
+// Normalize so diagonal isn't faster!
+direction.normalize();
+
+// Apply constant speed
+let speed: number = 5;
+direction.multiply(speed);
+
+// Add to player position
+player.add(direction);</code></pre>
+                    </div>
                 </div>
             </details>
 
@@ -459,15 +524,27 @@ player.add(direction);</code></pre>
 
             <details data-demo-id="dotProduct" data-deps="vector2d,clearCanvas,drawGrid,drawVector">
                 <summary>📝 Click to see: Dot Product Code</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">dot(other) {
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">dot(other) {
+    return this.x * other.x + this.y * other.y;
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">dot(other: Vector2D): number {
     return this.x * other.x + this.y * other.y;
 }</code></pre>
                 </div>
 
                 <div class="example-box">
                     <h4>🎮 Check if Enemy is in Front:</h4>
-                    <pre><code class="language-javascript">// Player is facing direction
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Player is facing direction
 let facingDir = new Vector2D(1, 0).normalize();
 
 // Direction to enemy
@@ -481,6 +558,24 @@ if (dotProduct > 0) {
 } else {
     console.log("Enemy is behind!");
 }</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">declare const player: Vector2D;
+declare const enemy: Vector2D;
+
+// Player is facing direction
+let facingDir: Vector2D = new Vector2D(1, 0).normalize();
+
+// Direction to enemy
+let toEnemy: Vector2D = enemy.subtract(player).normalize();
+
+// Check if in front
+let dotProduct: number = facingDir.dot(toEnemy);
+
+if (dotProduct > 0) {
+    console.log("Enemy is in front!");
+} else {
+    console.log("Enemy is behind!");
+}</code></pre>
+                    </div>
                 </div>
             </details>
 
@@ -498,8 +593,18 @@ if (dotProduct > 0) {
 
             <details>
                 <summary>📝 Click to see: Vector Subtraction Code</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">subtract(other) {
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">subtract(other) {
+    return new Vector2D(
+        this.x - other.x,
+        this.y - other.y
+    );
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">subtract(other: Vector2D): Vector2D {
     return new Vector2D(
         this.x - other.x,
         this.y - other.y
@@ -509,7 +614,12 @@ if (dotProduct > 0) {
 
                 <div class="example-box">
                     <h4>🎮 Example: Enemy Chasing Player</h4>
-                    <pre><code class="language-javascript">// Get direction from enemy to player
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Get direction from enemy to player
 const direction = player.position.subtract(enemy.position);
 
 // Normalize and apply enemy speed
@@ -519,6 +629,22 @@ direction.normalize().multiply(enemySpeed);
 enemy.position.add(direction);
 
 // Now enemy moves toward player at constant speed!</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface Entity { position: Vector2D }
+declare const player: Entity;
+declare const enemy: Entity;
+declare const enemySpeed: number;
+
+// Get direction from enemy to player
+const direction: Vector2D = player.position.subtract(enemy.position);
+
+// Normalize and apply enemy speed
+direction.normalize().multiply(enemySpeed);
+
+// Move enemy toward player
+enemy.position.add(direction);
+
+// Now enemy moves toward player at constant speed!</code></pre>
+                    </div>
                 </div>
             </details>
 
@@ -534,16 +660,29 @@ enemy.position.add(direction);
 
             <details>
                 <summary>📝 Click to see: Cross Product Code</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">// 2D cross product returns a scalar (z-component of 3D cross product)
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// 2D cross product returns a scalar (z-component of 3D cross product)
 cross(other) {
+    return this.x * other.y - this.y * other.x;
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// 2D cross product returns a scalar (z-component of 3D cross product)
+cross(other: Vector2D): number {
     return this.x * other.y - this.y * other.x;
 }</code></pre>
                 </div>
 
                 <div class="example-box">
                     <h4>🎮 Example: Determine Turn Direction</h4>
-                    <pre><code class="language-javascript">// Player is facing a direction
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Player is facing a direction
 const forward = new Vector2D(1, 0);
 
 // Direction to target
@@ -559,6 +698,27 @@ if (crossProduct > 0) {
 } else {
     console.log("Go straight!");
 }</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface Positioned { position: Vector2D }
+declare const player: Positioned;
+declare const target: Vector2D;
+
+// Player is facing a direction
+const forward: Vector2D = new Vector2D(1, 0);
+
+// Direction to target
+const toTarget: Vector2D = target.subtract(player.position).normalize();
+
+// Which way to turn?
+const crossProduct: number = forward.cross(toTarget);
+
+if (crossProduct > 0) {
+    console.log("Turn left!");
+} else if (crossProduct &lt; 0) {
+    console.log("Turn right!");
+} else {
+    console.log("Go straight!");
+}</code></pre>
+                    </div>
                 </div>
 
                 <div class="key-point">
@@ -574,9 +734,26 @@ if (crossProduct > 0) {
 
             <details>
                 <summary>📝 Click to see: Vector Projection Code</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">// Project this vector onto another vector
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Project this vector onto another vector
 project(onto) {
+    const dotProduct = this.dot(onto);
+    const ontoLengthSq = onto.x * onto.x + onto.y * onto.y;
+
+    if (ontoLengthSq === 0) return new Vector2D(0, 0);
+
+    const scalar = dotProduct / ontoLengthSq;
+    return new Vector2D(
+        onto.x * scalar,
+        onto.y * scalar
+    );
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Project this vector onto another vector
+project(onto: Vector2D): Vector2D {
     const dotProduct = this.dot(onto);
     const ontoLengthSq = onto.x * onto.x + onto.y * onto.y;
 
@@ -592,7 +769,12 @@ project(onto) {
 
                 <div class="example-box">
                     <h4>🎮 Example: Sliding Along Walls</h4>
-                    <pre><code class="language-javascript">// Player trying to move in a direction
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Player trying to move in a direction
 const desiredMovement = new Vector2D(5, 3);
 
 // Wall is horizontal (normal points up)
@@ -606,6 +788,24 @@ const alongWall = desiredMovement.subtract(intoWall);
 player.position.add(alongWall);
 
 // Player now slides smoothly along walls!</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface Positioned { position: Vector2D }
+declare const player: Positioned;
+
+// Player trying to move in a direction
+const desiredMovement: Vector2D = new Vector2D(5, 3);
+
+// Wall is horizontal (normal points up)
+const wallNormal: Vector2D = new Vector2D(0, 1);
+
+// Remove component of movement into wall
+const intoWall: Vector2D = desiredMovement.project(wallNormal);
+const alongWall: Vector2D = desiredMovement.subtract(intoWall);
+
+// Move player along wall instead of into it
+player.position.add(alongWall);
+
+// Player now slides smoothly along walls!</code></pre>
+                    </div>
                 </div>
 
                 <div class="key-point">
@@ -621,9 +821,22 @@ player.position.add(alongWall);
 
             <details>
                 <summary>📝 Click to see: Vector Reflection Code</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">// Reflect this vector across a surface (given surface normal)
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Reflect this vector across a surface (given surface normal)
 reflect(normal) {
+    // Formula: reflection = vector - 2 * (vector · normal) * normal
+    const dot = this.dot(normal);
+    return new Vector2D(
+        this.x - 2 * dot * normal.x,
+        this.y - 2 * dot * normal.y
+    );
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Reflect this vector across a surface (given surface normal)
+reflect(normal: Vector2D): Vector2D {
     // Formula: reflection = vector - 2 * (vector · normal) * normal
     const dot = this.dot(normal);
     return new Vector2D(
@@ -635,7 +848,12 @@ reflect(normal) {
 
                 <div class="example-box">
                     <h4>🎮 Example: Ball Bouncing Off Walls</h4>
-                    <pre><code class="language-javascript">// Ball's velocity
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Ball's velocity
 let velocity = new Vector2D(5, -3);
 
 // Hit bottom wall (normal points up)
@@ -648,6 +866,20 @@ velocity = velocity.reflect(wallNormal);
 velocity.multiply(0.8);  // 80% of original speed
 
 // Ball now bounces realistically!</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Ball's velocity
+let velocity: Vector2D = new Vector2D(5, -3);
+
+// Hit bottom wall (normal points up)
+const wallNormal: Vector2D = new Vector2D(0, -1);
+
+// Reflect velocity
+velocity = velocity.reflect(wallNormal);
+
+// Apply some energy loss (optional)
+velocity.multiply(0.8);  // 80% of original speed
+
+// Ball now bounces realistically!</code></pre>
+                    </div>
                 </div>
 
                 <div class="key-point">
@@ -912,8 +1144,12 @@ animate();</code></pre>
 
             <details data-demo-id="trig" data-deps="vector2d,clearCanvas">
                 <summary>📝 Click to see: Trigonometry Functions Explained</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">// Convert angle to direction vector
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Convert angle to direction vector
 function angleToVector(angle) {
     return new Vector2D(
         Math.cos(angle),  // X component
@@ -944,11 +1180,47 @@ function rotateAround(point, center, angle) {
         newY + center.y
     );
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Convert angle to direction vector
+function angleToVector(angle: number): Vector2D {
+    return new Vector2D(
+        Math.cos(angle),  // X component
+        Math.sin(angle)   // Y component
+    );
+}
+
+// Convert direction vector to angle
+function vectorToAngle(vector: Vector2D): number {
+    return Math.atan2(vector.y, vector.x);
+}
+
+// Rotate a point around another point
+function rotateAround(point: Vector2D, center: Vector2D, angle: number): Vector2D {
+    // Translate to origin
+    const x = point.x - center.x;
+    const y = point.y - center.y;
+
+    // Rotate
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const newX = x * cos - y * sin;
+    const newY = x * sin + y * cos;
+
+    // Translate back
+    return new Vector2D(
+        newX + center.x,
+        newY + center.y
+    );
+}</code></pre>
                 </div>
 
                 <div class="example-box">
                     <h4>🎮 Example: Make Enemy Face Player</h4>
-                    <pre><code class="language-javascript">// Calculate direction from enemy to player
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Calculate direction from enemy to player
 const direction = player.position.subtract(enemy.position);
 
 // Get angle to player
@@ -956,6 +1228,19 @@ enemy.rotation = Math.atan2(direction.y, direction.x);
 
 // Now enemy is rotated to face player!
 // Use this angle when drawing the enemy sprite</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface Sprite { position: Vector2D; rotation: number }
+declare const player: Sprite;
+declare const enemy: Sprite;
+
+// Calculate direction from enemy to player
+const direction: Vector2D = player.position.subtract(enemy.position);
+
+// Get angle to player
+enemy.rotation = Math.atan2(direction.y, direction.x);
+
+// Now enemy is rotated to face player!
+// Use this angle when drawing the enemy sprite</code></pre>
+                    </div>
                 </div>
             </details>
 
@@ -963,8 +1248,12 @@ enemy.rotation = Math.atan2(direction.y, direction.x);
 
             <details>
                 <summary>📝 Pattern 1: Circular Motion</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">class OrbitingObject {
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class OrbitingObject {
     constructor(centerX, centerY, radius) {
         this.center = new Vector2D(centerX, centerY);
         this.radius = radius;
@@ -983,6 +1272,29 @@ enemy.rotation = Math.atan2(direction.y, direction.x);
         );
     }
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">class OrbitingObject {
+    center: Vector2D;
+    radius: number;
+    angle = 0;
+    speed = 0.02;  // Radians per frame
+    position!: Vector2D;
+
+    constructor(centerX: number, centerY: number, radius: number) {
+        this.center = new Vector2D(centerX, centerY);
+        this.radius = radius;
+    }
+
+    update(): void {
+        // Increment angle
+        this.angle += this.speed;
+
+        // Calculate position on circle
+        this.position = new Vector2D(
+            this.center.x + Math.cos(this.angle) * this.radius,
+            this.center.y + Math.sin(this.angle) * this.radius
+        );
+    }
+}</code></pre>
                 </div>
                 <div class="key-point">
                     <strong>💡 Use case:</strong> Satellites orbiting a planet, shields rotating around a player, or planets in a solar system!
@@ -991,8 +1303,12 @@ enemy.rotation = Math.atan2(direction.y, direction.x);
 
             <details>
                 <summary>📝 Pattern 2: Wave Motion (Bobbing/Floating)</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">class FloatingItem {
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class FloatingItem {
     constructor(x, y) {
         this.baseY = y;  // Starting height
         this.position = new Vector2D(x, y);
@@ -1009,6 +1325,26 @@ enemy.rotation = Math.atan2(direction.y, direction.x);
         this.position.y = this.baseY + offset;
     }
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">class FloatingItem {
+    baseY: number;
+    position: Vector2D;
+    time = 0;
+    amplitude = 10;  // How high it bobs
+    frequency = 2;   // How fast it bobs
+
+    constructor(x: number, y: number) {
+        this.baseY = y;  // Starting height
+        this.position = new Vector2D(x, y);
+    }
+
+    update(): void {
+        this.time += 0.05;
+
+        // Sine wave for smooth up/down motion
+        const offset = Math.sin(this.time * this.frequency) * this.amplitude;
+        this.position.y = this.baseY + offset;
+    }
+}</code></pre>
                 </div>
                 <div class="key-point">
                     <strong>💡 Use case:</strong> Collectible items floating up and down, boats on water, or breathing animations!
@@ -1017,8 +1353,34 @@ enemy.rotation = Math.atan2(direction.y, direction.x);
 
             <details>
                 <summary>📝 Pattern 3: Projectile Arc (Parabolic Motion)</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">function shootProjectile(startPos, targetPos, launchAngle = 45) {
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">function shootProjectile(startPos, targetPos, launchAngle = 45) {
+    const angle = launchAngle * Math.PI / 180;  // Convert to radians
+    const distance = startPos.distance(targetPos);
+
+    // Calculate initial velocity needed
+    const gravity = 9.8;
+    const velocity = Math.sqrt(
+        (distance * gravity) / Math.sin(2 * angle)
+    );
+
+    // Velocity components
+    const vx = velocity * Math.cos(angle);
+    const vy = velocity * Math.sin(angle);
+
+    return { vx, vy };
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface ProjectileVelocity { vx: number; vy: number }
+
+function shootProjectile(
+    startPos: Vector2D,
+    targetPos: Vector2D,
+    launchAngle: number = 45
+): ProjectileVelocity {
     const angle = launchAngle * Math.PI / 180;  // Convert to radians
     const distance = startPos.distance(targetPos);
 
@@ -1181,8 +1543,12 @@ animate();</code></pre>
 
             <details>
                 <summary>📝 Pattern 4: Spiral Motion</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">class SpiralObject {
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class SpiralObject {
     constructor(centerX, centerY) {
         this.center = new Vector2D(centerX, centerY);
         this.angle = 0;
@@ -1203,6 +1569,30 @@ animate();</code></pre>
         );
     }
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">class SpiralObject {
+    center: Vector2D;
+    angle = 0;
+    radius = 0;
+    angleSpeed = 0.05;
+    radiusGrowth = 0.5;  // How fast spiral expands
+    position!: Vector2D;
+
+    constructor(centerX: number, centerY: number) {
+        this.center = new Vector2D(centerX, centerY);
+    }
+
+    update(): void {
+        // Increment angle and radius
+        this.angle += this.angleSpeed;
+        this.radius += this.radiusGrowth;
+
+        // Calculate position on expanding spiral
+        this.position = new Vector2D(
+            this.center.x + Math.cos(this.angle) * this.radius,
+            this.center.y + Math.sin(this.angle) * this.radius
+        );
+    }
+}</code></pre>
                 </div>
                 <div class="key-point">
                     <strong>💡 Use case:</strong> Whirlpool effects, drill attacks, spiral particle patterns, galaxy arms!
@@ -1211,8 +1601,12 @@ animate();</code></pre>
 
             <details>
                 <summary>📝 Pattern 5: Pendulum/Swing Motion</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">class Pendulum {
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class Pendulum {
     constructor(pivotX, pivotY, length) {
         this.pivot = new Vector2D(pivotX, pivotY);
         this.length = length;
@@ -1237,6 +1631,35 @@ animate();</code></pre>
         );
     }
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">class Pendulum {
+    pivot: Vector2D;
+    length: number;
+    angle = Math.PI / 4;  // Starting angle (45 degrees)
+    angleVelocity = 0;
+    angleAcceleration = 0;
+    gravity = 0.5;
+    damping = 0.995;  // Energy loss
+    position!: Vector2D;
+
+    constructor(pivotX: number, pivotY: number, length: number) {
+        this.pivot = new Vector2D(pivotX, pivotY);
+        this.length = length;
+    }
+
+    update(): void {
+        // Physics calculation for pendulum
+        this.angleAcceleration = (-this.gravity / this.length) * Math.sin(this.angle);
+        this.angleVelocity += this.angleAcceleration;
+        this.angleVelocity *= this.damping;  // Apply damping
+        this.angle += this.angleVelocity;
+
+        // Calculate bob position
+        this.position = new Vector2D(
+            this.pivot.x + Math.sin(this.angle) * this.length,
+            this.pivot.y + Math.cos(this.angle) * this.length
+        );
+    }
+}</code></pre>
                 </div>
                 <div class="key-point">
                     <strong>💡 Use case:</strong> Swinging ropes, hanging chains, swing sets, wrecking balls, grappling hooks!
@@ -1245,8 +1668,12 @@ animate();</code></pre>
 
             <details>
                 <summary>📝 Pattern 6: Figure-8 / Lissajous Curves</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">class Lissajous {
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class Lissajous {
     constructor(centerX, centerY, radiusX, radiusY) {
         this.center = new Vector2D(centerX, centerY);
         this.radiusX = radiusX;
@@ -1267,6 +1694,32 @@ animate();</code></pre>
         );
     }
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">class Lissajous {
+    center: Vector2D;
+    radiusX: number;
+    radiusY: number;
+    time = 0;
+    freqX = 3;  // Frequency ratio for X
+    freqY = 2;  // Frequency ratio for Y
+    phase = Math.PI / 2;  // Phase shift
+    position!: Vector2D;
+
+    constructor(centerX: number, centerY: number, radiusX: number, radiusY: number) {
+        this.center = new Vector2D(centerX, centerY);
+        this.radiusX = radiusX;
+        this.radiusY = radiusY;
+    }
+
+    update(): void {
+        this.time += 0.02;
+
+        // Create complex patterns using different frequencies
+        this.position = new Vector2D(
+            this.center.x + Math.sin(this.time * this.freqX) * this.radiusX,
+            this.center.y + Math.sin(this.time * this.freqY + this.phase) * this.radiusY
+        );
+    }
+}</code></pre>
                 </div>
                 <div class="key-point">
                     <strong>💡 Use case:</strong> Complex movement patterns, boss attack patterns, decorative animations, portal effects!
@@ -1275,8 +1728,12 @@ animate();</code></pre>
 
             <details>
                 <summary>📝 Pattern 7: Angle Interpolation (Smooth Rotation)</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">// Interpolate between two angles (handles wraparound)
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Interpolate between two angles (handles wraparound)
 function lerpAngle(start, end, t) {
     // Normalize angles to -π to π range
     let diff = end - start;
@@ -1311,6 +1768,40 @@ class RotatingEntity {
         );
     }
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Interpolate between two angles (handles wraparound)
+function lerpAngle(start: number, end: number, t: number): number {
+    // Normalize angles to -π to π range
+    let diff = end - start;
+
+    // Take shortest path around circle
+    while (diff > Math.PI) diff -= 2 * Math.PI;
+    while (diff &lt; -Math.PI) diff += 2 * Math.PI;
+
+    return start + diff * t;
+}
+
+class RotatingEntity {
+    currentAngle = 0;
+    targetAngle = 0;
+    rotationSpeed = 0.1;  // 10% per frame
+    position!: Vector2D;
+
+    faceDirection(target: Vector2D): void {
+        // Calculate angle to target
+        const dx = target.x - this.position.x;
+        const dy = target.y - this.position.y;
+        this.targetAngle = Math.atan2(dy, dx);
+    }
+
+    update(): void {
+        // Smoothly rotate toward target
+        this.currentAngle = lerpAngle(
+            this.currentAngle,
+            this.targetAngle,
+            this.rotationSpeed
+        );
+    }
+}</code></pre>
                 </div>
                 <div class="key-point">
                     <strong>💡 Use case:</strong> Turrets tracking targets, smooth camera rotation, character facing direction, vehicle steering!
@@ -1319,8 +1810,12 @@ class RotatingEntity {
 
             <details>
                 <summary>📝 Pattern 8: Field of View (FOV) Detection</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">class Enemy {
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class Enemy {
     constructor(x, y) {
         this.position = new Vector2D(x, y);
         this.facingAngle = 0;
@@ -1366,6 +1861,54 @@ class RotatingEntity {
         ctx.restore();
     }
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">class Enemy {
+    position: Vector2D;
+    facingAngle = 0;
+    fovAngle = Math.PI / 3;  // 60 degree FOV
+    viewDistance = 200;
+
+    constructor(x: number, y: number) {
+        this.position = new Vector2D(x, y);
+    }
+
+    canSee(target: Vector2D): boolean {
+        // Calculate direction to target
+        const toTarget = target.subtract(this.position);
+        const distance = toTarget.length();
+
+        // Check if within view distance
+        if (distance > this.viewDistance) return false;
+
+        // Calculate angle to target
+        const angleToTarget = Math.atan2(toTarget.y, toTarget.x);
+
+        // Calculate angle difference
+        let angleDiff = angleToTarget - this.facingAngle;
+
+        // Normalize to -π to π
+        while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+        while (angleDiff &lt; -Math.PI) angleDiff += 2 * Math.PI;
+
+        // Check if within FOV cone
+        return Math.abs(angleDiff) &lt; this.fovAngle / 2;
+    }
+
+    drawFOV(ctx: CanvasRenderingContext2D): void {
+        ctx.save();
+        ctx.translate(this.position.x, this.position.y);
+        ctx.rotate(this.facingAngle);
+
+        // Draw FOV cone
+        ctx.fillStyle = 'rgba(255, 255, 0, 0.2)';
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.arc(0, 0, this.viewDistance,
+            -this.fovAngle / 2, this.fovAngle / 2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+    }
+}</code></pre>
                 </div>
                 <div class="key-point">
                     <strong>💡 Use case:</strong> Stealth games, enemy detection, spotlight mechanics, radar systems, guard AI!
@@ -1374,8 +1917,12 @@ class RotatingEntity {
 
             <details>
                 <summary>📝 Pattern 9: 8-Directional Sprite Selection</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">// Convert angle to one of 8 directions for sprite selection
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Convert angle to one of 8 directions for sprite selection
 function angleToDirection8(angle) {
     // Normalize angle to 0-2π
     let normalized = angle % (2 * Math.PI);
@@ -1419,6 +1966,53 @@ class Character {
         }
     }
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// 8-direction labels as a literal-typed tuple — narrows return type
+type Direction8 =
+    | 'right' | 'down-right' | 'down' | 'down-left'
+    | 'left'  | 'up-left'    | 'up'   | 'up-right';
+
+// Convert angle to one of 8 directions for sprite selection
+function angleToDirection8(angle: number): Direction8 {
+    // Normalize angle to 0-2π
+    let normalized = angle % (2 * Math.PI);
+    if (normalized &lt; 0) normalized += 2 * Math.PI;
+
+    // Divide circle into 8 sections (45 degrees each)
+    const section = Math.round(normalized / (Math.PI / 4)) % 8;
+
+    const directions: Direction8[] = [
+        'right',      // 0°
+        'down-right', // 45°
+        'down',       // 90°
+        'down-left',  // 135°
+        'left',       // 180°
+        'up-left',    // 225°
+        'up',         // 270°
+        'up-right'    // 315°
+    ];
+
+    return directions[section];
+}
+
+class Character {
+    velocity: Vector2D = new Vector2D(0, 0);
+    currentSprite: string = 'idle-down';
+
+    update(): void {
+        if (this.velocity.length() > 0.1) {
+            // Get movement angle
+            const angle = Math.atan2(this.velocity.y, this.velocity.x);
+
+            // Get direction
+            const direction = angleToDirection8(angle);
+
+            // Set appropriate sprite
+            this.currentSprite = `walk-${direction}`;
+        } else {
+            this.currentSprite = 'idle-down';
+        }
+    }
+}</code></pre>
                 </div>
                 <div class="key-point">
                     <strong>💡 Use case:</strong> Top-down RPGs, strategy games, isometric games - selecting correct character sprite based on movement direction!
@@ -1441,8 +2035,12 @@ class Character {
             <h3>Practical Game System: Radar/Minimap</h3>
             <details>
                 <summary>📝 Click to see: Complete Radar System</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">class Radar {
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class Radar {
     constructor(centerX, centerY, radius) {
         this.center = new Vector2D(centerX, centerY);
         this.radius = radius;
@@ -1498,6 +2096,68 @@ class Character {
         });
     }
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface RadarEntity { position: Vector2D; isEnemy: boolean }
+interface RadarPlayer { position: Vector2D }
+
+class Radar {
+    center: Vector2D;
+    radius: number;
+    scale = 0.1;  // World scale to radar scale
+
+    constructor(centerX: number, centerY: number, radius: number) {
+        this.center = new Vector2D(centerX, centerY);
+        this.radius = radius;
+    }
+
+    worldToRadar(worldPos: Vector2D, playerPos: Vector2D): Vector2D {
+        // Get position relative to player
+        const relative = worldPos.subtract(playerPos);
+
+        // Scale down to radar size
+        const scaled = relative.copy().multiply(this.scale);
+
+        // Translate to radar center
+        return new Vector2D(
+            this.center.x + scaled.x,
+            this.center.y + scaled.y
+        );
+    }
+
+    draw(ctx: CanvasRenderingContext2D, entities: RadarEntity[], player: RadarPlayer): void {
+        // Draw radar background
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.beginPath();
+        ctx.arc(this.center.x, this.center.y, this.radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Draw border
+        ctx.strokeStyle = '#0f0';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Draw crosshairs
+        ctx.beginPath();
+        ctx.moveTo(this.center.x - 5, this.center.y);
+        ctx.lineTo(this.center.x + 5, this.center.y);
+        ctx.moveTo(this.center.x, this.center.y - 5);
+        ctx.lineTo(this.center.x, this.center.y + 5);
+        ctx.stroke();
+
+        // Draw entities
+        entities.forEach(entity => {
+            const radarPos = this.worldToRadar(entity.position, player.position);
+
+            // Only draw if within radar range
+            const dist = radarPos.distance(this.center);
+            if (dist &lt; this.radius) {
+                ctx.fillStyle = entity.isEnemy ? '#f00' : '#0f0';
+                ctx.beginPath();
+                ctx.arc(radarPos.x, radarPos.y, 3, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        });
+    }
+}</code></pre>
                 </div>
                 <div class="key-point">
                     <strong>💡 Use case:</strong> Minimaps, radar systems, strategy games, awareness indicators!
@@ -1527,8 +2187,12 @@ class Character {
 
             <details data-demo-id="easing" data-deps="vector2d,clearCanvas">
                 <summary>📝 Click to see: Common Easing Functions</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">// t is time (0 to 1), where 0 = start and 1 = end
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// t is time (0 to 1), where 0 = start and 1 = end
 
 // Linear (no easing - constant speed)
 function easeLinear(t) {
@@ -1580,11 +2244,63 @@ function easeOutBounce(t) {
         return 7.5625 * (t -= 2.625 / 2.75) * t + 0.984375;
     }
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// All easing functions share the same shape: number -> number.
+// Defining EasingFn once makes it easy to type a registry of them later.
+type EasingFn = (t: number) => number;
+
+// t is time (0 to 1), where 0 = start and 1 = end
+
+// Linear (no easing - constant speed)
+const easeLinear: EasingFn = (t) => t;
+
+// Quadratic Ease In (gentle acceleration)
+const easeInQuad: EasingFn = (t) => t * t;
+
+// Quadratic Ease Out (gentle deceleration)
+const easeOutQuad: EasingFn = (t) => t * (2 - t);
+
+// Quadratic Ease In-Out
+const easeInOutQuad: EasingFn = (t) =>
+    t &lt; 0.5
+        ? 2 * t * t
+        : -1 + (4 - 2 * t) * t;
+
+// Cubic (more dramatic)
+const easeInCubic: EasingFn = (t) => t * t * t;
+
+const easeOutCubic: EasingFn = (t) => {
+    const t1 = t - 1;
+    return t1 * t1 * t1 + 1;
+};
+
+// Elastic (bouncy, like a spring)
+const easeOutElastic: EasingFn = (t) => {
+    const p = 0.3;
+    return Math.pow(2, -10 * t) * Math.sin((t - p / 4) * (2 * Math.PI) / p) + 1;
+};
+
+// Bounce (like a ball bouncing)
+const easeOutBounce: EasingFn = (t) => {
+    if (t &lt; 1 / 2.75) {
+        return 7.5625 * t * t;
+    } else if (t &lt; 2 / 2.75) {
+        return 7.5625 * (t -= 1.5 / 2.75) * t + 0.75;
+    } else if (t &lt; 2.5 / 2.75) {
+        return 7.5625 * (t -= 2.25 / 2.75) * t + 0.9375;
+    } else {
+        return 7.5625 * (t -= 2.625 / 2.75) * t + 0.984375;
+    }
+};</code></pre>
                 </div>
 
                 <div class="example-box">
                     <h4>🎮 Using Easing in Your Game:</h4>
-                    <pre><code class="language-javascript">class AnimatedObject {
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">class AnimatedObject {
     constructor(startPos, endPos, duration) {
         this.startPos = startPos;
         this.endPos = endPos;
@@ -1608,6 +2324,39 @@ function easeOutBounce(t) {
         this.position.y = lerp(this.startPos.y, this.endPos.y, easedT);
     }
 }</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">declare const easeOutQuad: (t: number) => number;
+declare function lerp(a: number, b: number, t: number): number;
+
+class AnimatedObject {
+    startPos: Vector2D;
+    endPos: Vector2D;
+    duration: number;
+    elapsed = 0;
+    position: Vector2D;
+
+    constructor(startPos: Vector2D, endPos: Vector2D, duration: number) {
+        this.startPos = startPos;
+        this.endPos = endPos;
+        this.duration = duration;
+        this.position = startPos.copy();
+    }
+
+    update(deltaTime: number): void {
+        this.elapsed += deltaTime;
+
+        // Calculate progress (0 to 1)
+        let t = this.elapsed / this.duration;
+        t = Math.min(t, 1);  // Cap at 1
+
+        // Apply easing
+        const easedT = easeOutQuad(t);
+
+        // Interpolate position
+        this.position.x = lerp(this.startPos.x, this.endPos.x, easedT);
+        this.position.y = lerp(this.startPos.y, this.endPos.y, easedT);
+    }
+}</code></pre>
+                    </div>
                 </div>
             </details>
 
@@ -1641,8 +2390,12 @@ function easeOutBounce(t) {
             <h3>Complete Game Loop</h3>
             <details data-demo-id="game" data-deps="vector2d,clearCanvas,clamp,randomFloat">
                 <summary>📝 Click to see: Complete Game Code</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">class Player {
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class Player {
     constructor(x, y) {
         this.position = new Vector2D(x, y);
         this.velocity = new Vector2D(0, 0);
@@ -1666,6 +2419,41 @@ function easeOutBounce(t) {
     }
 
     draw(ctx) {
+        ctx.fillStyle = '#4fc3f7';
+        ctx.beginPath();
+        ctx.arc(this.position.x, this.position.y, 20, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface InputState { left: number; right: number; up: number; down: number }
+
+class Player {
+    position: Vector2D;
+    velocity: Vector2D;
+    speed = 5;
+
+    constructor(x: number, y: number) {
+        this.position = new Vector2D(x, y);
+        this.velocity = new Vector2D(0, 0);
+    }
+
+    update(input: InputState): void {
+        // Get input direction
+        let dir = new Vector2D(
+            input.right - input.left,
+            input.down - input.up
+        );
+
+        // Normalize and apply speed
+        if (dir.length() > 0) {
+            dir.normalize().multiply(this.speed);
+        }
+
+        // Update position
+        this.position.add(dir);
+    }
+
+    draw(ctx: CanvasRenderingContext2D): void {
         ctx.fillStyle = '#4fc3f7';
         ctx.beginPath();
         ctx.arc(this.position.x, this.position.y, 20, 0, Math.PI * 2);
@@ -1712,8 +2500,12 @@ function easeOutBounce(t) {
 
             <details data-demo-id="homingMissile" data-deps="vector2d,clearCanvas,randomFloat">
                 <summary>📝 Click to see: Homing Missile Class</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">class HomingMissile {
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class HomingMissile {
     constructor(x, y, target) {
         this.position = new Vector2D(x, y);
         this.velocity = new Vector2D(0, 0);
@@ -1787,13 +2579,97 @@ function easeOutBounce(t) {
         ctx.restore();
     }
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface MissileTarget { position: Vector2D; velocity: Vector2D }
+
+class HomingMissile {
+    position: Vector2D;
+    velocity: Vector2D;
+    target: MissileTarget;
+    speed = 3;
+    turnRate = 0.05;  // How quickly it can turn
+    rotation = 0;
+    alive = true;
+    trail: Vector2D[] = [];  // For visual effect
+
+    constructor(x: number, y: number, target: MissileTarget) {
+        this.position = new Vector2D(x, y);
+        this.velocity = new Vector2D(0, 0);
+        this.target = target;
+    }
+
+    update(): void {
+        // Calculate direction to target
+        const toTarget = this.target.position.subtract(this.position);
+
+        // Normalize and apply speed (seeking behavior)
+        const desired = toTarget.copy().normalize().multiply(this.speed);
+
+        // Smooth steering (lerp toward desired velocity)
+        this.velocity.lerp(desired, this.turnRate);
+
+        // Update position
+        this.position.add(this.velocity);
+
+        // Update rotation to face movement direction
+        this.rotation = Math.atan2(this.velocity.y, this.velocity.x);
+
+        // Add to trail for visual effect
+        this.trail.push(this.position.copy());
+        if (this.trail.length > 20) this.trail.shift();
+
+        // Check if hit target
+        if (this.position.distance(this.target.position) &lt; 20) {
+            this.alive = false;
+            // Explosion effect here!
+        }
+    }
+
+    draw(ctx: CanvasRenderingContext2D): void {
+        // Draw trail
+        for (let i = 0; i &lt; this.trail.length; i++) {
+            const alpha = i / this.trail.length;
+            ctx.fillStyle = `rgba(255, 165, 0, ${alpha * 0.5})`;
+            ctx.beginPath();
+            ctx.arc(this.trail[i].x, this.trail[i].y, 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Draw missile body (rotated)
+        ctx.save();
+        ctx.translate(this.position.x, this.position.y);
+        ctx.rotate(this.rotation);
+
+        // Missile body
+        ctx.fillStyle = '#ef5350';
+        ctx.fillRect(-10, -4, 20, 8);
+
+        // Missile nose (pointy end)
+        ctx.beginPath();
+        ctx.moveTo(10, 0);
+        ctx.lineTo(15, -4);
+        ctx.lineTo(15, 4);
+        ctx.closePath();
+        ctx.fill();
+
+        // Fins
+        ctx.fillStyle = '#c62828';
+        ctx.fillRect(-8, 4, 6, 4);
+        ctx.fillRect(-8, -8, 6, 4);
+
+        ctx.restore();
+    }
+}</code></pre>
                 </div>
             </details>
 
             <details>
                 <summary>📝 Click to see: Variations & Advanced Techniques</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">// VARIATION 1: Predictive Targeting (leads the target)
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// VARIATION 1: Predictive Targeting (leads the target)
 class PredictiveMissile extends HomingMissile {
     update() {
         // Predict where target will be
@@ -1840,6 +2716,69 @@ class SpiralMissile extends HomingMissile {
     }
 
     update() {
+        super.update();
+
+        // Add spiral offset perpendicular to velocity
+        this.spiralAngle += 0.2;
+        const perpendicular = this.velocity.copy().perpendicular().normalize();
+        const offset = perpendicular.multiply(
+            Math.sin(this.spiralAngle) * this.spiralRadius
+        );
+        this.position.add(offset);
+    }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Assumes HomingMissile from above is in scope.
+// (Each subclass below inherits MissileTarget, position, velocity, etc.)
+
+// VARIATION 1: Predictive Targeting (leads the target)
+class PredictiveMissile extends HomingMissile {
+    update(): void {
+        // Predict where target will be
+        const prediction = this.target.position.copy()
+            .add(this.target.velocity.copy().multiply(10));
+
+        // Aim for predicted position instead
+        const toTarget = prediction.subtract(this.position);
+        const desired = toTarget.copy().normalize().multiply(this.speed);
+        this.velocity.lerp(desired, this.turnRate);
+        this.position.add(this.velocity);
+        this.rotation = Math.atan2(this.velocity.y, this.velocity.x);
+    }
+}
+
+// VARIATION 2: Limited Fuel Missile
+class FuelMissile extends HomingMissile {
+    fuel = 100;
+
+    constructor(x: number, y: number, target: MissileTarget) {
+        super(x, y, target);
+    }
+
+    update(): void {
+        this.fuel -= 1;
+
+        if (this.fuel > 0) {
+            // Normal homing behavior
+            super.update();
+        } else {
+            // Out of fuel - ballistic trajectory (gravity)
+            this.velocity.y += 0.2;  // Gravity
+            this.position.add(this.velocity);
+            this.rotation = Math.atan2(this.velocity.y, this.velocity.x);
+        }
+    }
+}
+
+// VARIATION 3: Spiral/Corkscrew Missile
+class SpiralMissile extends HomingMissile {
+    spiralAngle = 0;
+    spiralRadius = 20;
+
+    constructor(x: number, y: number, target: MissileTarget) {
+        super(x, y, target);
+    }
+
+    update(): void {
         super.update();
 
         // Add spiral offset perpendicular to velocity
@@ -1904,8 +2843,12 @@ class SpiralMissile extends HomingMissile {
 
             <details>
                 <summary>📝 Click to see: Matrix2D Class</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">class Matrix2D {
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class Matrix2D {
     constructor() {
         // Identity matrix (does nothing)
         this.a = 1; this.b = 0; this.tx = 0;
@@ -1929,6 +2872,33 @@ class SpiralMissile extends HomingMissile {
     }
 
     translate(tx, ty) {
+        this.tx += tx;
+        this.ty += ty;
+        return this;
+    }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">class Matrix2D {
+    // Identity matrix (does nothing)
+    a = 1; b = 0; tx = 0;
+    c = 0; d = 1; ty = 0;
+
+    rotate(angle: number): this {
+        const cos = Math.cos(angle);
+        const sin = Math.sin(angle);
+        // Apply rotation transformation
+        // ... matrix math here ...
+        return this;
+    }
+
+    scale(sx: number, sy: number): this {
+        this.a *= sx;
+        this.b *= sx;
+        this.c *= sy;
+        this.d *= sy;
+        return this;
+    }
+
+    translate(tx: number, ty: number): this {
         this.tx += tx;
         this.ty += ty;
         return this;
