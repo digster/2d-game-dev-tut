@@ -59,8 +59,12 @@
 
             <details data-demo-id="quadtree" data-deps="vector2d,clearCanvas,randomFloat">
                 <summary>📝 Click to see: QuadTree Implementation</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">class QuadTree {
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class QuadTree {
     constructor(boundary, capacity = 4) {
         this.boundary = boundary;  // Rectangle defining this quad
         this.capacity = capacity;  // Max objects before subdividing
@@ -143,11 +147,112 @@
                  this.boundary.y + this.boundary.height < range.y);
     }
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface Rect { x: number; y: number; width: number; height: number }
+interface Point { x: number; y: number }
+declare function rangeContains(range: Rect, obj: Point): boolean;
+
+class QuadTree {
+    boundary: Rect;
+    capacity: number;
+    objects: Point[] = [];
+    divided = false;
+
+    // Children are only assigned after subdivide()
+    northeast?: QuadTree;
+    northwest?: QuadTree;
+    southeast?: QuadTree;
+    southwest?: QuadTree;
+
+    constructor(boundary: Rect, capacity: number = 4) {
+        this.boundary = boundary;  // Rectangle defining this quad
+        this.capacity = capacity;  // Max objects before subdividing
+    }
+
+    subdivide(): void {
+        const x = this.boundary.x;
+        const y = this.boundary.y;
+        const w = this.boundary.width / 2;
+        const h = this.boundary.height / 2;
+
+        this.northeast = new QuadTree({ x: x + w, y: y,     width: w, height: h }, this.capacity);
+        this.northwest = new QuadTree({ x: x,     y: y,     width: w, height: h }, this.capacity);
+        this.southeast = new QuadTree({ x: x + w, y: y + h, width: w, height: h }, this.capacity);
+        this.southwest = new QuadTree({ x: x,     y: y + h, width: w, height: h }, this.capacity);
+
+        this.divided = true;
+    }
+
+    insert(object: Point): boolean {
+        // Check if object is in this boundary
+        if (!this.contains(object)) {
+            return false;
+        }
+
+        // If there's room, add it here
+        if (this.objects.length &lt; this.capacity) {
+            this.objects.push(object);
+            return true;
+        }
+
+        // Otherwise, subdivide and add to child
+        if (!this.divided) {
+            this.subdivide();
+        }
+
+        return this.northeast!.insert(object) ||
+               this.northwest!.insert(object) ||
+               this.southeast!.insert(object) ||
+               this.southwest!.insert(object);
+    }
+
+    query(range: Rect, found: Point[] = []): Point[] {
+        // Check if range intersects this quad's boundary
+        if (!this.intersects(range)) {
+            return found;
+        }
+
+        // Check objects in this quad
+        for (const obj of this.objects) {
+            if (rangeContains(range, obj)) {
+                found.push(obj);
+            }
+        }
+
+        // Recursively search children
+        if (this.divided) {
+            this.northeast!.query(range, found);
+            this.northwest!.query(range, found);
+            this.southeast!.query(range, found);
+            this.southwest!.query(range, found);
+        }
+
+        return found;
+    }
+
+    contains(object: Point): boolean {
+        return object.x >= this.boundary.x &&
+               object.x &lt; this.boundary.x + this.boundary.width &&
+               object.y >= this.boundary.y &&
+               object.y &lt; this.boundary.y + this.boundary.height;
+    }
+
+    intersects(range: Rect): boolean {
+        return !(this.boundary.x > range.x + range.width ||
+                 this.boundary.x + this.boundary.width &lt; range.x ||
+                 this.boundary.y > range.y + range.height ||
+                 this.boundary.y + this.boundary.height &lt; range.y);
+    }
+}</code></pre>
                 </div>
 
                 <div class="example-box">
                     <h4>🎮 Using QuadTree for Collision Detection:</h4>
-                    <pre><code class="language-javascript">// Create quadtree
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Create quadtree
 const boundary = {x: 0, y: 0, width: 800, height: 600};
 const quadtree = new QuadTree(boundary);
 
@@ -170,6 +275,37 @@ objects.forEach(obj => {
         }
     });
 });</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface Collidable extends Point {
+    radius: number;
+    collidesWith(other: Collidable): boolean;
+}
+declare const objects: Collidable[];
+declare function handleCollision(a: Collidable, b: Collidable): void;
+
+// Create quadtree
+const boundary: Rect = { x: 0, y: 0, width: 800, height: 600 };
+const quadtree = new QuadTree(boundary);
+
+// Insert all objects
+objects.forEach(obj => quadtree.insert(obj));
+
+// For each object, only check nearby objects
+objects.forEach(obj => {
+    const range: Rect = {
+        x: obj.x - obj.radius * 2,
+        y: obj.y - obj.radius * 2,
+        width: obj.radius * 4,
+        height: obj.radius * 4
+    };
+
+    const nearby = quadtree.query(range) as Collidable[];
+    nearby.forEach(other => {
+        if (obj !== other && obj.collidesWith(other)) {
+            handleCollision(obj, other);
+        }
+    });
+});</code></pre>
+                    </div>
                 </div>
             </details>
 
@@ -339,8 +475,12 @@ animate();</code></pre>
 
             <details data-demo-id="pooling" data-deps="vector2d,clearCanvas,randomFloat">
                 <summary>📝 Click to see: Object Pool Implementation</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">class ObjectPool {
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class ObjectPool {
     constructor(createFn, resetFn, initialSize = 50) {
         this.createFn = createFn;  // Function to create new objects
         this.resetFn = resetFn;    // Function to reset objects for reuse
@@ -394,11 +534,81 @@ animate();</code></pre>
         }
     }
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// A poolable object exposes an update() that returns false to release.
+interface Poolable { update(): boolean }
+
+// Generic pool: T is the object type, A are the args used to reset it.
+class ObjectPool&lt;T extends Poolable, A extends unknown[] = unknown[]> {
+    private createFn: () => T;             // Function to create new objects
+    private resetFn: (obj: T, ...args: A) => void;  // Reset for reuse
+    private pool: T[] = [];
+    private active: T[] = [];
+
+    constructor(
+        createFn: () => T,
+        resetFn: (obj: T, ...args: A) => void,
+        initialSize: number = 50
+    ) {
+        this.createFn = createFn;
+        this.resetFn = resetFn;
+
+        // Pre-create objects
+        for (let i = 0; i &lt; initialSize; i++) {
+            this.pool.push(this.createFn());
+        }
+    }
+
+    get(...args: A): T {
+        let object: T;
+
+        if (this.pool.length > 0) {
+            // Reuse from pool
+            object = this.pool.pop()!;
+        } else {
+            // Pool is empty, create new
+            object = this.createFn();
+        }
+
+        // Reset and activate
+        this.resetFn(object, ...args);
+        this.active.push(object);
+
+        return object;
+    }
+
+    release(object: T): void {
+        // Remove from active
+        const index = this.active.indexOf(object);
+        if (index !== -1) {
+            this.active.splice(index, 1);
+        }
+
+        // Return to pool
+        this.pool.push(object);
+    }
+
+    update(): void {
+        // Update all active objects
+        for (let i = this.active.length - 1; i >= 0; i--) {
+            const obj = this.active[i];
+
+            // Update returns false when object should be released
+            if (!obj.update()) {
+                this.release(obj);
+            }
+        }
+    }
+}</code></pre>
                 </div>
 
                 <div class="example-box">
                     <h4>🎮 Example: Bullet Pool</h4>
-                    <pre><code class="language-javascript">// Create bullet pool
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Create bullet pool
 const bulletPool = new ObjectPool(
     // Create function
     () => ({
@@ -424,6 +634,42 @@ const bullet = bulletPool.get(playerX, playerY, 10, 0);
 
 // Update all active bullets
 bulletPool.update();</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface Bullet extends Poolable {
+    position: Vector2D;
+    velocity: Vector2D;
+    active: boolean;
+}
+type BulletResetArgs = [x: number, y: number, vx: number, vy: number];
+declare const playerX: number;
+declare const playerY: number;
+
+// Create bullet pool — TS infers ObjectPool&lt;Bullet, BulletResetArgs>
+const bulletPool = new ObjectPool&lt;Bullet, BulletResetArgs>(
+    // Create function
+    () => ({
+        position: new Vector2D(0, 0),
+        velocity: new Vector2D(0, 0),
+        active: false,
+        update() {
+            this.position.add(this.velocity);
+            // Return false if out of bounds
+            return this.position.x >= 0 && this.position.x &lt;= 800;
+        }
+    }),
+    // Reset function
+    (bullet, x, y, vx, vy) => {
+        bullet.position.set(x, y);
+        bullet.velocity.set(vx, vy);
+        bullet.active = true;
+    }
+);
+
+// Spawn a bullet (no garbage creation!)
+const bullet: Bullet = bulletPool.get(playerX, playerY, 10, 0);
+
+// Update all active bullets
+bulletPool.update();</code></pre>
+                    </div>
                 </div>
             </details>
 
@@ -559,8 +805,12 @@ animate();</code></pre>
 
             <details data-demo-id="noise" data-deps="clearCanvas">
                 <summary>📝 Click to see: Simple Noise Function</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">// Simplified Perlin-like noise
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Simplified Perlin-like noise
 class NoiseGenerator {
     constructor(seed = 0) {
         this.seed = seed;
@@ -618,6 +868,68 @@ class NoiseGenerator {
         return value / maxValue;
     }
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">declare function lerp(a: number, b: number, t: number): number;
+
+// Simplified Perlin-like noise
+class NoiseGenerator {
+    seed: number;
+
+    constructor(seed: number = 0) {
+        this.seed = seed;
+    }
+
+    // Simple hash function for pseudo-random values
+    hash(x: number, y: number): number {
+        let h = this.seed + x * 374761393 + y * 668265263;
+        h = (h ^ (h >> 13)) * 1274126177;
+        return (h ^ (h >> 16)) / 2147483648 + 0.5;
+    }
+
+    // Smooth interpolation
+    smoothstep(t: number): number {
+        return t * t * (3 - 2 * t);
+    }
+
+    // 2D noise function
+    noise(x: number, y: number): number {
+        const xi = Math.floor(x);
+        const yi = Math.floor(y);
+        const xf = x - xi;
+        const yf = y - yi;
+
+        // Get corner values
+        const n00 = this.hash(xi, yi);
+        const n10 = this.hash(xi + 1, yi);
+        const n01 = this.hash(xi, yi + 1);
+        const n11 = this.hash(xi + 1, yi + 1);
+
+        // Smooth interpolation
+        const sx = this.smoothstep(xf);
+        const sy = this.smoothstep(yf);
+
+        const nx0 = lerp(n00, n10, sx);
+        const nx1 = lerp(n01, n11, sx);
+
+        return lerp(nx0, nx1, sy);
+    }
+
+    // Multi-octave noise (more detail)
+    fractalNoise(x: number, y: number, octaves: number = 4): number {
+        let value = 0;
+        let amplitude = 1;
+        let frequency = 1;
+        let maxValue = 0;
+
+        for (let i = 0; i &lt; octaves; i++) {
+            value += this.noise(x * frequency, y * frequency) * amplitude;
+            maxValue += amplitude;
+            amplitude *= 0.5;
+            frequency *= 2;
+        }
+
+        return value / maxValue;
+    }
+}</code></pre>
                 </div>
             </details>
 
@@ -652,8 +964,12 @@ class NoiseGenerator {
 
             <details data-demo-id="procgen" data-deps="clearCanvas">
                 <summary>📝 Click to see: Perlin Noise Implementation</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">class PerlinNoise {
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class PerlinNoise {
     constructor() {
         // Permutation table (256 values, repeated)
         this.p = [];
@@ -727,11 +1043,91 @@ class NoiseGenerator {
         return total / maxValue;
     }
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">class PerlinNoise {
+    p: number[] = [];
+
+    constructor() {
+        // Permutation table (256 values, repeated)
+        for (let i = 0; i &lt; 256; i++) {
+            this.p[i] = Math.floor(Math.random() * 256);
+        }
+        // Duplicate for overflow
+        this.p = this.p.concat(this.p);
+    }
+
+    fade(t: number): number {
+        // Smoothstep: 6t^5 - 15t^4 + 10t^3
+        return t * t * t * (t * (t * 6 - 15) + 10);
+    }
+
+    lerp(a: number, b: number, t: number): number {
+        return a + t * (b - a);
+    }
+
+    grad(hash: number, x: number, y: number): number {
+        // Convert hash to gradient vector
+        const h = hash & 3;
+        const u = h &lt; 2 ? x : y;
+        const v = h &lt; 2 ? y : x;
+        return ((h & 1) ? -u : u) + ((h & 2) ? -v : v);
+    }
+
+    noise(x: number, y: number): number {
+        // Find grid cell
+        const X = Math.floor(x) & 255;
+        const Y = Math.floor(y) & 255;
+
+        // Relative position within cell
+        x -= Math.floor(x);
+        y -= Math.floor(y);
+
+        // Fade curves
+        const u = this.fade(x);
+        const v = this.fade(y);
+
+        // Hash coordinates of 4 cube corners
+        const a = this.p[X] + Y;
+        const aa = this.p[a];
+        const ab = this.p[a + 1];
+        const b = this.p[X + 1] + Y;
+        const ba = this.p[b];
+        const bb = this.p[b + 1];
+
+        // Blend results from 4 corners
+        return this.lerp(
+            this.lerp(this.grad(aa, x, y), this.grad(ba, x - 1, y), u),
+            this.lerp(this.grad(ab, x, y - 1), this.grad(bb, x - 1, y - 1), u),
+            v
+        );
+    }
+
+    // Octave noise - combine multiple frequencies
+    octaveNoise(x: number, y: number, octaves: number = 4, persistence: number = 0.5): number {
+        let total = 0;
+        let frequency = 1;
+        let amplitude = 1;
+        let maxValue = 0;
+
+        for (let i = 0; i &lt; octaves; i++) {
+            total += this.noise(x * frequency, y * frequency) * amplitude;
+            maxValue += amplitude;
+            amplitude *= persistence;
+            frequency *= 2;
+        }
+
+        return total / maxValue;
+    }
+}</code></pre>
                 </div>
 
                 <div class="example-box">
                     <h4>🎮 Terrain Generation Example:</h4>
-                    <pre><code class="language-javascript">class TerrainGenerator {
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">class TerrainGenerator {
     constructor(width, height) {
         this.width = width;
         this.height = height;
@@ -779,6 +1175,60 @@ class NoiseGenerator {
         return colors[tileType];
     }
 }</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">type TileType = 'water' | 'sand' | 'grass' | 'mountain' | 'snow';
+
+class TerrainGenerator {
+    width: number;
+    height: number;
+    noise = new PerlinNoise();
+    heightmap: number[][] = [];
+
+    constructor(width: number, height: number) {
+        this.width = width;
+        this.height = height;
+    }
+
+    generate(scale: number = 0.05): void {
+        for (let y = 0; y &lt; this.height; y++) {
+            this.heightmap[y] = [];
+            for (let x = 0; x &lt; this.width; x++) {
+                // Get noise value (0-1)
+                const value = this.noise.octaveNoise(
+                    x * scale,
+                    y * scale,
+                    4,      // 4 octaves
+                    0.5     // persistence
+                );
+
+                // Normalize to 0-1 range
+                this.heightmap[y][x] = (value + 1) / 2;
+            }
+        }
+    }
+
+    getTileType(x: number, y: number): TileType {
+        const height = this.heightmap[y][x];
+
+        // Map height to terrain types
+        if (height &lt; 0.3) return 'water';
+        if (height &lt; 0.4) return 'sand';
+        if (height &lt; 0.7) return 'grass';
+        if (height &lt; 0.9) return 'mountain';
+        return 'snow';
+    }
+
+    getColor(tileType: TileType): string {
+        const colors: Record&lt;TileType, string> = {
+            water: '#4A90E2',
+            sand: '#F5DEB3',
+            grass: '#7EC850',
+            mountain: '#8B7355',
+            snow: '#FFFFFF'
+        };
+        return colors[tileType];
+    }
+}</code></pre>
+                    </div>
                 </div>
             </details>
 
@@ -824,8 +1274,12 @@ class NoiseGenerator {
 
             <details data-demo-id="tilemap" data-deps="clearCanvas">
                 <summary>📝 Click to see: Tilemap Implementation</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">class Tilemap {
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class Tilemap {
     constructor(width, height, tileSize) {
         this.width = width;
         this.height = height;
@@ -885,6 +1339,75 @@ class NoiseGenerator {
         }
     }
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface Camera { x: number; y: number; width: number; height: number }
+
+class Tilemap {
+    width: number;
+    height: number;
+    tileSize: number;
+    tiles: number[][] = [];
+
+    constructor(width: number, height: number, tileSize: number) {
+        this.width = width;
+        this.height = height;
+        this.tileSize = tileSize;
+
+        // Initialize empty map
+        for (let y = 0; y &lt; height; y++) {
+            this.tiles[y] = [];
+            for (let x = 0; x &lt; width; x++) {
+                this.tiles[y][x] = 0;  // 0 = empty
+            }
+        }
+    }
+
+    setTile(x: number, y: number, type: number): void {
+        if (x >= 0 && x &lt; this.width && y >= 0 && y &lt; this.height) {
+            this.tiles[y][x] = type;
+        }
+    }
+
+    getTile(x: number, y: number): number {
+        if (x >= 0 && x &lt; this.width && y >= 0 && y &lt; this.height) {
+            return this.tiles[y][x];
+        }
+        return -1;  // Out of bounds
+    }
+
+    // Convert world position to tile coordinates
+    worldToTile(worldX: number, worldY: number): { x: number; y: number } {
+        return {
+            x: Math.floor(worldX / this.tileSize),
+            y: Math.floor(worldY / this.tileSize)
+        };
+    }
+
+    // Check if tile is solid (for collision)
+    isSolid(x: number, y: number): boolean {
+        const tile = this.getTile(x, y);
+        return tile === 1;  // 1 = wall
+    }
+
+    render(ctx: CanvasRenderingContext2D, camera: Camera): void {
+        // Only render visible tiles
+        const startX = Math.max(0, Math.floor(camera.x / this.tileSize));
+        const startY = Math.max(0, Math.floor(camera.y / this.tileSize));
+        const endX = Math.min(this.width, startX + camera.width / this.tileSize + 1);
+        const endY = Math.min(this.height, startY + camera.height / this.tileSize + 1);
+
+        for (let y = startY; y &lt; endY; y++) {
+            for (let x = startX; x &lt; endX; x++) {
+                const tile = this.tiles[y][x];
+                if (tile !== 0) {
+                    this.renderTile(ctx, x, y, tile, camera);
+                }
+            }
+        }
+    }
+
+    // Subclasses provide their own tile rendering
+    renderTile(_ctx: CanvasRenderingContext2D, _x: number, _y: number, _tile: number, _camera: Camera): void {}
+}</code></pre>
                 </div>
             </details>
 
@@ -927,8 +1450,12 @@ class NoiseGenerator {
 
             <details data-demo-id="ecs" data-deps="vector2d,clearCanvas,randomFloat">
                 <summary>📝 Click to see: ECS Implementation</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">// Components are pure data
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Components are pure data
 class Position {
     constructor(x, y) {
         this.x = x;
@@ -1063,11 +1590,145 @@ class RenderSystem {
         }
     }
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// A "constructor" type — anything you can call `new` on with any args.
+type ComponentClass&lt;T = object> = new (...args: any[]) => T;
+
+interface System {
+    update(entities: Entity[], deltaTime: number): void;
+}
+
+// Components are pure data
+class Position {
+    constructor(public x: number, public y: number) {}
+}
+
+class Velocity {
+    constructor(public x: number, public y: number) {}
+}
+
+class Renderable {
+    constructor(public sprite: string, public color: string) {}
+}
+
+class Health {
+    current: number;
+    max: number;
+    constructor(max: number) {
+        this.current = max;
+        this.max = max;
+    }
+}
+
+// Entity is just an ID with components
+class Entity {
+    static nextId = 0;
+
+    id: number;
+    components = new Map&lt;ComponentClass, object>();
+
+    constructor() {
+        this.id = Entity.nextId++;
+    }
+
+    addComponent&lt;T extends object>(component: T): this {
+        this.components.set(component.constructor as ComponentClass, component);
+        return this;  // For chaining
+    }
+
+    getComponent&lt;T extends object>(componentClass: ComponentClass&lt;T>): T | undefined {
+        return this.components.get(componentClass) as T | undefined;
+    }
+
+    hasComponent(componentClass: ComponentClass): boolean {
+        return this.components.has(componentClass);
+    }
+
+    removeComponent(componentClass: ComponentClass): void {
+        this.components.delete(componentClass);
+    }
+}
+
+// World manages all entities
+class World {
+    entities: Entity[] = [];
+    systems: System[] = [];
+
+    createEntity(): Entity {
+        const entity = new Entity();
+        this.entities.push(entity);
+        return entity;
+    }
+
+    removeEntity(entity: Entity): void {
+        const index = this.entities.indexOf(entity);
+        if (index !== -1) {
+            this.entities.splice(index, 1);
+        }
+    }
+
+    addSystem(system: System): void {
+        this.systems.push(system);
+    }
+
+    update(deltaTime: number): void {
+        for (const system of this.systems) {
+            system.update(this.entities, deltaTime);
+        }
+    }
+
+    // Query entities with specific components
+    query(...componentClasses: ComponentClass[]): Entity[] {
+        return this.entities.filter(entity =>
+            componentClasses.every(comp => entity.hasComponent(comp))
+        );
+    }
+}
+
+// Systems contain the logic
+class MovementSystem implements System {
+    update(entities: Entity[], deltaTime: number): void {
+        // Process only entities with Position and Velocity
+        for (const entity of entities) {
+            const pos = entity.getComponent(Position);
+            const vel = entity.getComponent(Velocity);
+            if (!pos || !vel) continue;
+
+            pos.x += vel.x * deltaTime;
+            pos.y += vel.y * deltaTime;
+        }
+    }
+}
+
+class RenderSystem implements System {
+    ctx: CanvasRenderingContext2D;
+
+    constructor(ctx: CanvasRenderingContext2D) {
+        this.ctx = ctx;
+    }
+
+    update(entities: Entity[]): void {
+        for (const entity of entities) {
+            const pos = entity.getComponent(Position);
+            const rend = entity.getComponent(Renderable);
+            if (!pos || !rend) continue;
+
+            this.ctx.fillStyle = rend.color;
+            this.ctx.beginPath();
+            this.ctx.arc(pos.x, pos.y, 10, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
+    }
+}</code></pre>
                 </div>
 
                 <div class="example-box">
                     <h4>🎮 Using ECS:</h4>
-                    <pre><code class="language-javascript">// Create world
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Create world
 const world = new World();
 
 // Add systems
@@ -1095,21 +1756,78 @@ function update(deltaTime) {
 // Query examples
 const movingThings = world.query(Position, Velocity);
 const damageable = world.query(Health);</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">declare const ctx: CanvasRenderingContext2D;
+
+// Create world
+const world = new World();
+
+// Add systems
+world.addSystem(new MovementSystem());
+world.addSystem(new RenderSystem(ctx));
+
+// Create a moving, visible entity (like a player)
+world.createEntity()
+    .addComponent(new Position(100, 100))
+    .addComponent(new Velocity(2, 1))
+    .addComponent(new Renderable('circle', 'blue'))
+    .addComponent(new Health(100));
+
+// Create a static, visible entity (like a tree)
+world.createEntity()
+    .addComponent(new Position(300, 200))
+    .addComponent(new Renderable('tree', 'green'));
+    // No Velocity = doesn't move!
+
+// Game loop
+function update(deltaTime: number): void {
+    world.update(deltaTime);
+}
+
+// Query examples
+const movingThings: Entity[] = world.query(Position, Velocity);
+const damageable: Entity[] = world.query(Health);</code></pre>
+                    </div>
                 </div>
 
                 <div class="thinking-prompt">
                     <h4>🧠 ECS vs Traditional OOP:</h4>
                     <p><strong>Traditional (Inheritance):</strong></p>
-                    <pre><code class="language-javascript">class Enemy extends GameObject {
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">class Enemy extends GameObject {
     // What if we want a moving tree?
     // Or a static enemy?
     // Inheritance is rigid!
 }</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">declare class GameObject {}
+
+class Enemy extends GameObject {
+    // What if we want a moving tree?
+    // Or a static enemy?
+    // Inheritance is rigid!
+}</code></pre>
+                    </div>
                     <p><strong>ECS (Composition):</strong></p>
-                    <pre><code class="language-javascript">// Mix and match components freely!
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Mix and match components freely!
 // Tree that moves? Add Velocity
 // Enemy that's frozen? Remove Velocity
 entity.addComponent(new Frozen(5));</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">declare const entity: Entity;
+class Frozen { constructor(public duration: number) {} }
+
+// Mix and match components freely!
+// Tree that moves? Add Velocity
+// Enemy that's frozen? Remove Velocity
+entity.addComponent(new Frozen(5));</code></pre>
+                    </div>
                 </div>
             </details>
 
@@ -1151,8 +1869,12 @@ entity.addComponent(new Frozen(5));</code></pre>
 
             <details data-demo-id="sound" data-deps="vector2d,clearCanvas,randomFloat">
                 <summary>📝 Click to see: Sound Propagation System</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">class SoundSource {
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class SoundSource {
     constructor(x, y, maxDistance = 500) {
         this.position = new Vector2D(x, y);
         this.maxDistance = maxDistance;
@@ -1264,6 +1986,128 @@ class AudioManager {
         return clamp(pitchShift, 0.5, 2.0);  // Limit to reasonable range
     }
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface Listener { position: Vector2D; forward: Vector2D }
+interface Obstacle { x: number; y: number; width: number; height: number }
+declare function clamp(v: number, min: number, max: number): number;
+declare function lineIntersectsRect(a: Vector2D, b: Vector2D, rect: Obstacle): boolean;
+
+class SoundSource {
+    position: Vector2D;
+    maxDistance: number;
+    baseVolume = 1.0;
+    audio?: HTMLAudioElement;  // Optional — wired up by AudioManager
+
+    constructor(x: number, y: number, maxDistance: number = 500) {
+        this.position = new Vector2D(x, y);
+        this.maxDistance = maxDistance;
+    }
+
+    // Calculate volume based on distance
+    calculateVolume(listenerPos: Vector2D): number {
+        const distance = this.position.distance(listenerPos);
+
+        if (distance >= this.maxDistance) {
+            return 0;
+        }
+
+        // Linear falloff (can also use inverse square law)
+        const attenuation = 1 - (distance / this.maxDistance);
+
+        return this.baseVolume * attenuation;
+    }
+
+    // Calculate stereo panning (-1 = left, 0 = center, 1 = right)
+    calculatePanning(listenerPos: Vector2D, listenerForward: Vector2D): number {
+        const toSound = this.position.subtract(listenerPos);
+        const right = new Vector2D(-listenerForward.y, listenerForward.x);
+
+        // Dot product with right vector
+        const pan = toSound.normalize().dot(right);
+
+        return clamp(pan, -1, 1);
+    }
+
+    // Check if sound is occluded by obstacles
+    calculateOcclusion(listenerPos: Vector2D, obstacles: Obstacle[]): number {
+        let occlusionFactor = 1.0;
+
+        for (const obstacle of obstacles) {
+            // Cast ray from listener to sound source
+            const intersection = lineIntersectsRect(
+                listenerPos,
+                this.position,
+                obstacle
+            );
+
+            if (intersection) {
+                // Sound is muffled by obstacle
+                occlusionFactor *= 0.3;  // 70% reduction
+            }
+        }
+
+        return occlusionFactor;
+    }
+}
+
+class AudioManager {
+    listener: Listener = {
+        position: new Vector2D(0, 0),
+        forward: new Vector2D(0, -1)  // Facing up
+    };
+    sources: SoundSource[] = [];
+    obstacles: Obstacle[] = [];
+
+    addSource(x: number, y: number, audioElement: HTMLAudioElement): SoundSource {
+        const source = new SoundSource(x, y);
+        source.audio = audioElement;
+        this.sources.push(source);
+        return source;
+    }
+
+    update(): void {
+        for (const source of this.sources) {
+            // Calculate volume with distance and occlusion
+            let volume = source.calculateVolume(this.listener.position);
+            const occlusion = source.calculateOcclusion(
+                this.listener.position,
+                this.obstacles
+            );
+            volume *= occlusion;
+
+            // Calculate panning
+            const pan = source.calculatePanning(
+                this.listener.position,
+                this.listener.forward
+            );
+
+            // Apply to Web Audio API (if available)
+            if (source.audio) {
+                source.audio.volume = volume;
+                // For stereo panning, you'd use a StereoPannerNode
+            }
+        }
+    }
+
+    // Doppler effect (pitch shift based on velocity)
+    calculateDopplerShift(
+        sourcePos: Vector2D, sourceVel: Vector2D,
+        listenerPos: Vector2D, listenerVel: Vector2D
+    ): number {
+        const speedOfSound = 343;  // m/s (or arbitrary game units)
+
+        const toListener = listenerPos.subtract(sourcePos).normalize();
+
+        // Velocity components toward each other
+        const sourceSpeed = sourceVel.dot(toListener);
+        const listenerSpeed = listenerVel.dot(toListener);
+
+        // Doppler formula
+        const pitchShift = (speedOfSound + listenerSpeed) /
+                           (speedOfSound - sourceSpeed);
+
+        return clamp(pitchShift, 0.5, 2.0);  // Limit to reasonable range
+    }
+}</code></pre>
                 </div>
             </details>
 
@@ -1303,8 +2147,12 @@ class AudioManager {
 
             <details data-demo-id="network" data-deps="vector2d,clearCanvas,randomFloat">
                 <summary>📝 Click to see: Network Interpolation System</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">class NetworkEntity {
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class NetworkEntity {
     constructor(id) {
         this.id = id;
         this.position = new Vector2D(0, 0);
@@ -1419,6 +2267,129 @@ class PredictedPlayer {
         // server.send({ input, sequence });
     }
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface PositionUpdate { position: Vector2D; timestamp: number }
+interface Input { x: number; y: number }
+interface PendingInput { input: Input; sequence: number }
+declare const Vector2D: {
+    new (x: number, y: number): Vector2D;
+    lerp(a: Vector2D, b: Vector2D, t: number): Vector2D;
+};
+
+class NetworkEntity {
+    id: string | number;
+    position: Vector2D = new Vector2D(0, 0);
+    renderPosition: Vector2D = new Vector2D(0, 0);
+
+    // Buffer of recent server updates
+    positionBuffer: PositionUpdate[] = [];
+    interpolationDelay = 100;  // ms behind server
+
+    constructor(id: string | number) {
+        this.id = id;
+    }
+
+    // Receive position update from server
+    receiveServerUpdate(position: Vector2D, timestamp: number): void {
+        this.positionBuffer.push({
+            position: position.copy(),
+            timestamp: timestamp
+        });
+
+        // Keep only last 1 second of updates
+        const cutoff = timestamp - 1000;
+        this.positionBuffer = this.positionBuffer.filter(
+            update => update.timestamp > cutoff
+        );
+    }
+
+    // Interpolate position based on buffered updates
+    updateInterpolation(currentTime: number): void {
+        // Render time is slightly behind server
+        const renderTime = currentTime - this.interpolationDelay;
+
+        // Find two updates to interpolate between
+        let target: PositionUpdate | null = null;
+        let previous: PositionUpdate | null = null;
+
+        for (let i = 0; i &lt; this.positionBuffer.length; i++) {
+            if (this.positionBuffer[i].timestamp &lt;= renderTime) {
+                previous = this.positionBuffer[i];
+            }
+            if (this.positionBuffer[i].timestamp >= renderTime) {
+                target = this.positionBuffer[i];
+                break;
+            }
+        }
+
+        // No interpolation data available
+        if (!previous || !target) {
+            if (this.positionBuffer.length > 0) {
+                this.renderPosition = this.positionBuffer[0].position.copy();
+            }
+            return;
+        }
+
+        // Interpolate between the two positions
+        const timeDiff = target.timestamp - previous.timestamp;
+        const t = (renderTime - previous.timestamp) / timeDiff;
+
+        this.renderPosition = Vector2D.lerp(
+            previous.position,
+            target.position,
+            t
+        );
+    }
+}
+
+// Client-side prediction for local player
+class PredictedPlayer {
+    position: Vector2D = new Vector2D(0, 0);
+    velocity: Vector2D = new Vector2D(0, 0);
+    inputSequence = 0;
+
+    // Store inputs for reconciliation
+    pendingInputs: PendingInput[] = [];
+
+    // Apply input immediately (prediction)
+    applyInput(input: Input): void {
+        this.inputSequence++;
+
+        // Store input with sequence number
+        this.pendingInputs.push({
+            input: input,
+            sequence: this.inputSequence
+        });
+
+        // Apply movement immediately
+        this.velocity.set(input.x * 5, input.y * 5);
+        this.position.add(this.velocity);
+
+        // Send to server
+        this.sendToServer(input, this.inputSequence);
+    }
+
+    // Reconcile with server state
+    reconcileWithServer(serverPosition: Vector2D, lastProcessedInput: number): void {
+        // Remove inputs already processed by server
+        this.pendingInputs = this.pendingInputs.filter(
+            i => i.sequence > lastProcessedInput
+        );
+
+        // Rewind to server position
+        this.position = serverPosition.copy();
+
+        // Replay unprocessed inputs
+        for (const input of this.pendingInputs) {
+            this.velocity.set(input.input.x * 5, input.input.y * 5);
+            this.position.add(this.velocity);
+        }
+    }
+
+    sendToServer(_input: Input, _sequence: number): void {
+        // Send input to server (websocket, etc.)
+        // server.send({ input, sequence });
+    }
+}</code></pre>
                 </div>
             </details>
 
@@ -1455,8 +2426,12 @@ class PredictedPlayer {
 
             <details>
                 <summary>📝 Click to see: Delta Time Implementation</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">// WRONG: Frame-rate dependent (bad!)
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// WRONG: Frame-rate dependent (bad!)
 function badUpdate() {
     player.x += 5;  // Moves 5px per frame
     // At 60fps: moves 300px/sec
@@ -1487,6 +2462,41 @@ function gameLoop(timestamp) {
 
     requestAnimationFrame(gameLoop);
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">declare const player: { x: number };
+declare function update(dt: number): void;
+declare function render(): void;
+
+// WRONG: Frame-rate dependent (bad!)
+function badUpdate(): void {
+    player.x += 5;  // Moves 5px per frame
+    // At 60fps: moves 300px/sec
+    // At 30fps: moves 150px/sec (half speed!)
+}
+
+// CORRECT: Frame-rate independent (good!)
+let lastTime = 0;
+
+function goodUpdate(currentTime: number): void {
+    const deltaTime = (currentTime - lastTime) / 1000;  // Convert to seconds
+    lastTime = currentTime;
+
+    const speed = 300;  // pixels per second
+    player.x += speed * deltaTime;
+    // At 60fps (dt≈0.016): moves 300 * 0.016 = 4.8px per frame = 300px/sec
+    // At 30fps (dt≈0.033): moves 300 * 0.033 = 10px per frame = 300px/sec
+    // Same speed regardless of framerate!
+}
+
+// Game loop with delta time
+function gameLoop(timestamp: number): void {
+    const deltaTime = (timestamp - lastTime) / 1000;
+    lastTime = timestamp;
+
+    update(deltaTime);
+    render();
+
+    requestAnimationFrame(gameLoop);
+}</code></pre>
                 </div>
             </details>
 
@@ -1500,8 +2510,12 @@ function gameLoop(timestamp) {
 
             <details>
                 <summary>📝 Click to see: Fixed Timestep Implementation</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">class FixedTimestepGame {
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class FixedTimestepGame {
     constructor() {
         this.accumulator = 0;
         this.fixedTimeStep = 1 / 60;  // 60 Hz physics
@@ -1562,11 +2576,86 @@ function gameLoop(timestamp) {
 }
 
 requestAnimationFrame(gameLoop);</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface InterpolatedEntity {
+    previousPosition: Vector2D;
+    position: Vector2D;
+    draw(pos: Vector2D): void;
+}
+declare const entities: InterpolatedEntity[];
+
+class FixedTimestepGame {
+    accumulator = 0;
+    fixedTimeStep = 1 / 60;  // 60 Hz physics
+    lastTime = 0;
+    maxFrameTime = 0.25;     // Cap at 4 FPS to prevent spiral
+
+    update(currentTime: number): void {
+        // Calculate frame time
+        let frameTime = (currentTime - this.lastTime) / 1000;
+        this.lastTime = currentTime;
+
+        // Cap frame time to prevent spiral of death
+        if (frameTime > this.maxFrameTime) {
+            frameTime = this.maxFrameTime;
+        }
+
+        // Add to accumulator
+        this.accumulator += frameTime;
+
+        // Consume accumulator in fixed-size chunks
+        while (this.accumulator >= this.fixedTimeStep) {
+            this.fixedUpdate(this.fixedTimeStep);
+            this.accumulator -= this.fixedTimeStep;
+        }
+
+        // Interpolation factor for smooth rendering
+        const alpha = this.accumulator / this.fixedTimeStep;
+        this.render(alpha);
+    }
+
+    fixedUpdate(dt: number): void {
+        // Physics updates here (always constant dt)
+        this.updatePhysics(dt);
+        this.updateGameLogic(dt);
+    }
+
+    render(alpha: number): void {
+        // Interpolate between current and previous state
+        // for smooth rendering even if physics runs slower
+        entities.forEach(entity => {
+            const renderPos = Vector2D.lerp(
+                entity.previousPosition,
+                entity.position,
+                alpha
+            );
+            entity.draw(renderPos);
+        });
+    }
+
+    // Subclasses provide game-specific physics + logic
+    updatePhysics(_dt: number): void {}
+    updateGameLogic(_dt: number): void {}
+}
+
+// Game loop
+const game = new FixedTimestepGame();
+
+function gameLoop(timestamp: number): void {
+    game.update(timestamp);
+    requestAnimationFrame(gameLoop);
+}
+
+requestAnimationFrame(gameLoop);</code></pre>
                 </div>
 
                 <div class="example-box">
                     <h4>🎮 How it Works:</h4>
-                    <pre><code class="language-javascript">// Example timeline:
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Example timeline:
 // Frame 1: dt = 16ms (60fps)
 //   accumulator = 16ms
 //   Run physics once (16.6ms consumed)
@@ -1584,6 +2673,25 @@ requestAnimationFrame(gameLoop);</code></pre>
 
 // Result: Physics ALWAYS runs at 60Hz,
 // regardless of rendering framerate!</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Example timeline:
+// Frame 1: dt = 16ms (60fps)
+//   accumulator = 16ms
+//   Run physics once (16.6ms consumed)
+//   accumulator = 0ms
+
+// Frame 2: dt = 33ms (30fps - slow frame!)
+//   accumulator = 33ms
+//   Run physics twice (16.6ms × 2 = 33.2ms consumed)
+//   accumulator = 0ms
+
+// Frame 3: dt = 8ms (120fps - fast frame!)
+//   accumulator = 8ms
+//   Don't run physics (not enough time)
+//   accumulator = 8ms (carry over)
+
+// Result: Physics ALWAYS runs at 60Hz,
+// regardless of rendering framerate!</code></pre>
+                    </div>
                 </div>
             </details>
 

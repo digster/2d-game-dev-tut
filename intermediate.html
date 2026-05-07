@@ -64,8 +64,12 @@
 
             <details data-demo-id="lerp" data-deps="vector2d,clearCanvas,drawGrid">
                 <summary>📝 Click to see: Lerp Implementation</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">// Basic lerp function
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Basic lerp function
 function lerp(start, end, t) {
     return start + (end - start) * t;
 }
@@ -76,11 +80,32 @@ Vector2D.prototype.lerp = function(target, t) {
     this.y += (target.y - this.y) * t;
     return this;
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Augment Vector2D with a .lerp method via interface declaration merging
+interface Vector2D {
+    lerp(target: Vector2D, t: number): this;
+}
+
+// Basic lerp function
+function lerp(start: number, end: number, t: number): number {
+    return start + (end - start) * t;
+}
+
+// Vector lerp (mutates and returns this for chaining)
+Vector2D.prototype.lerp = function (this: Vector2D, target: Vector2D, t: number): Vector2D {
+    this.x += (target.x - this.x) * t;
+    this.y += (target.y - this.y) * t;
+    return this;
+};</code></pre>
                 </div>
 
                 <div class="example-box">
                     <h4>🎮 Smooth Camera Follow:</h4>
-                    <pre><code class="language-javascript">class Camera {
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">class Camera {
     constructor() {
         this.position = new Vector2D(0, 0);
     }
@@ -90,6 +115,15 @@ Vector2D.prototype.lerp = function(target, t) {
         this.position.lerp(target, smoothing);
     }
 }</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">class Camera {
+    position: Vector2D = new Vector2D(0, 0);
+
+    follow(target: Vector2D, smoothing: number = 0.1): void {
+        // Smoothly move camera toward target
+        this.position.lerp(target, smoothing);
+    }
+}</code></pre>
+                    </div>
                 </div>
             </details>
 
@@ -131,8 +165,12 @@ Vector2D.prototype.lerp = function(target, t) {
 
             <details data-demo-id="physics" data-deps="vector2d,clearCanvas,randomFloat,clamp,drawVector">
                 <summary>📝 Click to see: Physics Entity Class</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">class PhysicsEntity {
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class PhysicsEntity {
     constructor(x, y, mass = 1) {
         this.position = new Vector2D(x, y);
         this.velocity = new Vector2D(0, 0);
@@ -157,11 +195,46 @@ Vector2D.prototype.lerp = function(target, t) {
         this.acceleration.multiply(0);
     }
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">class PhysicsEntity {
+    position: Vector2D;
+    velocity: Vector2D;
+    acceleration: Vector2D;
+    mass: number;
+
+    constructor(x: number, y: number, mass: number = 1) {
+        this.position = new Vector2D(x, y);
+        this.velocity = new Vector2D(0, 0);
+        this.acceleration = new Vector2D(0, 0);
+        this.mass = mass;
+    }
+
+    applyForce(force: Vector2D): void {
+        // F = ma, so a = F/m
+        const f = force.copy().divide(this.mass);
+        this.acceleration.add(f);
+    }
+
+    update(): void {
+        // Update velocity based on acceleration
+        this.velocity.add(this.acceleration);
+
+        // Update position based on velocity
+        this.position.add(this.velocity);
+
+        // Reset acceleration (forces are applied each frame)
+        this.acceleration.multiply(0);
+    }
+}</code></pre>
                 </div>
 
                 <div class="example-box">
                     <h4>🎮 Adding Gravity:</h4>
-                    <pre><code class="language-javascript">const gravity = new Vector2D(0, 0.5);  // Downward force
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">const gravity = new Vector2D(0, 0.5);  // Downward force
 
 function gameLoop() {
     entities.forEach(entity => {
@@ -169,6 +242,17 @@ function gameLoop() {
         entity.update();
     });
 }</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">declare const entities: PhysicsEntity[];
+
+const gravity: Vector2D = new Vector2D(0, 0.5);  // Downward force
+
+function gameLoop(): void {
+    entities.forEach(entity => {
+        entity.applyForce(gravity);
+        entity.update();
+    });
+}</code></pre>
+                    </div>
                 </div>
             </details>
 
@@ -331,8 +415,12 @@ animate();</code></pre>
 
             <details data-demo-id="spaceship" data-deps="vector2d,clearCanvas,randomFloat,clamp,drawVector">
                 <summary>📝 Click to see: Spaceship Implementation</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">class Spaceship {
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class Spaceship {
     constructor(x, y) {
         this.position = new Vector2D(x, y);
         this.velocity = new Vector2D(0, 0);
@@ -382,11 +470,70 @@ animate();</code></pre>
         this.acceleration.multiply(0);
     }
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">class Spaceship {
+    position: Vector2D;
+    velocity: Vector2D;
+    acceleration: Vector2D;
+
+    angle = 0;          // Direction ship is facing
+    rotation = 0;       // Angular velocity
+
+    mass = 1;
+    thrustPower = 0.15;
+    rotationSpeed = 0.08;
+
+    constructor(x: number, y: number) {
+        this.position = new Vector2D(x, y);
+        this.velocity = new Vector2D(0, 0);
+        this.acceleration = new Vector2D(0, 0);
+    }
+
+    applyForce(force: Vector2D): void {
+        // F = ma, so a = F/m
+        const f = force.copy().divide(this.mass);
+        this.acceleration.add(f);
+    }
+
+    thrust(): void {
+        // Apply force in the direction ship is facing
+        const thrustForce = new Vector2D(
+            Math.cos(this.angle) * this.thrustPower,
+            Math.sin(this.angle) * this.thrustPower
+        );
+        this.applyForce(thrustForce);
+    }
+
+    rotateLeft(): void {
+        this.rotation = -this.rotationSpeed;
+    }
+
+    rotateRight(): void {
+        this.rotation = this.rotationSpeed;
+    }
+
+    update(): void {
+        // Update rotation
+        this.angle += this.rotation;
+        this.rotation *= 0.9;  // Damping
+
+        // Update physics
+        this.velocity.add(this.acceleration);
+        this.position.add(this.velocity);
+
+        // Reset acceleration
+        this.acceleration.multiply(0);
+    }
+}</code></pre>
                 </div>
 
                 <div class="example-box">
                     <h4>🎮 Gravity Well Physics:</h4>
-                    <pre><code class="language-javascript">class GravityWell {
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">class GravityWell {
     constructor(x, y, mass = 100) {
         this.position = new Vector2D(x, y);
         this.mass = mass;
@@ -416,6 +563,51 @@ function update() {
 
     spaceship.update();
 }</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface GravityAffected {
+    position: Vector2D;
+    mass: number;
+    applyForce(force: Vector2D): void;
+}
+declare function clamp(v: number, min: number, max: number): number;
+
+class GravityWell {
+    position: Vector2D;
+    mass: number;
+    radius: number;
+
+    constructor(x: number, y: number, mass: number = 100) {
+        this.position = new Vector2D(x, y);
+        this.mass = mass;
+        this.radius = Math.sqrt(mass) * 2;
+    }
+
+    attract(entity: GravityAffected): void {
+        // Calculate direction to gravity well
+        const force = this.position.copy().subtract(entity.position);
+        const distance = clamp(force.length(), 5, 100);
+
+        // Newton's law of gravitation: F = G × (m1 × m2) / r²
+        const G = 1;  // Gravitational constant (simplified)
+        const strength = (G * this.mass * entity.mass) / (distance * distance);
+
+        force.normalize().multiply(strength);
+        entity.applyForce(force);
+    }
+}
+
+// In game loop:
+declare const gravityWells: GravityWell[];
+declare const spaceship: Spaceship;
+
+function update(): void {
+    // Apply gravity from all wells
+    gravityWells.forEach(well => {
+        well.attract(spaceship);
+    });
+
+    spaceship.update();
+}</code></pre>
+                    </div>
                 </div>
             </details>
 
@@ -671,8 +863,12 @@ animate();</code></pre>
 
             <details data-demo-id="spring" data-deps="vector2d,clearCanvas,randomFloat,clamp">
                 <summary>📝 Click to see: Spring Implementation</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">class Spring {
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class Spring {
     constructor(stiffness = 0.1, damping = 0.8) {
         this.position = new Vector2D(0, 0);
         this.velocity = new Vector2D(0, 0);
@@ -701,11 +897,48 @@ animate();</code></pre>
         this.target.set(x, y);
     }
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">class Spring {
+    position: Vector2D = new Vector2D(0, 0);
+    velocity: Vector2D = new Vector2D(0, 0);
+    target: Vector2D = new Vector2D(0, 0);
+
+    stiffness: number;  // How tight the spring is
+    damping: number;    // How much it slows down
+
+    constructor(stiffness: number = 0.1, damping: number = 0.8) {
+        this.stiffness = stiffness;
+        this.damping = damping;
+    }
+
+    update(): void {
+        // Calculate spring force
+        const displacement = this.target.subtract(this.position);
+        const springForce = displacement.multiply(this.stiffness);
+
+        // Apply force to velocity
+        this.velocity.add(springForce);
+
+        // Apply damping (friction)
+        this.velocity.multiply(this.damping);
+
+        // Update position
+        this.position.add(this.velocity);
+    }
+
+    setTarget(x: number, y: number): void {
+        this.target.set(x, y);
+    }
+}</code></pre>
                 </div>
 
                 <div class="example-box">
                     <h4>🎮 Example: Smooth Camera Follow</h4>
-                    <pre><code class="language-javascript">class Camera {
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">class Camera {
     constructor() {
         this.spring = new Spring(0.08, 0.85);
     }
@@ -727,6 +960,31 @@ animate();</code></pre>
 // Lower damping = more bouncy (0.7)
 // Lower stiffness = looser follow (0.05)
 // Higher damping = less bouncy (0.95)</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface PlayerLike { x: number; y: number }
+
+class Camera {
+    spring = new Spring(0.08, 0.85);
+    x: number = 0;
+    y: number = 0;
+
+    follow(player: PlayerLike): void {
+        // Set target to player position
+        this.spring.setTarget(player.x, player.y);
+
+        // Update spring physics
+        this.spring.update();
+
+        // Camera position is spring position
+        this.x = this.spring.position.x;
+        this.y = this.spring.position.y;
+    }
+}
+
+// Higher stiffness = tighter follow (0.2)
+// Lower damping = more bouncy (0.7)
+// Lower stiffness = looser follow (0.05)
+// Higher damping = less bouncy (0.95)</code></pre>
+                    </div>
                 </div>
             </details>
 
@@ -902,8 +1160,12 @@ animate();</code></pre>
 
             <details data-demo-id="verlet" data-deps="vector2d,clearCanvas,drawGrid,randomFloat">
                 <summary>📝 Click to see: Verlet Point Implementation</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">class VerletPoint {
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class VerletPoint {
     constructor(x, y, pinned = false) {
         this.position = new Vector2D(x, y);
         this.oldPosition = new Vector2D(x, y);
@@ -951,12 +1213,71 @@ animate();</code></pre>
         }
     }
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface Bounds { left: number; right: number; top: number; bottom: number }
+
+class VerletPoint {
+    position: Vector2D;
+    oldPosition: Vector2D;
+    acceleration: Vector2D = new Vector2D(0, 0);
+    pinned: boolean;
+
+    constructor(x: number, y: number, pinned: boolean = false) {
+        this.position = new Vector2D(x, y);
+        this.oldPosition = new Vector2D(x, y);
+        this.pinned = pinned;  // Fixed points don't move
+    }
+
+    update(dt: number = 1): void {
+        if (this.pinned) return;
+
+        // Calculate velocity implicitly
+        const velocity = this.position.copy().subtract(this.oldPosition);
+
+        // Save current position
+        const temp = this.position.copy();
+
+        // Verlet integration: new_pos = pos + velocity + acceleration
+        this.position.add(velocity);
+        this.position.add(this.acceleration.copy().multiply(dt * dt));
+
+        // Store old position for next frame
+        this.oldPosition = temp;
+
+        // Reset acceleration
+        this.acceleration.multiply(0);
+    }
+
+    applyForce(force: Vector2D): void {
+        this.acceleration.add(force);
+    }
+
+    constrain(bounds: Bounds): void {
+        // Keep point within bounds (with bouncing)
+        if (this.position.x &lt; bounds.left) {
+            this.position.x = bounds.left;
+        }
+        if (this.position.x > bounds.right) {
+            this.position.x = bounds.right;
+        }
+        if (this.position.y > bounds.bottom) {
+            this.position.y = bounds.bottom;
+        }
+        if (this.position.y &lt; bounds.top) {
+            this.position.y = bounds.top;
+        }
+    }
+}</code></pre>
                 </div>
 
                 <div class="example-box">
                     <h4>🔗 Constraints: The Magic of Verlet</h4>
                     <p>Constraints are what make Verlet physics special. After updating positions, we enforce constraints (like "these two points must stay exactly 50 pixels apart"). This creates rope, cloth, and rigid structures!</p>
-                    <pre><code class="language-javascript">class Constraint {
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">class Constraint {
     constructor(p1, p2, length = null) {
         this.p1 = p1;
         this.p2 = p2;
@@ -984,13 +1305,50 @@ animate();</code></pre>
         }
     }
 }</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">class Constraint {
+    p1: VerletPoint;
+    p2: VerletPoint;
+    length: number;
+
+    constructor(p1: VerletPoint, p2: VerletPoint, length: number | null = null) {
+        this.p1 = p1;
+        this.p2 = p2;
+        // If no length specified, use current distance
+        this.length = length ?? p1.position.distance(p2.position);
+    }
+
+    solve(): void {
+        // Calculate current distance between points
+        const diff = this.p2.position.copy().subtract(this.p1.position);
+        const currentDistance = diff.length();
+
+        // Calculate how much to correct
+        const correction = (currentDistance - this.length) / currentDistance;
+
+        // Move both points to satisfy constraint
+        const correctionVector = diff.multiply(correction * 0.5);
+
+        if (!this.p1.pinned) {
+            this.p1.position.add(correctionVector);
+        }
+
+        if (!this.p2.pinned) {
+            this.p2.position.subtract(correctionVector);
+        }
+    }
+}</code></pre>
+                    </div>
                 </div>
             </details>
 
             <details>
                 <summary>📝 Click to see: Complete Rope System</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">class Rope {
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class Rope {
     constructor(startX, startY, segments = 10, segmentLength = 20) {
         this.points = [];
         this.constraints = [];
@@ -1056,11 +1414,82 @@ animate();</code></pre>
         });
     }
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">class Rope {
+    points: VerletPoint[] = [];
+    constraints: Constraint[] = [];
+
+    constructor(startX: number, startY: number, segments: number = 10, segmentLength: number = 20) {
+        // Create points along the rope
+        for (let i = 0; i &lt;= segments; i++) {
+            const x = startX;
+            const y = startY + i * segmentLength;
+            const pinned = (i === 0);  // Pin the first point
+
+            this.points.push(new VerletPoint(x, y, pinned));
+        }
+
+        // Create constraints between adjacent points
+        for (let i = 0; i &lt; segments; i++) {
+            const constraint = new Constraint(
+                this.points[i],
+                this.points[i + 1],
+                segmentLength
+            );
+            this.constraints.push(constraint);
+        }
+    }
+
+    update(gravity: Vector2D = new Vector2D(0, 0.5)): void {
+        // Apply forces to all points
+        this.points.forEach(point => {
+            point.applyForce(gravity);
+        });
+
+        // Update positions
+        this.points.forEach(point => {
+            point.update();
+        });
+
+        // Solve constraints multiple times for stability
+        for (let i = 0; i &lt; 3; i++) {
+            this.constraints.forEach(constraint => {
+                constraint.solve();
+            });
+        }
+    }
+
+    draw(ctx: CanvasRenderingContext2D): void {
+        // Draw the rope as connected line segments
+        ctx.strokeStyle = '#8b4513';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(this.points[0].position.x, this.points[0].position.y);
+
+        for (let i = 1; i &lt; this.points.length; i++) {
+            ctx.lineTo(this.points[i].position.x, this.points[i].position.y);
+        }
+
+        ctx.stroke();
+
+        // Draw points
+        this.points.forEach(point => {
+            ctx.fillStyle = point.pinned ? '#ff5252' : '#42a5f5';
+            ctx.beginPath();
+            ctx.arc(point.position.x, point.position.y, 4, 0, Math.PI * 2);
+            ctx.fill();
+        });
+    }
+}</code></pre>
                 </div>
 
                 <div class="example-box">
                     <h4>🎮 Usage Example:</h4>
-                    <pre><code class="language-javascript">// Create a rope hanging from the top
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Create a rope hanging from the top
 const rope = new Rope(400, 50, 15, 20);
 
 function gameLoop() {
@@ -1086,6 +1515,36 @@ canvas.addEventListener('mousemove', (e) => {
         }
     });
 });</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">declare const canvas: HTMLCanvasElement;
+declare const ctx: CanvasRenderingContext2D;
+
+// Create a rope hanging from the top
+const rope: Rope = new Rope(400, 50, 15, 20);
+
+function gameLoop(): void {
+    // Update rope physics
+    rope.update();
+
+    // Draw rope
+    rope.draw(ctx);
+
+    requestAnimationFrame(gameLoop);
+}
+
+// Make the rope interactive!
+canvas.addEventListener('mousemove', (e: MouseEvent) => {
+    const mousePos = new Vector2D(e.offsetX, e.offsetY);
+
+    // Find closest point and apply force
+    rope.points.forEach(point => {
+        const dist = point.position.distance(mousePos);
+        if (dist &lt; 50) {
+            const force = mousePos.subtract(point.position).multiply(0.02);
+            point.applyForce(force);
+        }
+    });
+});</code></pre>
+                    </div>
                 </div>
             </details>
 
@@ -1387,8 +1846,12 @@ animate();</code></pre>
 
             <details data-demo-id="procedural" data-deps="vector2d,clearCanvas,drawGrid,randomFloat">
                 <summary>📝 Click to see: Procedural Animation Implementation</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">// Butterfly - Wing flapping with figure-8 flight pattern
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Butterfly - Wing flapping with figure-8 flight pattern
 class Butterfly {
     constructor(x, y) {
         this.position = new Vector2D(x, y);
@@ -1411,11 +1874,41 @@ class Butterfly {
         // Draw wings with rotating angles...
     }
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Butterfly - Wing flapping with figure-8 flight pattern
+class Butterfly {
+    position: Vector2D;
+    time = 0;
+    wingPhase = 0;
+
+    constructor(x: number, y: number) {
+        this.position = new Vector2D(x, y);
+    }
+
+    update(dt: number): void {
+        this.time += dt;
+        this.wingPhase += dt * 12; // Wing flapping speed
+
+        // Figure-8 flight pattern using Lissajous curve
+        this.position.x += Math.sin(this.time * 0.8) * 0.5;
+        this.position.y += Math.sin(this.time * 1.6) * 0.3;
+    }
+
+    draw(ctx: CanvasRenderingContext2D): void {
+        // Wing flapping animation
+        const wingAngle = Math.sin(this.wingPhase) * 0.5;
+        // Draw wings with rotating angles...
+    }
+}</code></pre>
                 </div>
 
                 <div class="example-box">
                     <h4>🐟 Fish - Swimming with tail wagging:</h4>
-                    <pre><code class="language-javascript">class Fish {
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">class Fish {
     constructor(x, y) {
         this.position = new Vector2D(x, y);
         this.velocity = new Vector2D(0, 0);
@@ -1440,11 +1933,46 @@ class Butterfly {
         const tailWag = Math.sin(this.tailPhase) * 0.4;
     }
 }</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">declare const speed: number;
+
+class Fish {
+    position: Vector2D;
+    velocity: Vector2D = new Vector2D(0, 0);
+    tailPhase = 0;
+    targetAngle = 0;
+    currentAngle = 0;
+
+    constructor(x: number, y: number) {
+        this.position = new Vector2D(x, y);
+    }
+
+    update(dt: number): void {
+        this.tailPhase += dt * 8;
+
+        // Smoothly rotate toward target direction
+        let angleDiff = this.targetAngle - this.currentAngle;
+        this.currentAngle += angleDiff * dt * 2;
+
+        // Move in current direction
+        this.velocity.x = Math.cos(this.currentAngle) * speed * dt;
+        this.velocity.y = Math.sin(this.currentAngle) * speed * dt;
+        this.position.add(this.velocity);
+
+        // Tail wagging for swimming effect
+        const tailWag = Math.sin(this.tailPhase) * 0.4;
+    }
+}</code></pre>
+                    </div>
                 </div>
 
                 <div class="example-box">
                     <h4>🎐 Jellyfish - Pulsing with tentacle chains:</h4>
-                    <pre><code class="language-javascript">class Jellyfish {
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">class Jellyfish {
     constructor(x, y) {
         this.position = new Vector2D(x, y);
         this.tentacles = []; // Array of segment chains
@@ -1469,6 +1997,38 @@ class Butterfly {
         });
     }
 }</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Each tentacle is a chain of Vector2D segments
+type Tentacle = Vector2D[];
+
+class Jellyfish {
+    position: Vector2D;
+    velocity: Vector2D = new Vector2D(0, 0);
+    tentacles: Tentacle[] = [];
+    pulsePhase = 0;
+
+    constructor(x: number, y: number) {
+        this.position = new Vector2D(x, y);
+    }
+
+    update(dt: number): void {
+        this.pulsePhase += dt * 4;
+
+        // Pulsing propulsion - only push when contracting
+        const pulse = Math.sin(this.pulsePhase);
+        if (pulse > 0) {
+            this.velocity.y -= pulse * 0.3;
+        }
+
+        // Update tentacles with chain following
+        this.tentacles.forEach(segments => {
+            for (let j = 1; j &lt; segments.length; j++) {
+                // Each segment follows previous with delay
+                segments[j].lerp(segments[j - 1], 0.15);
+            }
+        });
+    }
+}</code></pre>
+                    </div>
                 </div>
             </details>
 
@@ -1670,8 +2230,12 @@ animate();</code></pre>
 
             <details data-demo-id="wave" data-deps="vector2d,clearCanvas">
                 <summary>📝 Click to see: Wave Simulation Implementation</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">// 1D Wave System - Perfect for water surfaces, ropes, flags
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// 1D Wave System - Perfect for water surfaces, ropes, flags
 class Wave1D {
     constructor(points, length) {
         this.points = points;      // Number of points in the wave
@@ -1704,11 +2268,54 @@ class Wave1D {
         }
     }
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// 1D Wave System - Perfect for water surfaces, ropes, flags
+class Wave1D {
+    points: number;        // Number of points in the wave
+    length: number;        // Physical length
+    y: number[];           // Current positions
+    velocity: number[];    // Velocities
+    damping = 0.99;        // Energy loss (0.95-0.99 typical)
+    tension = 0.025;       // Wave propagation speed
+
+    constructor(points: number, length: number) {
+        this.points = points;
+        this.length = length;
+        this.y = new Array(points).fill(0);
+        this.velocity = new Array(points).fill(0);
+    }
+
+    update(): void {
+        // Calculate forces based on neighbors
+        for (let i = 1; i &lt; this.points - 1; i++) {
+            // Force from left and right neighbors
+            const force = (this.y[i - 1] + this.y[i + 1]) / 2 - this.y[i];
+            this.velocity[i] += force * this.tension;
+        }
+
+        // Apply velocities and damping
+        for (let i = 0; i &lt; this.points; i++) {
+            this.y[i] += this.velocity[i];
+            this.velocity[i] *= this.damping;
+        }
+    }
+
+    disturb(index: number, force: number): void {
+        // Create a disturbance (like dropping a stone in water)
+        if (index >= 0 && index &lt; this.points) {
+            this.velocity[index] += force;
+        }
+    }
+}</code></pre>
                 </div>
 
                 <div class="example-box">
                     <h4>🎵 Standing Wave Generator:</h4>
-                    <pre><code class="language-javascript">// Great for visualizing sound, vibrations, energy fields
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Great for visualizing sound, vibrations, energy fields
 class StandingWave {
     constructor(amplitude, frequency, points) {
         this.amplitude = amplitude;
@@ -1726,11 +2333,39 @@ class StandingWave {
         return this.amplitude * Math.sin(x * this.frequency) * Math.cos(this.time * 3);
     }
 }</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Great for visualizing sound, vibrations, energy fields
+class StandingWave {
+    amplitude: number;
+    frequency: number;
+    points: number;
+    time = 0;
+
+    constructor(amplitude: number, frequency: number, points: number) {
+        this.amplitude = amplitude;
+        this.frequency = frequency;
+        this.points = points;
+    }
+
+    update(dt: number): void {
+        this.time += dt;
+    }
+
+    getY(x: number): number {
+        // Standing wave: oscillates in place
+        return this.amplitude * Math.sin(x * this.frequency) * Math.cos(this.time * 3);
+    }
+}</code></pre>
+                    </div>
                 </div>
 
                 <div class="example-box">
                     <h4>🌊 Traveling Wave System:</h4>
-                    <pre><code class="language-javascript">// Perfect for water, energy blasts, shockwaves
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Perfect for water, energy blasts, shockwaves
 class TravelingWave {
     constructor(amplitude, wavelength, speed) {
         this.amplitude = amplitude;
@@ -1749,11 +2384,40 @@ class TravelingWave {
         return this.amplitude * Math.sin(x * frequency - this.time * this.speed);
     }
 }</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Perfect for water, energy blasts, shockwaves
+class TravelingWave {
+    amplitude: number;
+    wavelength: number;
+    speed: number;
+    time = 0;
+
+    constructor(amplitude: number, wavelength: number, speed: number) {
+        this.amplitude = amplitude;
+        this.wavelength = wavelength;
+        this.speed = speed;
+    }
+
+    update(dt: number): void {
+        this.time += dt;
+    }
+
+    getY(x: number): number {
+        // Traveling wave: moves through space
+        const frequency = (2 * Math.PI) / this.wavelength;
+        return this.amplitude * Math.sin(x * frequency - this.time * this.speed);
+    }
+}</code></pre>
+                    </div>
                 </div>
 
                 <div class="example-box">
                     <h4>💫 Wave Interference (Multiple Waves):</h4>
-                    <pre><code class="language-javascript">// Combine multiple waves for complex effects
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Combine multiple waves for complex effects
 class WaveField {
     constructor() {
         this.sources = []; // Array of {x, y, amplitude, frequency, phase}
@@ -1784,6 +2448,44 @@ class WaveField {
         return height;
     }
 }</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Combine multiple waves for complex effects
+interface WaveSource {
+    x: number;
+    y: number;
+    amplitude: number;
+    frequency: number;
+    phase: number;
+}
+
+class WaveField {
+    sources: WaveSource[] = [];  // Array of wave sources
+
+    addSource(x: number, y: number, amplitude: number = 20, frequency: number = 0.1): void {
+        this.sources.push({ x, y, amplitude, frequency, phase: 0 });
+    }
+
+    update(dt: number): void {
+        // Advance phase of all sources
+        this.sources.forEach(source => {
+            source.phase += dt * 2;
+        });
+    }
+
+    getHeight(x: number, y: number): number {
+        // Sum contributions from all wave sources
+        let height = 0;
+        this.sources.forEach(source => {
+            const dx = x - source.x;
+            const dy = y - source.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            // Circular wave spreading from source
+            height += source.amplitude * Math.sin(distance * source.frequency - source.phase);
+        });
+        return height;
+    }
+}</code></pre>
+                    </div>
                 </div>
             </details>
 
@@ -1823,8 +2525,12 @@ class WaveField {
 
             <details data-demo-id="friction" data-deps="vector2d,clearCanvas">
                 <summary>📝 Click to see: Friction Implementations</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">// Simple Linear Friction
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Simple Linear Friction
 class LinearFriction {
     constructor(coefficient = 0.98) {
         this.coefficient = coefficient;  // 0.98 = 2% speed loss per frame
@@ -1874,11 +2580,79 @@ class GroundFriction {
         }
     }
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Common entity shape used across all friction types
+interface FrictionEntity {
+    velocity: Vector2D;
+    applyForce(force: Vector2D): void;
+}
+interface GroundEntity extends FrictionEntity { onGround: boolean }
+
+// Simple Linear Friction
+class LinearFriction {
+    coefficient: number;
+
+    constructor(coefficient: number = 0.98) {
+        this.coefficient = coefficient;  // 0.98 = 2% speed loss per frame
+    }
+
+    apply(entity: FrictionEntity): void {
+        entity.velocity.multiply(this.coefficient);
+
+        // Stop if moving very slowly (prevent infinite drift)
+        if (entity.velocity.length() &lt; 0.01) {
+            entity.velocity.multiply(0);
+        }
+    }
+}
+
+// Air/Fluid Drag (more realistic)
+class DragForce {
+    coefficient: number;
+
+    constructor(coefficient: number = 0.01) {
+        this.coefficient = coefficient;
+    }
+
+    apply(entity: FrictionEntity): void {
+        // Drag = -coefficient × velocity²
+        const speed = entity.velocity.length();
+        const dragMagnitude = this.coefficient * speed * speed;
+
+        // Apply drag in opposite direction of movement
+        const dragForce = entity.velocity.copy()
+            .normalize()
+            .multiply(-dragMagnitude);
+
+        entity.applyForce(dragForce);
+    }
+}
+
+// Ground Friction (only when touching ground)
+class GroundFriction {
+    coefficient: number;
+
+    constructor(coefficient: number = 0.15) {
+        this.coefficient = coefficient;
+    }
+
+    apply(entity: GroundEntity): void {
+        if (entity.onGround) {
+            // Friction opposes horizontal movement
+            const friction = -entity.velocity.x * this.coefficient;
+            entity.velocity.x += friction;
+        }
+    }
+}</code></pre>
                 </div>
 
                 <div class="example-box">
                     <h4>🎮 Example: Ice vs Grass vs Mud</h4>
-                    <pre><code class="language-javascript">// Different surfaces have different friction
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Different surfaces have different friction
 const surfaces = {
     ice: new LinearFriction(0.99),    // Very slippery
     grass: new LinearFriction(0.92),  // Normal friction
@@ -1891,6 +2665,28 @@ function update(player, currentSurface) {
 
     player.position.add(player.velocity);
 }</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">type SurfaceName = 'ice' | 'grass' | 'mud';
+
+interface MovablePlayer {
+    position: Vector2D;
+    velocity: Vector2D;
+    applyForce(force: Vector2D): void;
+}
+
+// Different surfaces have different friction
+const surfaces: Record&lt;SurfaceName, LinearFriction> = {
+    ice: new LinearFriction(0.99),    // Very slippery
+    grass: new LinearFriction(0.92),  // Normal friction
+    mud: new LinearFriction(0.80)     // High friction
+};
+
+function update(player: MovablePlayer, currentSurface: SurfaceName): void {
+    // Apply appropriate friction
+    surfaces[currentSurface].apply(player);
+
+    player.position.add(player.velocity);
+}</code></pre>
+                    </div>
                 </div>
             </details>
 
@@ -1923,8 +2719,12 @@ function update(player, currentSurface) {
 
             <details data-demo-id="collision" data-deps="vector2d,clearCanvas,randomFloat,clamp">
                 <summary>📝 Click to see: Collision Detection Functions</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">// Circle vs Circle
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Circle vs Circle
 function circleVsCircle(c1, r1, c2, r2) {
     const distance = c1.distance(c2);
     return distance < r1 + r2;
@@ -1948,6 +2748,39 @@ function circleVsRect(circlePos, radius, rectPos, width, height) {
     const distY = circlePos.y - closestY;
 
     return (distX * distX + distY * distY) < (radius * radius);
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">declare function clamp(v: number, min: number, max: number): number;
+
+// Circle vs Circle
+function circleVsCircle(c1: Vector2D, r1: number, c2: Vector2D, r2: number): boolean {
+    const distance = c1.distance(c2);
+    return distance &lt; r1 + r2;
+}
+
+// AABB (Axis-Aligned Bounding Box) - Rectangle vs Rectangle
+function aabbVsAabb(
+    pos1: Vector2D, w1: number, h1: number,
+    pos2: Vector2D, w2: number, h2: number
+): boolean {
+    return pos1.x &lt; pos2.x + w2 &&
+           pos1.x + w1 > pos2.x &&
+           pos1.y &lt; pos2.y + h2 &&
+           pos1.y + h1 > pos2.y;
+}
+
+// Circle vs Rectangle
+function circleVsRect(
+    circlePos: Vector2D, radius: number,
+    rectPos: Vector2D, width: number, height: number
+): boolean {
+    // Find closest point on rectangle to circle
+    const closestX = clamp(circlePos.x, rectPos.x, rectPos.x + width);
+    const closestY = clamp(circlePos.y, rectPos.y, rectPos.y + height);
+
+    const distX = circlePos.x - closestX;
+    const distY = circlePos.y - closestY;
+
+    return (distX * distX + distY * distY) &lt; (radius * radius);
 }</code></pre>
                 </div>
             </details>
@@ -1992,8 +2825,12 @@ function circleVsRect(circlePos, radius, rectPos, width, height) {
 
             <details data-demo-id="reflection" data-deps="vector2d,clearCanvas">
                 <summary>📝 Click to see: Reflection Implementations</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">// Simple Axis-Aligned Reflection (walls parallel to axes)
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Simple Axis-Aligned Reflection (walls parallel to axes)
 function bounceOffWalls(object, bounds, bounciness = 0.8) {
     // Right wall
     if (object.position.x + object.radius > bounds.right) {
@@ -2061,11 +2898,92 @@ function bounceCircles(a, b, elasticity = 0.9) {
         b.position.subtract(separation);
     }
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface Bounds { left: number; right: number; top: number; bottom: number }
+interface Bounceable {
+    position: Vector2D;
+    velocity: Vector2D;
+    radius: number;
+}
+interface CircleBody extends Bounceable { mass: number }
+
+// Simple Axis-Aligned Reflection (walls parallel to axes)
+function bounceOffWalls(object: Bounceable, bounds: Bounds, bounciness: number = 0.8): void {
+    // Right wall
+    if (object.position.x + object.radius > bounds.right) {
+        object.position.x = bounds.right - object.radius;
+        object.velocity.x *= -bounciness;  // Reverse and reduce
+    }
+
+    // Left wall
+    if (object.position.x - object.radius &lt; bounds.left) {
+        object.position.x = bounds.left + object.radius;
+        object.velocity.x *= -bounciness;
+    }
+
+    // Bottom wall
+    if (object.position.y + object.radius > bounds.bottom) {
+        object.position.y = bounds.bottom - object.radius;
+        object.velocity.y *= -bounciness;
+    }
+
+    // Top wall
+    if (object.position.y - object.radius &lt; bounds.top) {
+        object.position.y = bounds.top + object.radius;
+        object.velocity.y *= -bounciness;
+    }
+}
+
+// Reflection Off Any Surface (using surface normal)
+function reflect(velocity: Vector2D, surfaceNormal: Vector2D): Vector2D {
+    // Formula: v' = v - 2(v · n)n
+    // Where n is the surface normal (unit vector)
+    const dotProduct = velocity.dot(surfaceNormal);
+    const reflection = surfaceNormal
+        .copy()
+        .multiply(2 * dotProduct);
+
+    return velocity.subtract(reflection);
+}
+
+// Circle Bouncing Off Circle
+function bounceCircles(a: CircleBody, b: CircleBody, elasticity: number = 0.9): void {
+    // Get collision normal (from b to a)
+    const normal = a.position.subtract(b.position).normalize();
+
+    // Relative velocity
+    const relativeVel = a.velocity.subtract(b.velocity);
+
+    // Velocity along collision normal
+    const speed = relativeVel.dot(normal);
+
+    // Don't bounce if moving apart
+    if (speed > 0) return;
+
+    // Calculate impulse (considering mass)
+    const impulse = (2 * speed) / (a.mass + b.mass);
+
+    // Apply impulse to both objects
+    a.velocity.subtract(normal.copy().multiply(impulse * b.mass * elasticity));
+    b.velocity.add(normal.copy().multiply(impulse * a.mass * elasticity));
+
+    // Separate objects to prevent overlap
+    const overlap = (a.radius + b.radius) - a.position.distance(b.position);
+    if (overlap > 0) {
+        const separation = normal.copy().multiply(overlap / 2);
+        a.position.add(separation);
+        b.position.subtract(separation);
+    }
+}</code></pre>
                 </div>
 
                 <div class="example-box">
                     <h4>🎮 Example: Breakout/Pong Ball</h4>
-                    <pre><code class="language-javascript">class Ball {
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">class Ball {
     constructor(x, y) {
         this.position = new Vector2D(x, y);
         this.velocity = new Vector2D(5, 5);
@@ -2091,6 +3009,37 @@ function bounceCircles(a, b, elasticity = 0.9) {
         this.velocity.y = -Math.abs(Math.cos(angle) * speed);
     }
 }</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface Paddle { x: number; width: number }
+
+class Ball {
+    position: Vector2D;
+    velocity: Vector2D = new Vector2D(5, 5);
+    radius = 10;
+    bounciness = 1.0;  // Perfect bounce
+
+    constructor(x: number, y: number) {
+        this.position = new Vector2D(x, y);
+    }
+
+    update(bounds: Bounds): void {
+        // Move ball
+        this.position.add(this.velocity);
+
+        // Bounce off walls
+        bounceOffWalls(this, bounds, this.bounciness);
+    }
+
+    hitPaddle(paddle: Paddle): void {
+        // Reflect based on where it hit the paddle
+        const relativeHit = (this.position.x - paddle.x) / (paddle.width / 2);
+        const angle = relativeHit * (Math.PI / 4);  // Max 45 degrees
+
+        const speed = this.velocity.length();
+        this.velocity.x = Math.sin(angle) * speed;
+        this.velocity.y = -Math.abs(Math.cos(angle) * speed);
+    }
+}</code></pre>
+                    </div>
                 </div>
             </details>
 
@@ -2129,8 +3078,12 @@ function bounceCircles(a, b, elasticity = 0.9) {
 
             <details data-demo-id="raycasting" data-deps="vector2d,clearCanvas,randomFloat">
                 <summary>📝 Click to see: Ray Class</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">class Ray {
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class Ray {
     constructor(origin, direction) {
         this.origin = origin.copy();
         this.direction = direction.copy().normalize();
@@ -2149,6 +3102,34 @@ function bounceCircles(a, b, elasticity = 0.9) {
 
     // Get point along ray at distance t
     pointAt(t) {
+        return new Vector2D(
+            this.origin.x + this.direction.x * t,
+            this.origin.y + this.direction.y * t
+        );
+    }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">class Ray {
+    origin: Vector2D;
+    direction: Vector2D;
+
+    constructor(origin: Vector2D, direction: Vector2D) {
+        this.origin = origin.copy();
+        this.direction = direction.copy().normalize();
+    }
+
+    // Check if ray intersects with a circle
+    intersectsCircle(center: Vector2D, radius: number): boolean {
+        const oc = this.origin.subtract(center);
+        const a = this.direction.dot(this.direction);
+        const b = 2 * oc.dot(this.direction);
+        const c = oc.dot(oc) - radius * radius;
+
+        const discriminant = b * b - 4 * a * c;
+        return discriminant >= 0;
+    }
+
+    // Get point along ray at distance t
+    pointAt(t: number): Vector2D {
         return new Vector2D(
             this.origin.x + this.direction.x * t,
             this.origin.y + this.direction.y * t
@@ -2187,8 +3168,12 @@ function bounceCircles(a, b, elasticity = 0.9) {
 
             <details data-demo-id="particles" data-deps="vector2d,clearCanvas,randomFloat">
                 <summary>📝 Click to see: Particle System</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">class Particle {
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class Particle {
     constructor(x, y) {
         this.position = new Vector2D(x, y);
         this.velocity = Vector2D.random(randomFloat(1, 5));
@@ -2233,6 +3218,60 @@ class ParticleSystem {
         this.particles.forEach(p => p.draw(ctx));
     }
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">declare function randomFloat(min: number, max: number): number;
+declare const Vector2D: {
+    new (x: number, y: number): Vector2D;
+    random(magnitude: number): Vector2D;
+};
+
+class Particle {
+    position: Vector2D;
+    velocity: Vector2D;
+    life = 1.0;
+    decay: number;
+    size: number;
+
+    constructor(x: number, y: number) {
+        this.position = new Vector2D(x, y);
+        this.velocity = Vector2D.random(randomFloat(1, 5));
+        this.decay = randomFloat(0.01, 0.03);
+        this.size = randomFloat(2, 8);
+    }
+
+    update(): boolean {
+        this.velocity.multiply(0.98);  // Friction
+        this.position.add(this.velocity);
+        this.life -= this.decay;
+        return this.life > 0;
+    }
+
+    draw(ctx: CanvasRenderingContext2D): void {
+        ctx.globalAlpha = this.life;
+        ctx.fillStyle = '#ffa726';
+        ctx.beginPath();
+        ctx.arc(this.position.x, this.position.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+    }
+}
+
+class ParticleSystem {
+    particles: Particle[] = [];
+
+    emit(x: number, y: number, count: number = 20): void {
+        for (let i = 0; i &lt; count; i++) {
+            this.particles.push(new Particle(x, y));
+        }
+    }
+
+    update(): void {
+        this.particles = this.particles.filter(p => p.update());
+    }
+
+    draw(ctx: CanvasRenderingContext2D): void {
+        this.particles.forEach(p => p.draw(ctx));
+    }
+}</code></pre>
                 </div>
             </details>
 
@@ -2268,8 +3307,12 @@ class ParticleSystem {
 
             <details data-demo-id="advancedParticles" data-deps="vector2d,clearCanvas">
                 <summary>📝 Effect 1: Fire & Flames</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">class FireParticle extends Particle {
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class FireParticle extends Particle {
     constructor(x, y) {
         super(x, y);
 
@@ -2317,13 +3360,70 @@ class ParticleSystem {
         ctx.globalAlpha = 1;
     }
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface RGB { r: number; g: number; b: number }
+declare function random(min: number, max: number): number;
+
+class FireParticle extends Particle {
+    colors: RGB[];
+
+    constructor(x: number, y: number) {
+        super(x, y);
+
+        // Fire rises and spreads
+        this.velocity.y = -random(1, 3);  // Upward
+        this.velocity.x = random(-0.5, 0.5);  // Slight spread
+
+        this.size = random(4, 12);
+        this.life = 1.0;
+        this.decay = random(0.02, 0.04);
+
+        // Color transitions: yellow → orange → red → transparent
+        this.colors = [
+            { r: 255, g: 255, b: 100 },  // Bright yellow
+            { r: 255, g: 150, b: 50 },   // Orange
+            { r: 255, g: 50, b: 50 }     // Red
+        ];
+    }
+
+    update(): boolean {
+        this.life -= this.decay;
+
+        // Accelerate upward (heat rises!)
+        this.velocity.y -= 0.05;
+
+        // Shrink as it burns out
+        this.size *= 0.98;
+
+        this.position.add(this.velocity);
+
+        return this.life > 0;
+    }
+
+    draw(ctx: CanvasRenderingContext2D): void {
+        // Interpolate color based on life
+        const colorIndex = Math.floor((1 - this.life) * 2);
+        const color = this.colors[Math.min(colorIndex, 2)];
+
+        ctx.globalAlpha = this.life;
+        ctx.fillStyle = `rgb(${color.r}, ${color.g}, ${color.b})`;
+        ctx.beginPath();
+        ctx.arc(this.position.x, this.position.y,
+                 this.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+    }
+}</code></pre>
                 </div>
             </details>
 
             <details>
                 <summary>📝 Effect 2: Smoke</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">class SmokeParticle extends Particle {
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class SmokeParticle extends Particle {
     constructor(x, y) {
         super(x, y);
 
@@ -2367,13 +3467,64 @@ class ParticleSystem {
         ctx.globalAlpha = 1;
     }
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">class SmokeParticle extends Particle {
+    angle: number;
+    swirl: number;
+
+    constructor(x: number, y: number) {
+        super(x, y);
+
+        // Smoke drifts slowly upward
+        this.velocity.y = -random(0.3, 0.8);
+        this.velocity.x = random(-0.3, 0.3);
+
+        this.size = random(8, 20);
+        this.life = 1.0;
+        this.decay = random(0.005, 0.015);  // Lasts longer
+
+        // Swirl effect
+        this.angle = random(0, Math.PI * 2);
+        this.swirl = random(-0.02, 0.02);
+    }
+
+    update(): boolean {
+        this.life -= this.decay;
+
+        // Swirl motion
+        this.angle += this.swirl;
+        this.velocity.x += Math.cos(this.angle) * 0.05;
+
+        // Expand as it dissipates
+        this.size += 0.2;
+
+        this.position.add(this.velocity);
+
+        return this.life > 0;
+    }
+
+    draw(ctx: CanvasRenderingContext2D): void {
+        // Gray smoke, fades with life
+        const gray = Math.floor(100 + this.life * 100);
+        ctx.globalAlpha = this.life * 0.4;  // Semi-transparent
+        ctx.fillStyle = `rgb(${gray}, ${gray}, ${gray})`;
+        ctx.beginPath();
+        ctx.arc(this.position.x, this.position.y,
+                 this.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+    }
+}</code></pre>
                 </div>
             </details>
 
             <details>
                 <summary>📝 Effect 3: Sparkles/Magic</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">class SparkleParticle extends Particle {
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class SparkleParticle extends Particle {
     constructor(x, y) {
         super(x, y);
 
@@ -2429,13 +3580,74 @@ class ParticleSystem {
         ctx.globalAlpha = 1;
     }
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">class SparkleParticle extends Particle {
+    hue: number;
+    twinkle = 0;
+    currentSize = 0;
+
+    constructor(x: number, y: number) {
+        super(x, y);
+
+        // Sparkles burst outward
+        const angle = random(0, Math.PI * 2);
+        const speed = random(2, 5);
+        this.velocity.x = Math.cos(angle) * speed;
+        this.velocity.y = Math.sin(angle) * speed;
+
+        this.size = random(2, 6);
+        this.life = 1.0;
+        this.decay = random(0.03, 0.06);
+
+        // Random bright color
+        this.hue = random(0, 360);
+    }
+
+    update(): boolean {
+        this.life -= this.decay;
+
+        // Slow down over time
+        this.velocity.multiply(0.95);
+
+        // Twinkle animation
+        this.twinkle += 0.2;
+        const scale = Math.abs(Math.sin(this.twinkle));
+
+        this.currentSize = this.size * scale;
+
+        this.position.add(this.velocity);
+
+        return this.life > 0;
+    }
+
+    draw(ctx: CanvasRenderingContext2D): void {
+        ctx.globalAlpha = this.life;
+        ctx.fillStyle = `hsl(${this.hue}, 100%, 70%)`;
+
+        // Draw as a star/cross shape
+        const s = this.currentSize;
+        ctx.beginPath();
+        ctx.moveTo(this.position.x - s, this.position.y);
+        ctx.lineTo(this.position.x + s, this.position.y);
+        ctx.moveTo(this.position.x, this.position.y - s);
+        ctx.lineTo(this.position.x, this.position.y + s);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = `hsl(${this.hue}, 100%, 90%)`;
+        ctx.stroke();
+
+        ctx.globalAlpha = 1;
+    }
+}</code></pre>
                 </div>
             </details>
 
             <details>
                 <summary>📝 Effect 4: Rain & Water</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">class RainParticle extends Particle {
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class RainParticle extends Particle {
     constructor(x, y) {
         super(x, y);
 
@@ -2478,6 +3690,57 @@ class ParticleSystem {
     createSplash() {
         // Create small splash particles (handled by particle system)
         for (let i = 0; i < 5; i++) {
+            const angle = random(-Math.PI, 0);  // Upward hemisphere
+            const speed = random(1, 3);
+            // Emit splash particles...
+        }
+    }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">class RainParticle extends Particle {
+    length: number;
+
+    constructor(x: number, y: number) {
+        super(x, y);
+
+        // Rain falls down with slight wind
+        this.velocity.y = random(5, 10);
+        this.velocity.x = random(-1, 1);  // Wind effect
+
+        this.length = random(10, 20);
+        this.life = 1.0;
+        this.decay = 0;  // Doesn't fade until hitting ground
+    }
+
+    update(groundY: number = 600): boolean {
+        // Accelerate (gravity)
+        this.velocity.y += 0.2;
+
+        this.position.add(this.velocity);
+
+        // Hit ground - create splash!
+        if (this.position.y >= groundY) {
+            this.createSplash();
+            return false;  // Remove raindrop
+        }
+
+        return true;
+    }
+
+    draw(ctx: CanvasRenderingContext2D): void {
+        ctx.strokeStyle = 'rgba(150, 150, 255, 0.5)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(this.position.x, this.position.y);
+        ctx.lineTo(
+            this.position.x - this.velocity.x * 0.3,
+            this.position.y - this.length
+        );
+        ctx.stroke();
+    }
+
+    createSplash(): void {
+        // Create small splash particles (handled by particle system)
+        for (let i = 0; i &lt; 5; i++) {
             const angle = random(-Math.PI, 0);  // Upward hemisphere
             const speed = random(1, 3);
             // Emit splash particles...

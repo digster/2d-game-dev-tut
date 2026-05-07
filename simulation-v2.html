@@ -131,8 +131,12 @@
 
             <details>
                 <summary>📝 Click to see: Runge-Kutta 4 Integration</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">// RK4 is crucial for chaotic systems - Euler would fail!
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// RK4 is crucial for chaotic systems - Euler would fail!
 // It evaluates derivatives at 4 points per step for accuracy
 function rk4Step(state, dt) {
     // state = [θ1, ω1, θ2, ω2]
@@ -150,6 +154,51 @@ function rk4Step(state, dt) {
 
 // The actual physics - Lagrangian equations of motion
 function derivatives([θ1, ω1, θ2, ω2]) {
+    const g = 9.81;
+    const m1 = 1, m2 = 1, L1 = 1, L2 = 1;
+
+    const delta = θ1 - θ2;
+    const sinDelta = Math.sin(delta);
+    const cosDelta = Math.cos(delta);
+
+    const denom1 = L1 * (2*m1 + m2 - m2*Math.cos(2*delta));
+    const denom2 = L2 * (2*m1 + m2 - m2*Math.cos(2*delta));
+
+    // Angular acceleration for pendulum 1
+    const α1 = (-g*(2*m1+m2)*Math.sin(θ1)
+                - m2*g*Math.sin(θ1 - 2*θ2)
+                - 2*sinDelta*m2*(ω2*ω2*L2 + ω1*ω1*L1*cosDelta)) / denom1;
+
+    // Angular acceleration for pendulum 2
+    const α2 = (2*sinDelta*(ω1*ω1*L1*(m1+m2)
+                + g*(m1+m2)*Math.cos(θ1)
+                + ω2*ω2*L2*m2*cosDelta)) / denom2;
+
+    return [ω1, α1, ω2, α2]; // [dθ1/dt, dω1/dt, dθ2/dt, dω2/dt]
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Fixed-length state vector for the double pendulum: [θ1, ω1, θ2, ω2]
+type State = [number, number, number, number];
+declare function addArrays(a: State, b: State): State;
+declare function scaleArray(a: State, s: number): State;
+
+// RK4 is crucial for chaotic systems - Euler would fail!
+// It evaluates derivatives at 4 points per step for accuracy
+function rk4Step(state: State, dt: number): State {
+    // state = [θ1, ω1, θ2, ω2]
+    const k1 = derivatives(state);
+    const k2 = derivatives(addArrays(state, scaleArray(k1, dt/2)));
+    const k3 = derivatives(addArrays(state, scaleArray(k2, dt/2)));
+    const k4 = derivatives(addArrays(state, scaleArray(k3, dt)));
+
+    // Weighted average: (k1 + 2k2 + 2k3 + k4) / 6
+    for (let i = 0; i &lt; 4; i++) {
+        state[i] += dt * (k1[i] + 2*k2[i] + 2*k3[i] + k4[i]) / 6;
+    }
+    return state;
+}
+
+// The actual physics - Lagrangian equations of motion
+function derivatives([θ1, ω1, θ2, ω2]: State): State {
     const g = 9.81;
     const m1 = 1, m2 = 1, L1 = 1, L2 = 1;
 
@@ -463,8 +512,12 @@ function derivatives([θ1, ω1, θ2, ω2]) {
 
             <details>
                 <summary>📝 Click to see: SAT Collision Detection</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">// Separating Axis Theorem - works for ANY convex polygon
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Separating Axis Theorem - works for ANY convex polygon
 function satCollision(bodyA, bodyB) {
     const cornersA = bodyA.getCorners();
     const cornersB = bodyB.getCorners();
@@ -508,6 +561,62 @@ function projectShape(corners, axis) {
     }
     return { min, max };
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface Vec2 { x: number; y: number }
+interface ConvexBody {
+    getCorners(): Vec2[];
+    getAxes(): Vec2[];
+}
+interface SATResult {
+    normal: Vec2;
+    depth: number;
+    contactPoint: Vec2;
+}
+declare function findContactPoint(a: Vec2[], b: Vec2[], axis: Vec2): Vec2;
+
+// Separating Axis Theorem - works for ANY convex polygon
+function satCollision(bodyA: ConvexBody, bodyB: ConvexBody): SATResult | null {
+    const cornersA = bodyA.getCorners();
+    const cornersB = bodyB.getCorners();
+
+    // Check all axes from both shapes
+    const axes: Vec2[] = [...bodyA.getAxes(), ...bodyB.getAxes()];
+
+    let minOverlap = Infinity;
+    let smallestAxis: Vec2 | null = null;
+
+    for (const axis of axes) {
+        // Project both shapes onto this axis
+        const projA = projectShape(cornersA, axis);
+        const projB = projectShape(cornersB, axis);
+
+        // Check for gap (separating axis found = no collision)
+        const overlap = Math.min(projA.max - projB.min, projB.max - projA.min);
+        if (overlap &lt; 0) return null; // No collision!
+
+        // Track smallest overlap for collision response
+        if (overlap &lt; minOverlap) {
+            minOverlap = overlap;
+            smallestAxis = axis;
+        }
+    }
+
+    // Collision detected! Return penetration info
+    return {
+        normal: smallestAxis!,
+        depth: minOverlap,
+        contactPoint: findContactPoint(cornersA, cornersB, smallestAxis!)
+    };
+}
+
+function projectShape(corners: Vec2[], axis: Vec2): { min: number; max: number } {
+    let min = Infinity, max = -Infinity;
+    for (const c of corners) {
+        const proj = c.x * axis.x + c.y * axis.y;
+        min = Math.min(min, proj);
+        max = Math.max(max, proj);
+    }
+    return { min, max };
+}</code></pre>
                 </div>
                 <div class="example-box">
                     <h4>💡 Why SAT Works:</h4>
@@ -517,8 +626,12 @@ function projectShape(corners, axis) {
 
             <details>
                 <summary>📝 Click to see: Impulse-Based Collision Response</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">function resolveCollision(bodyA, bodyB, collision) {
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">function resolveCollision(bodyA, bodyB, collision) {
     const { normal, depth, contactPoint } = collision;
 
     // Separate bodies (push apart based on mass ratio)
@@ -565,6 +678,68 @@ function projectShape(corners, axis) {
     const j = -(1 + e) * velAlongNormal / denom;
 
     const impulse = { x: j * normal.x, y: j * normal.y };
+
+    // Apply impulse (causes both translation and rotation!)
+    bodyA.applyImpulse(impulse, contactPoint);
+    bodyB.applyImpulse({ x: -impulse.x, y: -impulse.y }, contactPoint);
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface RigidBody {
+    pos: Vec2;
+    vel: Vec2;
+    angularVel: number;
+    mass: number;
+    inertia: number;
+    restitution: number;
+    applyImpulse(impulse: Vec2, contactPoint: Vec2): void;
+}
+
+function resolveCollision(bodyA: RigidBody, bodyB: RigidBody, collision: SATResult): void {
+    const { normal, depth, contactPoint } = collision;
+
+    // Separate bodies (push apart based on mass ratio)
+    const totalMass = bodyA.mass + bodyB.mass;
+    const moveA = depth * (bodyB.mass / totalMass);
+    const moveB = depth * (bodyA.mass / totalMass);
+
+    bodyA.pos.x -= normal.x * moveA;
+    bodyA.pos.y -= normal.y * moveA;
+    bodyB.pos.x += normal.x * moveB;
+    bodyB.pos.y += normal.y * moveB;
+
+    // Calculate relative velocity at contact point
+    const rA: Vec2 = { x: contactPoint.x - bodyA.pos.x, y: contactPoint.y - bodyA.pos.y };
+    const rB: Vec2 = { x: contactPoint.x - bodyB.pos.x, y: contactPoint.y - bodyB.pos.y };
+
+    // Velocity at contact = linear + angular contribution
+    const velA: Vec2 = {
+        x: bodyA.vel.x - bodyA.angularVel * rA.y,
+        y: bodyA.vel.y + bodyA.angularVel * rA.x
+    };
+    const velB: Vec2 = {
+        x: bodyB.vel.x - bodyB.angularVel * rB.y,
+        y: bodyB.vel.y + bodyB.angularVel * rB.x
+    };
+
+    const relVel: Vec2 = { x: velA.x - velB.x, y: velA.y - velB.y };
+    const velAlongNormal = relVel.x * normal.x + relVel.y * normal.y;
+
+    // Don't resolve if moving apart
+    if (velAlongNormal > 0) return;
+
+    // Restitution (bounciness)
+    const e = Math.min(bodyA.restitution, bodyB.restitution);
+
+    // Impulse magnitude (includes rotational terms!)
+    const rAxN = rA.x * normal.y - rA.y * normal.x;
+    const rBxN = rB.x * normal.y - rB.y * normal.x;
+
+    const denom = 1/bodyA.mass + 1/bodyB.mass
+                + (rAxN * rAxN) / bodyA.inertia
+                + (rBxN * rBxN) / bodyB.inertia;
+
+    const j = -(1 + e) * velAlongNormal / denom;
+
+    const impulse: Vec2 = { x: j * normal.x, y: j * normal.y };
 
     // Apply impulse (causes both translation and rotation!)
     bodyA.applyImpulse(impulse, contactPoint);
@@ -619,8 +794,12 @@ function projectShape(corners, axis) {
 
             <details class="code-block" data-demo-id="cloth" data-deps="clearCanvas">
                 <summary>📖 Complete Code: Cloth Simulation</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">class ClothParticle {
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class ClothParticle {
     constructor(x, y) {
         this.x = x;
         this.y = y;
@@ -651,13 +830,53 @@ function projectShape(corners, axis) {
         this.y += fy / this.mass * dt * dt;
     }
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">class ClothParticle {
+    x: number;
+    y: number;
+    oldX: number;       // Verlet needs previous position
+    oldY: number;
+    pinned = false;
+    mass = 1;
+
+    constructor(x: number, y: number) {
+        this.x = x;
+        this.y = y;
+        this.oldX = x;
+        this.oldY = y;
+    }
+
+    update(gravity: number, damping: number, dt: number): void {
+        if (this.pinned) return;
+
+        // Verlet integration: x_new = x + (x - x_old) * damping + a * dt²
+        const vx = (this.x - this.oldX) * damping;
+        const vy = (this.y - this.oldY) * damping;
+
+        this.oldX = this.x;
+        this.oldY = this.y;
+
+        this.x += vx;
+        this.y += vy + gravity * dt * dt;
+    }
+
+    applyForce(fx: number, fy: number, dt: number): void {
+        if (this.pinned) return;
+        // Force → acceleration → velocity change stored in position difference
+        this.x += fx / this.mass * dt * dt;
+        this.y += fy / this.mass * dt * dt;
+    }
+}</code></pre>
                 </div>
             </details>
 
             <details>
                 <summary>📝 Click to see: Three Spring Types</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">class ClothSpring {
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class ClothSpring {
     constructor(p1, p2, type, tearThreshold = 50) {
         this.p1 = p1;
         this.p2 = p2;
@@ -748,6 +967,109 @@ function createClothSprings(particles, cols, rows, spacing) {
 
     return springs;
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Spring type as a literal union — restricts callers to valid kinds
+type SpringType = 'structural' | 'shear' | 'bend';
+
+class ClothSpring {
+    p1: ClothParticle;
+    p2: ClothParticle;
+    type: SpringType;
+    restLength: number;
+    tearThreshold: number;
+    broken = false;
+    stiffness: number;
+
+    constructor(p1: ClothParticle, p2: ClothParticle, type: SpringType, tearThreshold: number = 50) {
+        this.p1 = p1;
+        this.p2 = p2;
+        this.type = type;
+        this.restLength = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+        this.tearThreshold = tearThreshold;
+
+        // Different stiffness for different spring types
+        this.stiffness = type === 'structural' ? 1.0
+                       : type === 'shear' ? 0.7
+                       : 0.3; // bend springs are softer
+    }
+
+    satisfy(): void {
+        if (this.broken) return;
+
+        const dx = this.p2.x - this.p1.x;
+        const dy = this.p2.y - this.p1.y;
+        const currentLength = Math.hypot(dx, dy);
+
+        // Check for tearing
+        if (currentLength > this.restLength * this.tearThreshold / 10) {
+            this.broken = true;
+            return;
+        }
+
+        // Calculate correction
+        const diff = (currentLength - this.restLength) / currentLength;
+        const moveX = dx * diff * 0.5 * this.stiffness;
+        const moveY = dy * diff * 0.5 * this.stiffness;
+
+        // Move both particles (unless pinned)
+        if (!this.p1.pinned) {
+            this.p1.x += moveX;
+            this.p1.y += moveY;
+        }
+        if (!this.p2.pinned) {
+            this.p2.x -= moveX;
+            this.p2.y -= moveY;
+        }
+    }
+}
+
+// Creating the spring network
+function createClothSprings(
+    particles: ClothParticle[], cols: number, rows: number, _spacing: number
+): ClothSpring[] {
+    const springs: ClothSpring[] = [];
+
+    for (let y = 0; y &lt; rows; y++) {
+        for (let x = 0; x &lt; cols; x++) {
+            const i = y * cols + x;
+
+            // Structural springs (horizontal and vertical)
+            if (x &lt; cols - 1) {
+                springs.push(new ClothSpring(
+                    particles[i], particles[i + 1], 'structural'
+                ));
+            }
+            if (y &lt; rows - 1) {
+                springs.push(new ClothSpring(
+                    particles[i], particles[i + cols], 'structural'
+                ));
+            }
+
+            // Shear springs (diagonal)
+            if (x &lt; cols - 1 && y &lt; rows - 1) {
+                springs.push(new ClothSpring(
+                    particles[i], particles[i + cols + 1], 'shear'
+                ));
+                springs.push(new ClothSpring(
+                    particles[i + 1], particles[i + cols], 'shear'
+                ));
+            }
+
+            // Bend springs (skip one particle)
+            if (x &lt; cols - 2) {
+                springs.push(new ClothSpring(
+                    particles[i], particles[i + 2], 'bend'
+                ));
+            }
+            if (y &lt; rows - 2) {
+                springs.push(new ClothSpring(
+                    particles[i], particles[i + cols * 2], 'bend'
+                ));
+            }
+        }
+    }
+
+    return springs;
+}</code></pre>
                 </div>
                 <div class="example-box">
                     <h4>💡 Why Three Spring Types Matter:</h4>
@@ -761,8 +1083,12 @@ function createClothSprings(particles, cols, rows, spacing) {
 
             <details>
                 <summary>📝 Click to see: Multiple Constraint Iterations</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">// The key to stable cloth: multiple constraint passes per frame
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// The key to stable cloth: multiple constraint passes per frame
 function updateCloth(particles, springs, iterations = 12) {
     // 1. Apply forces (gravity, wind)
     for (const p of particles) {
@@ -772,6 +1098,43 @@ function updateCloth(particles, springs, iterations = 12) {
     // 2. Satisfy constraints multiple times
     // More iterations = stiffer, more stable cloth
     for (let iter = 0; iter < iterations; iter++) {
+        for (const spring of springs) {
+            spring.satisfy();
+        }
+    }
+
+    // 3. Boundary constraints
+    for (const p of particles) {
+        if (p.y > canvasHeight) {
+            p.y = canvasHeight;
+            p.oldY = p.y + (p.y - p.oldY) * 0.5; // Friction
+        }
+    }
+}
+
+// Why multiple iterations?
+// Each satisfy() only moves particles halfway to satisfaction.
+// After one pass, fixing spring A might break spring B.
+// Multiple passes let the system converge to a valid state.</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">declare const gravity: number;
+declare const damping: number;
+declare const dt: number;
+declare const canvasHeight: number;
+
+// The key to stable cloth: multiple constraint passes per frame
+function updateCloth(
+    particles: ClothParticle[],
+    springs: ClothSpring[],
+    iterations: number = 12
+): void {
+    // 1. Apply forces (gravity, wind)
+    for (const p of particles) {
+        p.update(gravity, damping, dt);
+    }
+
+    // 2. Satisfy constraints multiple times
+    // More iterations = stiffer, more stable cloth
+    for (let iter = 0; iter &lt; iterations; iter++) {
         for (const spring of springs) {
             spring.satisfy();
         }
@@ -837,8 +1200,12 @@ function updateCloth(particles, springs, iterations = 12) {
 
             <details>
                 <summary>📝 Click to see: SPH Kernels</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">// Smoothing kernels - the heart of accurate SPH
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Smoothing kernels - the heart of accurate SPH
 class SPHKernels {
     constructor(h) {
         this.h = h;  // Smoothing radius
@@ -876,6 +1243,53 @@ class SPHKernels {
         return this.viscConst * (this.h - r);
     }
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Smoothing kernels - the heart of accurate SPH
+class SPHKernels {
+    h: number;     // Smoothing radius
+    h2: number;
+    h6: number;
+    h9: number;
+
+    // Pre-computed constants
+    poly6Const: number;
+    spikyConst: number;
+    viscConst: number;
+
+    constructor(h: number) {
+        this.h = h;
+        this.h2 = h * h;
+        this.h6 = Math.pow(h, 6);
+        this.h9 = Math.pow(h, 9);
+
+        this.poly6Const = 315 / (64 * Math.PI * this.h9);
+        this.spikyConst = -45 / (Math.PI * this.h6);
+        this.viscConst = 45 / (Math.PI * this.h6);
+    }
+
+    // Poly6 kernel - used for DENSITY calculation
+    // Smooth and symmetric, great for summing contributions
+    poly6(r2: number): number {
+        if (r2 >= this.h2) return 0;
+        const diff = this.h2 - r2;
+        return this.poly6Const * diff * diff * diff;
+    }
+
+    // Spiky kernel gradient - used for PRESSURE forces
+    // Has a sharp peak that prevents particles from clumping
+    spikyGrad(r: number, dx: number, dy: number): Vec2 {
+        if (r >= this.h || r &lt; 0.0001) return { x: 0, y: 0 };
+        const diff = this.h - r;
+        const scale = this.spikyConst * diff * diff / r;
+        return { x: scale * dx, y: scale * dy };
+    }
+
+    // Viscosity kernel Laplacian - used for VISCOSITY
+    // Smooths velocity differences between neighbors
+    viscLaplacian(r: number): number {
+        if (r >= this.h) return 0;
+        return this.viscConst * (this.h - r);
+    }
+}</code></pre>
                 </div>
                 <div class="key-point">
                     <strong>💡 Why Different Kernels?</strong>
@@ -889,8 +1303,12 @@ class SPHKernels {
 
             <details>
                 <summary>📝 Click to see: Spatial Hashing for O(n) Neighbor Lookup</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">// Spatial hash grid - turns O(n²) into O(n) neighbor search!
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Spatial hash grid - turns O(n²) into O(n) neighbor search!
 class SpatialHash {
     constructor(cellSize) {
         this.cellSize = cellSize;
@@ -938,6 +1356,90 @@ class SpatialHash {
 
 // Usage in SPH simulation:
 function updateDensities(particles, spatialHash, kernels) {
+    spatialHash.clear();
+    for (const p of particles) {
+        spatialHash.insert(p);
+    }
+
+    for (const p of particles) {
+        p.density = 0;
+        const neighbors = spatialHash.getNeighbors(p);
+
+        for (const n of neighbors) {
+            const dx = p.x - n.x;
+            const dy = p.y - n.y;
+            const r2 = dx*dx + dy*dy;
+
+            // Only check particles within smoothing radius
+            p.density += n.mass * kernels.poly6(r2);
+        }
+
+        // Calculate pressure from density
+        p.pressure = GAS_CONSTANT * (p.density - REST_DENSITY);
+    }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Generic over the particle type — anything with x and y can be hashed
+interface SpatialEntity { x: number; y: number }
+
+declare const GAS_CONSTANT: number;
+declare const REST_DENSITY: number;
+
+// Spatial hash grid - turns O(n²) into O(n) neighbor search!
+class SpatialHash&lt;T extends SpatialEntity> {
+    cellSize: number;
+    grid: Map&lt;string, T[]> = new Map();
+
+    constructor(cellSize: number) {
+        this.cellSize = cellSize;
+    }
+
+    // Hash function: convert (x,y) position to cell key
+    hash(x: number, y: number): string {
+        const cx = Math.floor(x / this.cellSize);
+        const cy = Math.floor(y / this.cellSize);
+        return `${cx},${cy}`;
+    }
+
+    clear(): void {
+        this.grid.clear();
+    }
+
+    insert(particle: T): void {
+        const key = this.hash(particle.x, particle.y);
+        let cell = this.grid.get(key);
+        if (!cell) {
+            cell = [];
+            this.grid.set(key, cell);
+        }
+        cell.push(particle);
+    }
+
+    // Get all particles in neighboring cells
+    getNeighbors(particle: T): T[] {
+        const neighbors: T[] = [];
+        const cx = Math.floor(particle.x / this.cellSize);
+        const cy = Math.floor(particle.y / this.cellSize);
+
+        // Check 3x3 grid of cells around particle
+        for (let dx = -1; dx &lt;= 1; dx++) {
+            for (let dy = -1; dy &lt;= 1; dy++) {
+                const key = `${cx + dx},${cy + dy}`;
+                const cell = this.grid.get(key);
+                if (cell) {
+                    neighbors.push(...cell);
+                }
+            }
+        }
+        return neighbors;
+    }
+}
+
+// Usage in SPH simulation:
+function updateDensities(
+    particles: SPHParticle[],
+    spatialHash: SpatialHash&lt;SPHParticle>,
+    kernels: SPHKernels
+): void {
     spatialHash.clear();
     for (const p of particles) {
         spatialHash.insert(p);
@@ -1160,8 +1662,12 @@ class PerlinNoise {
 
             <details>
                 <summary>📝 Click to see: Curl Noise for Divergence-Free Flow</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">// Curl noise - creates swirling, divergence-free flow
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Curl noise - creates swirling, divergence-free flow
 function getCurlNoise(perlin, x, y, t, scale = 0.01, eps = 0.0001) {
     // Sample Perlin noise at 4 points around (x, y)
     const n = perlin.noise(x * scale, (y - eps) * scale, t);  // Above
@@ -1211,6 +1717,65 @@ function getWindWithOctaves(perlin, x, y, t, octaves = 4) {
 
     return wind;
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Curl noise - creates swirling, divergence-free flow
+function getCurlNoise(
+    perlin: PerlinNoise,
+    x: number, y: number, t: number,
+    scale: number = 0.01,
+    eps: number = 0.0001
+): Vec2 {
+    // Sample Perlin noise at 4 points around (x, y)
+    const n = perlin.noise(x * scale, (y - eps) * scale, t);  // Above
+    const s = perlin.noise(x * scale, (y + eps) * scale, t);  // Below
+    const e = perlin.noise((x + eps) * scale, y * scale, t);  // Right
+    const w = perlin.noise((x - eps) * scale, y * scale, t);  // Left
+
+    // Compute partial derivatives (central difference)
+    const dNoise_dy = (n - s) / (2 * eps);
+    const dNoise_dx = (e - w) / (2 * eps);
+
+    // Curl: perpendicular to gradient
+    return {
+        x: dNoise_dy,   // Wind X = d/dy
+        y: -dNoise_dx   // Wind Y = -d/dx
+    };
+}
+
+// Multiple octaves for detail at different scales
+function getWindWithOctaves(
+    perlin: PerlinNoise,
+    x: number, y: number, t: number,
+    octaves: number = 4
+): Vec2 {
+    let wind: Vec2 = { x: 0, y: 0 };
+    let amplitude = 1;
+    let frequency = 1;
+    let maxAmp = 0;
+
+    for (let i = 0; i &lt; octaves; i++) {
+        const curl = getCurlNoise(
+            perlin,
+            x * frequency,
+            y * frequency,
+            t * frequency,
+            0.01
+        );
+
+        wind.x += curl.x * amplitude;
+        wind.y += curl.y * amplitude;
+        maxAmp += amplitude;
+
+        // Each octave: higher frequency, lower amplitude
+        amplitude *= 0.5;   // Persistence
+        frequency *= 2.0;   // Lacunarity
+    }
+
+    // Normalize
+    wind.x /= maxAmp;
+    wind.y /= maxAmp;
+
+    return wind;
+}</code></pre>
                 </div>
                 <div class="key-point">
                     <strong>💡 Why Curl Noise?</strong>
@@ -1220,8 +1785,12 @@ function getWindWithOctaves(perlin, x, y, t, octaves = 4) {
 
             <details>
                 <summary>📝 Click to see: Wind Particle System</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">class WindParticle {
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class WindParticle {
     constructor(x, y) {
         this.x = x;
         this.y = y;
@@ -1259,6 +1828,66 @@ function getWindWithOctaves(perlin, x, y, t, octaves = 4) {
             ctx.beginPath();
             ctx.moveTo(this.history[0].x, this.history[0].y);
             for (let i = 1; i < this.history.length; i++) {
+                ctx.lineTo(this.history[i].x, this.history[i].y);
+            }
+            ctx.lineTo(this.x, this.y);
+            ctx.strokeStyle = `rgba(79, 195, 247, ${alpha * 0.5})`;
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        }
+
+        // Draw head
+        ctx.fillStyle = `rgba(79, 195, 247, ${alpha})`;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, 2, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">declare const canvas: HTMLCanvasElement;
+
+class WindParticle {
+    x: number;
+    y: number;
+    life: number;
+    maxLife: number;
+    history: Vec2[] = [];
+    maxHistory = 20;
+
+    constructor(x: number, y: number) {
+        this.x = x;
+        this.y = y;
+        this.life = 200 + Math.random() * 200;
+        this.maxLife = this.life;
+    }
+
+    update(wind: Vec2, strength: number): void {
+        // Store position history for trail
+        this.history.push({ x: this.x, y: this.y });
+        if (this.history.length > this.maxHistory) {
+            this.history.shift();
+        }
+
+        // Move with wind
+        this.x += wind.x * strength;
+        this.y += wind.y * strength;
+
+        this.life--;
+
+        // Wrap around edges
+        if (this.x &lt; 0) this.x = canvas.width;
+        if (this.x > canvas.width) this.x = 0;
+        if (this.y &lt; 0) this.y = canvas.height;
+        if (this.y > canvas.height) this.y = 0;
+    }
+
+    draw(ctx: CanvasRenderingContext2D): void {
+        const alpha = this.life / this.maxLife;
+
+        // Draw trail
+        if (this.history.length > 1) {
+            ctx.beginPath();
+            ctx.moveTo(this.history[0].x, this.history[0].y);
+            for (let i = 1; i &lt; this.history.length; i++) {
                 ctx.lineTo(this.history[i].x, this.history[i].y);
             }
             ctx.lineTo(this.x, this.y);
@@ -1435,8 +2064,12 @@ function getWindWithOctaves(perlin, x, y, t, octaves = 4) {
 
             <details>
                 <summary>📝 Click to see: Heat Visualization</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">// Color mapping: blue (cold) → white → yellow → red (hot)
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Color mapping: blue (cold) → white → yellow → red (hot)
 function tempToColor(temp, ambient = 20, maxTemp = 500) {
     const normalized = Math.max(0, (temp - ambient) / (maxTemp - ambient));
 
@@ -1487,6 +2120,57 @@ function drawHeatGrid(ctx, heatGrid) {
     }
     ctx.globalAlpha = 1;
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Color mapping: blue (cold) → white → yellow → red (hot)
+function tempToColor(temp: number, ambient: number = 20, maxTemp: number = 500): string {
+    const normalized = Math.max(0, (temp - ambient) / (maxTemp - ambient));
+
+    if (normalized &lt; 0.25) {
+        // Cold: blue to white
+        const t = normalized / 0.25;
+        return `rgb(${Math.floor(100 + 155*t)}, ${Math.floor(100 + 155*t)}, 255)`;
+    } else if (normalized &lt; 0.5) {
+        // Warm: white to yellow
+        const t = (normalized - 0.25) / 0.25;
+        return `rgb(255, 255, ${Math.floor(255 - 255*t)})`;
+    } else if (normalized &lt; 0.75) {
+        // Hot: yellow to orange
+        const t = (normalized - 0.5) / 0.25;
+        return `rgb(255, ${Math.floor(255 - 100*t)}, 0)`;
+    } else {
+        // Very hot: orange to red
+        const t = (normalized - 0.75) / 0.25;
+        return `rgb(255, ${Math.floor(155 - 155*t)}, 0)`;
+    }
+}
+
+function drawHeatGrid(ctx: CanvasRenderingContext2D, heatGrid: HeatGrid): void {
+    for (let y = 0; y &lt; heatGrid.rows; y++) {
+        for (let x = 0; x &lt; heatGrid.cols; x++) {
+            const temp = heatGrid.temp[y][x];
+            const mat = heatGrid.material[y][x];
+
+            // Base color from temperature
+            ctx.fillStyle = tempToColor(temp);
+
+            // Darken for solid materials
+            if (mat === 1) { // Metal
+                ctx.globalAlpha = 0.8;
+            } else if (mat === 2) { // Wood
+                ctx.globalAlpha = 0.6;
+            } else {
+                ctx.globalAlpha = temp > 25 ? 0.8 : 0.3;
+            }
+
+            ctx.fillRect(
+                x * heatGrid.cellSize,
+                y * heatGrid.cellSize,
+                heatGrid.cellSize,
+                heatGrid.cellSize
+            );
+        }
+    }
+    ctx.globalAlpha = 1;
+}</code></pre>
                 </div>
                 <div class="example-box">
                     <h4>💡 Material Properties:</h4>
@@ -1500,8 +2184,12 @@ function drawHeatGrid(ctx, heatGrid) {
 
             <details>
                 <summary>📝 Click to see: Combustion (Fire Spread)</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">// Extended heat grid with combustion
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Extended heat grid with combustion
 class CombustibleHeatGrid extends HeatGrid {
     constructor(width, height, cellSize) {
         super(width, height, cellSize);
@@ -1545,6 +2233,61 @@ class CombustibleHeatGrid extends HeatGrid {
 
                     // Fuel depleted: turn back to air
                     if (this.fuel[y][x] <= 0) {
+                        this.material[y][x] = 0;
+                    }
+                }
+            }
+        }
+
+        // Then: normal heat diffusion
+        super.update(dt);
+    }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Extended heat grid with combustion
+class CombustibleHeatGrid extends HeatGrid {
+    fuel: number[][];
+
+    // Combustion parameters
+    ignitionTemp = 200;   // Temperature to start burning
+    burnRate = 0.5;       // How fast fuel burns
+    heatPerFuel = 100;    // Heat released per unit fuel
+
+    constructor(width: number, height: number, cellSize: number) {
+        super(width, height, cellSize);
+        // Fuel amount per cell
+        this.fuel = this.createGrid(0);
+    }
+
+    setFuel(x: number, y: number, amount: number, radius: number = 5): void {
+        const cx = Math.floor(x / this.cellSize);
+        const cy = Math.floor(y / this.cellSize);
+
+        for (let dy = -radius; dy &lt;= radius; dy++) {
+            for (let dx = -radius; dx &lt;= radius; dx++) {
+                const nx = cx + dx;
+                const ny = cy + dy;
+                if (nx >= 0 && nx &lt; this.cols && ny >= 0 && ny &lt; this.rows) {
+                    if (Math.sqrt(dx*dx + dy*dy) &lt;= radius) {
+                        this.fuel[ny][nx] = amount;
+                        this.material[ny][nx] = 2; // Wood
+                    }
+                }
+            }
+        }
+    }
+
+    update(dt: number): void {
+        // First: handle combustion
+        for (let y = 0; y &lt; this.rows; y++) {
+            for (let x = 0; x &lt; this.cols; x++) {
+                if (this.fuel[y][x] > 0 && this.temp[y][x] >= this.ignitionTemp) {
+                    // Burning! Consume fuel and release heat
+                    const burnAmount = Math.min(this.fuel[y][x], this.burnRate * dt);
+                    this.fuel[y][x] -= burnAmount;
+                    this.temp[y][x] += burnAmount * this.heatPerFuel;
+
+                    // Fuel depleted: turn back to air
+                    if (this.fuel[y][x] &lt;= 0) {
                         this.material[y][x] = 0;
                     }
                 }

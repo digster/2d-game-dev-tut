@@ -70,8 +70,12 @@
 
             <details>
                 <summary>📝 Click to see: Fluid Grid Setup</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">// Fluid simulation grid
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Fluid simulation grid
 class FluidGrid {
     constructor(width, height, scale) {
         this.cols = Math.floor(width / scale);
@@ -99,15 +103,80 @@ class FluidGrid {
         return grid;
     }
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// 2D scalar field stored as rows × cols
+type Grid = number[][];
+
+// Fluid simulation grid
+class FluidGrid {
+    cols: number;
+    rows: number;
+    scale: number;
+
+    // Velocity (in X and Y directions)
+    vx: Grid;
+    vy: Grid;
+
+    // Previous velocity (for stability)
+    vx0: Grid;
+    vy0: Grid;
+
+    // Density (for visualization - like dye in water)
+    density: Grid;
+    density0: Grid;
+
+    constructor(width: number, height: number, scale: number) {
+        this.cols = Math.floor(width / scale);
+        this.rows = Math.floor(height / scale);
+        this.scale = scale;
+
+        this.vx = this.createGrid();
+        this.vy = this.createGrid();
+        this.vx0 = this.createGrid();
+        this.vy0 = this.createGrid();
+        this.density = this.createGrid();
+        this.density0 = this.createGrid();
+    }
+
+    createGrid(): Grid {
+        const grid: Grid = [];
+        for (let i = 0; i &lt; this.rows; i++) {
+            grid[i] = new Array(this.cols).fill(0);
+        }
+        return grid;
+    }
+}</code></pre>
                 </div>
             </details>
 
             <details>
                 <summary>📝 Click to see: Diffusion (Spreading)</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">// Diffusion spreads values to neighbors
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Diffusion spreads values to neighbors
 // Like heat spreading through metal or ink dispersing in water
 diffuse(x, x0, diffusion, dt) {
+    const a = dt * diffusion * this.cols * this.rows;
+
+    // Gauss-Seidel iteration for stability
+    for (let iter = 0; iter &lt; 20; iter++) {
+        for (let i = 1; i &lt; this.rows - 1; i++) {
+            for (let j = 1; j &lt; this.cols - 1; j++) {
+                // Average with neighbors, weighted by diffusion rate
+                x[i][j] = (x0[i][j] + a * (
+                    x[i - 1][j] + x[i + 1][j] +
+                    x[i][j - 1] + x[i][j + 1]
+                )) / (1 + 4 * a);
+            }
+        }
+    }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Diffusion spreads values to neighbors
+// Like heat spreading through metal or ink dispersing in water
+// (method on FluidGrid — `Grid` is `number[][]`)
+diffuse(x: Grid, x0: Grid, diffusion: number, dt: number): void {
     const a = dt * diffusion * this.cols * this.rows;
 
     // Gauss-Seidel iteration for stability
@@ -133,10 +202,46 @@ diffuse(x, x0, diffusion, dt) {
 
             <details>
                 <summary>📝 Click to see: Advection (Flow)</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">// Advection moves values along the velocity field
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Advection moves values along the velocity field
 // Like a river carrying leaves downstream
 advect(d, d0, vx, vy, dt) {
+    const dt0 = dt * this.cols;
+
+    for (let i = 1; i &lt; this.rows - 1; i++) {
+        for (let j = 1; j &lt; this.cols - 1; j++) {
+            // Trace backwards along velocity
+            let x = j - dt0 * vx[i][j];
+            let y = i - dt0 * vy[i][j];
+
+            // Clamp to grid boundaries
+            x = Math.max(0.5, Math.min(this.cols - 1.5, x));
+            y = Math.max(0.5, Math.min(this.rows - 1.5, y));
+
+            // Interpolate between grid cells
+            const i0 = Math.floor(y);
+            const i1 = i0 + 1;
+            const j0 = Math.floor(x);
+            const j1 = j0 + 1;
+
+            const s1 = x - j0;
+            const s0 = 1 - s1;
+            const t1 = y - i0;
+            const t0 = 1 - t1;
+
+            // Bilinear interpolation
+            d[i][j] = s0 * (t0 * d0[i0][j0] + t1 * d0[i1][j0]) +
+                      s1 * (t0 * d0[i0][j1] + t1 * d0[i1][j1]);
+        }
+    }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Advection moves values along the velocity field
+// Like a river carrying leaves downstream
+advect(d: Grid, d0: Grid, vx: Grid, vy: Grid, dt: number): void {
     const dt0 = dt * this.cols;
 
     for (let i = 1; i &lt; this.rows - 1; i++) {
@@ -176,10 +281,48 @@ advect(d, d0, vx, vy, dt) {
 
             <details>
                 <summary>📝 Click to see: Pressure & Incompressibility</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">// Project removes divergence (ensures fluid is incompressible)
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Project removes divergence (ensures fluid is incompressible)
 // This is what makes fluid behave like liquid, not gas
 project(vx, vy, p, div) {
+    // Calculate divergence (how much fluid is leaving each cell)
+    for (let i = 1; i &lt; this.rows - 1; i++) {
+        for (let j = 1; j &lt; this.cols - 1; j++) {
+            div[i][j] = -0.5 * (
+                vx[i][j + 1] - vx[i][j - 1] +
+                vy[i + 1][j] - vy[i - 1][j]
+            ) / this.cols;
+            p[i][j] = 0;
+        }
+    }
+
+    // Solve for pressure using iterative method
+    for (let iter = 0; iter &lt; 20; iter++) {
+        for (let i = 1; i &lt; this.rows - 1; i++) {
+            for (let j = 1; j &lt; this.cols - 1; j++) {
+                p[i][j] = (div[i][j] +
+                    p[i - 1][j] + p[i + 1][j] +
+                    p[i][j - 1] + p[i][j + 1]
+                ) / 4;
+            }
+        }
+    }
+
+    // Subtract pressure gradient from velocity
+    for (let i = 1; i &lt; this.rows - 1; i++) {
+        for (let j = 1; j &lt; this.cols - 1; j++) {
+            vx[i][j] -= 0.5 * this.cols * (p[i][j + 1] - p[i][j - 1]);
+            vy[i][j] -= 0.5 * this.cols * (p[i + 1][j] - p[i - 1][j]);
+        }
+    }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Project removes divergence (ensures fluid is incompressible)
+// This is what makes fluid behave like liquid, not gas
+project(vx: Grid, vy: Grid, p: Grid, div: Grid): void {
     // Calculate divergence (how much fluid is leaving each cell)
     for (let i = 1; i &lt; this.rows - 1; i++) {
         for (let j = 1; j &lt; this.cols - 1; j++) {
@@ -221,8 +364,12 @@ project(vx, vy, p, div) {
 
             <details data-demo-id="fluid" data-deps="clearCanvas">
                 <summary>📝 Click to see: Complete Simulation Step</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">// Main simulation step - call this every frame
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Main simulation step - call this every frame
 step(dt = 0.016) {
     const visc = 0.0001;  // Viscosity (thickness of fluid)
     const diff = 0.0001;  // Diffusion rate
@@ -252,6 +399,42 @@ step(dt = 0.016) {
 }
 
 fadeDensity(fadeRate) {
+    for (let i = 0; i &lt; this.rows; i++) {
+        for (let j = 0; j &lt; this.cols; j++) {
+            this.density[i][j] *= fadeRate;
+        }
+    }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Main simulation step - call this every frame
+step(dt: number = 0.016): void {
+    const visc = 0.0001;  // Viscosity (thickness of fluid)
+    const diff = 0.0001;  // Diffusion rate
+
+    // 1. Diffuse velocity (friction between fluid layers)
+    this.diffuse(this.vx, this.vx0, visc, dt);
+    this.diffuse(this.vy, this.vy0, visc, dt);
+
+    // 2. Project (fix velocity to be incompressible)
+    this.project(this.vx, this.vy, this.vx0, this.vy0);
+
+    // 3. Advect velocity (velocity moves itself)
+    this.advect(this.vx, this.vx0, this.vx0, this.vy0, dt);
+    this.advect(this.vy, this.vy0, this.vx0, this.vy0, dt);
+
+    // 4. Project again (ensure still incompressible)
+    this.project(this.vx, this.vy, this.vx0, this.vy0);
+
+    // 5. Diffuse density (dye spreads out)
+    this.diffuse(this.density, this.density0, diff, dt);
+
+    // 6. Advect density (velocity carries dye along)
+    this.advect(this.density, this.density0, this.vx, this.vy, dt);
+
+    // 7. Fade density over time (optional, for visual effect)
+    this.fadeDensity(0.99);
+}
+
+fadeDensity(fadeRate: number): void {
     for (let i = 0; i &lt; this.rows; i++) {
         for (let j = 0; j &lt; this.cols; j++) {
             this.density[i][j] *= fadeRate;
@@ -620,14 +803,53 @@ animate();</code></pre>
 
                 <details data-demo-id="buoyancy" data-deps="vector2d,clearCanvas,randomFloat">
                     <summary>📝 Click to see: Buoyancy Force Calculation</summary>
-                    <div class="code-container">
-                        <pre><code class="language-javascript">// Apply buoyancy force to objects in water
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Apply buoyancy force to objects in water
 function applyBuoyancy(object, waterLevel) {
     // Calculate how much of object is submerged
     const objectBottom = object.y + object.height / 2;
     const objectTop = object.y - object.height / 2;
 
     if (objectBottom &gt; waterLevel) {
+        // Calculate submerged percentage (0 to 1)
+        let submergedHeight = objectBottom - waterLevel;
+        if (objectTop &lt; waterLevel) {
+            submergedHeight = object.height;
+        }
+        const submergedPercent = submergedHeight / object.height;
+
+        // Buoyancy force = (water density - object density) * submerged volume * gravity
+        // Simplified: use density ratio for force calculation
+        const waterDensity = 1.0;
+        const buoyancyForce = (waterDensity - object.density) * submergedPercent * 0.5;
+
+        // Apply upward buoyancy force
+        object.vy += buoyancyForce;
+
+        // Water drag (resistance)
+        object.vx *= 0.95;
+        object.vy *= 0.98;
+    }
+}</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface BuoyantObject {
+    y: number;
+    vx: number;
+    vy: number;
+    height: number;
+    density: number;
+}
+
+// Apply buoyancy force to objects in water
+function applyBuoyancy(object: BuoyantObject, waterLevel: number): void {
+    // Calculate how much of object is submerged
+    const objectBottom = object.y + object.height / 2;
+    const objectTop = object.y - object.height / 2;
+
+    if (objectBottom > waterLevel) {
         // Calculate submerged percentage (0 to 1)
         let submergedHeight = objectBottom - waterLevel;
         if (objectTop &lt; waterLevel) {
@@ -679,8 +901,12 @@ function applyBuoyancy(object, waterLevel) {
 
                 <details data-demo-id="risingWater" data-deps="vector2d,clearCanvas">
                     <summary>📝 Click to see: Rising Water & Player Movement Code</summary>
-                    <div class="code-container">
-                        <pre><code class="language-javascript">// Rising water challenge mechanics
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Rising water challenge mechanics
 let waterLevel = canvas.height;
 let waterRising = false;
 const waterRiseSpeed = 0.5;
@@ -705,6 +931,53 @@ function updatePlayer() {
 
     // Check if player is in water
     if (player.y + player.height / 2 &gt; waterLevel) {
+        // Reduce speed in water (water resistance)
+        player.vx *= 0.8;
+        player.vy *= 0.8;
+
+        // Apply buoyancy (slight upward force)
+        player.vy -= 0.3;
+    }
+
+    // Apply velocity
+    player.x += player.vx;
+    player.y += player.vy;
+}</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface SwimmingPlayer {
+    x: number; y: number;
+    vx: number; vy: number;
+    height: number;
+}
+declare const canvas: HTMLCanvasElement;
+declare const player: SwimmingPlayer;
+declare const gravity: number;
+
+// Rising water challenge mechanics
+let waterLevel = canvas.height;
+let waterRising = false;
+const waterRiseSpeed = 0.5;
+let gameOver = false;
+
+// Update water level
+function updateWater(): void {
+    if (waterRising && waterLevel > 0) {
+        waterLevel -= waterRiseSpeed; // Water rises (Y decreases upward)
+    }
+
+    // Check if player is caught by water
+    if (player.y >= waterLevel) {
+        // Game over - player drowns!
+        gameOver = true;
+    }
+}
+
+// Player movement in water
+function updatePlayer(): void {
+    // Apply gravity
+    player.vy += gravity;
+
+    // Check if player is in water
+    if (player.y + player.height / 2 > waterLevel) {
         // Reduce speed in water (water resistance)
         player.vx *= 0.8;
         player.vy *= 0.8;
@@ -746,8 +1019,12 @@ function updatePlayer() {
 
                 <details data-demo-id="sph" data-deps="vector2d,clearCanvas,randomFloat">
                     <summary>📝 Click to see: SPH Particle Interaction Code</summary>
-                    <div class="code-container">
-                        <pre><code class="language-javascript">// SPH - Smoothed Particle Hydrodynamics
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">// SPH - Smoothed Particle Hydrodynamics
 const smoothingRadius = 30; // How far particles interact
 const restDensity = 1.0;    // Target density (how tightly packed)
 const stiffness = 0.1;      // How strongly particles push apart
@@ -761,6 +1038,57 @@ function updateSPHParticles() {
         let pressureForceY = 0;
 
         particles.forEach(neighbor =&gt; {
+            if (p === neighbor) return;
+
+            const dx = neighbor.x - p.x;
+            const dy = neighbor.y - p.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist &lt; smoothingRadius) {
+                // Smoothing kernel - particles closer = stronger influence
+                const influence = 1 - dist / smoothingRadius;
+                density += influence;
+
+                // Pressure force pushes particles apart
+                const pressure = (density - restDensity) * stiffness;
+                pressureForceX -= (dx / dist) * pressure * influence;
+                pressureForceY -= (dy / dist) * pressure * influence;
+            }
+        });
+
+        // Apply forces
+        p.vx += pressureForceX;
+        p.vy += pressureForceY;
+
+        // Viscosity (water sticks together)
+        p.vx *= 0.98;
+        p.vy *= 0.98;
+
+        // Gravity
+        p.vy += 0.5;
+
+        // Update position
+        p.x += p.vx;
+        p.y += p.vy;
+    });
+}</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface SPHParticle { x: number; y: number; vx: number; vy: number }
+declare const particles: SPHParticle[];
+
+// SPH - Smoothed Particle Hydrodynamics
+const smoothingRadius = 30; // How far particles interact
+const restDensity = 1.0;    // Target density (how tightly packed)
+const stiffness = 0.1;      // How strongly particles push apart
+
+// Update each particle
+function updateSPHParticles(): void {
+    particles.forEach(p => {
+        // Find nearby particles
+        let density = 0;
+        let pressureForceX = 0;
+        let pressureForceY = 0;
+
+        particles.forEach(neighbor => {
             if (p === neighbor) return;
 
             const dx = neighbor.x - p.x;
@@ -828,8 +1156,12 @@ function updateSPHParticles() {
 
                 <details data-demo-id="flowPuzzle" data-deps="vector2d,clearCanvas,randomFloat">
                     <summary>📝 Click to see: Particle Flow & Obstacle Detection</summary>
-                    <div class="code-container">
-                        <pre><code class="language-javascript">// Simple particle-based water flow
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Simple particle-based water flow
 let waterParticles = [];
 let obstacles = [];
 let bucket = { x: 600, y: 400, width: 100, height: 60 };
@@ -865,6 +1197,50 @@ function updateFlowParticles() {
 
         // Remove particles that fall off screen
         if (p.y &gt; canvas.height) {
+            waterParticles.splice(index, 1);
+        }
+    });
+}</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface FlowParticle { x: number; y: number; vx: number; vy: number }
+interface Rect { x: number; y: number; width: number; height: number }
+declare const canvas: HTMLCanvasElement;
+
+// Simple particle-based water flow
+let waterParticles: FlowParticle[] = [];
+let obstacles: Rect[] = [];
+let bucket: Rect = { x: 600, y: 400, width: 100, height: 60 };
+let collected = 0;
+
+// Update water particles
+function updateFlowParticles(): void {
+    waterParticles.forEach((p, index) => {
+        // Gravity pulls water down
+        p.vy += 0.3;
+
+        // Apply velocity
+        p.x += p.vx;
+        p.y += p.vy;
+
+        // Check collision with obstacles
+        obstacles.forEach(obs => {
+            if (p.x > obs.x && p.x &lt; obs.x + obs.width &&
+                p.y > obs.y && p.y &lt; obs.y + obs.height) {
+                // Bounce off obstacle
+                p.vy *= -0.5;
+                p.vx += (Math.random() - 0.5) * 2; // Scatter sideways
+                p.y = obs.y - 1; // Push out of obstacle
+            }
+        });
+
+        // Check if particle reaches bucket
+        if (p.x > bucket.x && p.x &lt; bucket.x + bucket.width &&
+            p.y > bucket.y && p.y &lt; bucket.y + bucket.height) {
+            collected++;
+            waterParticles.splice(index, 1); // Remove collected particle
+        }
+
+        // Remove particles that fall off screen
+        if (p.y > canvas.height) {
             waterParticles.splice(index, 1);
         }
     });
@@ -938,8 +1314,12 @@ function updateFlowParticles() {
 
             <details data-demo-id="wind" data-deps="vector2d,clearCanvas,randomFloat">
                 <summary>📝 Click to see: Wind Field Setup</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">// Wind field - grid-based vector field with turbulence
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Wind field - grid-based vector field with turbulence
 const windGridSize = 20;
 const windCols = Math.ceil(canvas.width / windGridSize);
 const windRows = Math.ceil(canvas.height / windGridSize);
@@ -947,6 +1327,44 @@ const windRows = Math.ceil(canvas.height / windGridSize);
 let windVectors = [];
 let windParticles = [];
 let windGusts = [];
+let windTime = 0;
+
+// Initialize wind field grid
+for (let i = 0; i &lt; windRows; i++) {
+    windVectors[i] = [];
+    for (let j = 0; j &lt; windCols; j++) {
+        windVectors[i][j] = { x: 0, y: 0 };
+    }
+}
+
+// Create particles to visualize wind
+for (let i = 0; i &lt; 200; i++) {
+    windParticles.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        vx: 0,
+        vy: 0,
+        trail: []
+    });
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface WindVector { x: number; y: number }
+interface Trail { x: number; y: number }
+interface WindParticle {
+    x: number; y: number;
+    vx: number; vy: number;
+    trail: Trail[];
+}
+interface WindGust { x: number; y: number; radius: number; strength: number }
+declare const canvas: HTMLCanvasElement;
+
+// Wind field - grid-based vector field with turbulence
+const windGridSize = 20;
+const windCols = Math.ceil(canvas.width / windGridSize);
+const windRows = Math.ceil(canvas.height / windGridSize);
+
+let windVectors: WindVector[][] = [];
+let windParticles: WindParticle[] = [];
+let windGusts: WindGust[] = [];
 let windTime = 0;
 
 // Initialize wind field grid
@@ -977,8 +1395,12 @@ for (let i = 0; i &lt; 200; i++) {
 
             <details>
                 <summary>📝 Click to see: Wind Field Update with Turbulence</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">// Simple noise function for natural turbulence
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Simple noise function for natural turbulence
 function windNoise(x, y, t) {
     const n = Math.sin(x * 0.1 + t) * Math.cos(y * 0.1 + t * 0.7);
     return n * 0.5 + 0.5; // Normalize to 0-1
@@ -1025,6 +1447,56 @@ function updateWindField(dt) {
         return g.strength &gt; 0.1;
     });
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">declare const windStrength: number;
+declare const turbulence: number;
+
+// Simple noise function for natural turbulence
+function windNoise(x: number, y: number, t: number): number {
+    const n = Math.sin(x * 0.1 + t) * Math.cos(y * 0.1 + t * 0.7);
+    return n * 0.5 + 0.5; // Normalize to 0-1
+}
+
+// Update wind field each frame
+function updateWindField(dt: number): void {
+    windTime += dt * 0.001;
+
+    for (let i = 0; i &lt; windRows; i++) {
+        for (let j = 0; j &lt; windCols; j++) {
+            // Base wind direction (left to right)
+            let wx = 1 * windStrength;
+            let wy = 0;
+
+            // Add turbulence using noise
+            const noiseX = windNoise(j, i, windTime);
+            const noiseY = windNoise(j + 100, i + 100, windTime);
+            wx += (noiseX - 0.5) * turbulence * 2;
+            wy += (noiseY - 0.5) * turbulence * 2;
+
+            // Add gust effects (temporary wind bursts)
+            const x = j * windGridSize;
+            const y = i * windGridSize;
+            for (const gust of windGusts) {
+                const dx = x - gust.x;
+                const dy = y - gust.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist &lt; gust.radius) {
+                    const influence = (1 - dist / gust.radius) * gust.strength;
+                    const angle = Math.atan2(dy, dx);
+                    wx += Math.cos(angle) * influence;
+                    wy += Math.sin(angle) * influence;
+                }
+            }
+
+            windVectors[i][j] = { x: wx, y: wy };
+        }
+    }
+
+    // Decay gusts over time
+    windGusts = windGusts.filter(g => {
+        g.strength *= 0.95;
+        return g.strength > 0.1;
+    });
+}</code></pre>
                 </div>
 
                 <div class="example-box">
@@ -1035,8 +1507,12 @@ function updateWindField(dt) {
 
             <details>
                 <summary>📝 Click to see: Particle Movement & Interpolation</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">// Get interpolated wind at any position (smooth between grid cells)
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Get interpolated wind at any position (smooth between grid cells)
 function getWindAt(x, y) {
     const gridX = x / windGridSize;
     const gridY = y / windGridSize;
@@ -1085,6 +1561,57 @@ function updateWindParticles() {
         if (p.x &gt; canvas.width) p.x = 0;
         if (p.y &lt; 0) p.y = canvas.height;
         if (p.y &gt; canvas.height) p.y = 0;
+    });
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Get interpolated wind at any position (smooth between grid cells)
+function getWindAt(x: number, y: number): WindVector {
+    const gridX = x / windGridSize;
+    const gridY = y / windGridSize;
+    const i = Math.floor(gridY);
+    const j = Math.floor(gridX);
+
+    if (i &lt; 0 || i >= windRows - 1 || j &lt; 0 || j >= windCols - 1) {
+        return { x: 0, y: 0 };
+    }
+
+    // Bilinear interpolation between 4 grid points
+    const fx = gridX - j;
+    const fy = gridY - i;
+    const v00 = windVectors[i][j];
+    const v10 = windVectors[i][j + 1];
+    const v01 = windVectors[i + 1][j];
+    const v11 = windVectors[i + 1][j + 1];
+
+    const wx = v00.x * (1 - fx) * (1 - fy) + v10.x * fx * (1 - fy) +
+               v01.x * (1 - fx) * fy + v11.x * fx * fy;
+    const wy = v00.y * (1 - fx) * (1 - fy) + v10.y * fx * (1 - fy) +
+               v01.y * (1 - fx) * fy + v11.y * fx * fy;
+
+    return { x: wx, y: wy };
+}
+
+// Update particles based on wind
+function updateWindParticles(): void {
+    windParticles.forEach(p => {
+        const wind = getWindAt(p.x, p.y);
+
+        // Apply wind force
+        p.vx += wind.x * 0.5;
+        p.vy += wind.y * 0.5;
+
+        // Damping to prevent infinite acceleration
+        p.vx *= 0.98;
+        p.vy *= 0.98;
+
+        // Move particle
+        p.x += p.vx;
+        p.y += p.vy;
+
+        // Wrap around screen edges
+        if (p.x &lt; 0) p.x = canvas.width;
+        if (p.x > canvas.width) p.x = 0;
+        if (p.y &lt; 0) p.y = canvas.height;
+        if (p.y > canvas.height) p.y = 0;
     });
 }</code></pre>
                 </div>
@@ -1183,8 +1710,12 @@ function updateWindParticles() {
 
             <details>
                 <summary>📝 Click to see: Terrain Initialization (Pixel-Based)</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">// Use ImageData to store terrain at pixel level
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Use ImageData to store terrain at pixel level
 let terrainImageData = ctx.createImageData(canvas.width, canvas.height);
 let balls = [];
 
@@ -1214,6 +1745,40 @@ function initTerrain() {
 
     ctx.putImageData(terrainImageData, 0, 0);
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface Ball { x: number; y: number; vx: number; vy: number; radius: number }
+declare const canvas: HTMLCanvasElement;
+declare const ctx: CanvasRenderingContext2D;
+
+// Use ImageData to store terrain at pixel level
+let terrainImageData: ImageData = ctx.createImageData(canvas.width, canvas.height);
+let balls: Ball[] = [];
+
+// Initialize terrain with layered generation
+function initTerrain(): void {
+    balls = [];
+    terrainImageData = ctx.createImageData(canvas.width, canvas.height);
+    const data = terrainImageData.data;
+
+    for (let y = 0; y &lt; canvas.height; y++) {
+        for (let x = 0; x &lt; canvas.width; x++) {
+            const idx = (y * canvas.width + x) * 4; // RGBA = 4 bytes per pixel
+
+            // Create layered terrain with noise
+            if (y > 150 && y &lt; 450) {
+                const noise = Math.sin(x * 0.05) * 10 + Math.cos(y * 0.03) * 5;
+                if (y + noise > 200) {
+                    // Dirt layer (brown)
+                    data[idx] = 139;     // R
+                    data[idx + 1] = 90;  // G
+                    data[idx + 2] = 43;  // B
+                    data[idx + 3] = 255; // A (fully opaque = solid terrain)
+                }
+            }
+        }
+    }
+
+    ctx.putImageData(terrainImageData, 0, 0);
+}</code></pre>
                 </div>
 
                 <div class="example-box">
@@ -1224,8 +1789,12 @@ function initTerrain() {
 
             <details data-demo-id="terrain" data-deps="clearCanvas,randomFloat">
                 <summary>📝 Click to see: Terrain Destruction</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">// Check if terrain exists at a position
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Check if terrain exists at a position
 function isTerrainAt(x, y) {
     if (x &lt; 0 || x &gt;= canvas.width || y &lt; 0 || y &gt;= canvas.height) return false;
     const idx = (Math.floor(y) * canvas.width + Math.floor(x)) * 4;
@@ -1255,6 +1824,36 @@ function destroyTerrain(x, y, radius) {
     // Update canvas with destroyed terrain
     ctx.putImageData(terrainImageData, 0, 0);
 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Check if terrain exists at a position
+function isTerrainAt(x: number, y: number): boolean {
+    if (x &lt; 0 || x >= canvas.width || y &lt; 0 || y >= canvas.height) return false;
+    const idx = (Math.floor(y) * canvas.width + Math.floor(x)) * 4;
+    return terrainImageData.data[idx + 3] > 0; // Check alpha channel
+}
+
+// Destroy terrain in circular area
+function destroyTerrain(x: number, y: number, radius: number): void {
+    const data = terrainImageData.data;
+
+    // Loop through square bounding box, check distance for circle
+    for (let dy = -radius; dy &lt;= radius; dy++) {
+        for (let dx = -radius; dx &lt;= radius; dx++) {
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist &lt;= radius) {
+                const px = Math.floor(x + dx);
+                const py = Math.floor(y + dy);
+
+                if (px >= 0 && px &lt; canvas.width && py >= 0 && py &lt; canvas.height) {
+                    const idx = (py * canvas.width + px) * 4;
+                    data[idx + 3] = 0; // Set alpha to 0 = transparent = destroyed
+                }
+            }
+        }
+    }
+
+    // Update canvas with destroyed terrain
+    ctx.putImageData(terrainImageData, 0, 0);
+}</code></pre>
                 </div>
 
                 <div class="example-box">
@@ -1265,8 +1864,12 @@ function destroyTerrain(x, y, radius) {
 
             <details>
                 <summary>📝 Click to see: Physics Collision with Terrain</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">// Update physics balls
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Update physics balls
 function updateBalls() {
     balls.forEach((ball, index) =&gt; {
         // Apply gravity
@@ -1295,6 +1898,39 @@ function updateBalls() {
 
         // Remove balls that fall off screen
         if (ball.y &gt; canvas.height + 50) {
+            balls.splice(index, 1);
+        }
+    });
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Update physics balls
+function updateBalls(): void {
+    balls.forEach((ball, index) => {
+        // Apply gravity
+        ball.vy += 0.5;
+
+        // Move ball
+        ball.x += ball.vx;
+        ball.y += ball.vy;
+
+        // Check collision with terrain at multiple points around ball
+        let collided = false;
+        for (let i = 0; i &lt; 360; i += 30) {
+            const angle = i * Math.PI / 180;
+            const checkX = ball.x + Math.cos(angle) * ball.radius;
+            const checkY = ball.y + Math.sin(angle) * ball.radius;
+
+            if (isTerrainAt(checkX, checkY)) {
+                collided = true;
+                // Bounce with energy loss
+                ball.vy *= -0.5;
+                ball.vx *= 0.9;
+                ball.y -= 2; // Push out of terrain
+                break;
+            }
+        }
+
+        // Remove balls that fall off screen
+        if (ball.y > canvas.height + 50) {
             balls.splice(index, 1);
         }
     });
@@ -1400,8 +2036,12 @@ function updateBalls() {
 
             <details>
                 <summary>📝 Click to see: Material Properties Code</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">// Define material types with burning properties
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Define material types with burning properties
 const MATERIALS = {
     EMPTY: { id: 0, flammable: false, color: '#1a1a1a' },
     WOOD: {
@@ -1432,13 +2072,61 @@ const MATERIALS = {
         color: '#1E90FF'
     }
 };</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Material kinds — narrowed via discriminated union by `flammable`
+type Material =
+    | { id: number; flammable: false; color: string; extinguishes?: boolean }
+    | {
+          id: number;
+          flammable: true;
+          ignitionTemp: number;
+          burnDuration: number;  // frames to burn
+          spreadChance: number;
+          color: string;
+      };
+
+// Define material types with burning properties.
+// `as const` makes keys (EMPTY, WOOD…) usable as a literal-typed registry.
+const MATERIALS = {
+    EMPTY: { id: 0, flammable: false, color: '#1a1a1a' },
+    WOOD: {
+        id: 1,
+        flammable: true,
+        ignitionTemp: 200,
+        burnDuration: 150,  // frames to burn
+        spreadChance: 0.3,
+        color: '#8B4513'
+    },
+    GRASS: {
+        id: 2,
+        flammable: true,
+        ignitionTemp: 150,
+        burnDuration: 60,
+        spreadChance: 0.6,  // spreads faster
+        color: '#228B22'
+    },
+    STONE: {
+        id: 3,
+        flammable: false,
+        color: '#808080'
+    },
+    WATER: {
+        id: 4,
+        flammable: false,
+        extinguishes: true,  // stops fire
+        color: '#1E90FF'
+    }
+} satisfies Record&lt;string, Material>;</code></pre>
                 </div>
             </details>
 
             <details data-demo-id="thermal" data-deps="clearCanvas,randomFloat">
                 <summary>📝 Click to see: Fire Spread Algorithm</summary>
-                <div class="code-container">
-                    <pre><code class="language-javascript">// Check if fire should spread to neighboring cells
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Check if fire should spread to neighboring cells
 spreadFire(i, j) {
     const neighbors = [
         [i-1, j], [i+1, j], [i, j-1], [i, j+1],
@@ -1467,6 +2155,53 @@ spreadFire(i, j) {
 
         // Water extinguishes nearby fire
         if (material.extinguishes &amp;&amp; cell.burning) {
+            cell.burning = false;
+            cell.temperature = 20;
+        }
+    }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface Cell {
+    type: keyof typeof MATERIALS;
+    burning: boolean;
+    burnTime: number;
+    temperature: number;
+}
+declare const grid: Cell[][];
+declare const rows: number;
+declare const cols: number;
+
+// Check if fire should spread to neighboring cells
+// (method on a fire-grid class — uses the MATERIALS union from above)
+spreadFire(i: number, j: number): void {
+    const neighbors: [number, number][] = [
+        [i-1, j], [i+1, j], [i, j-1], [i, j+1],
+        [i-1, j-1], [i-1, j+1], [i+1, j-1], [i+1, j+1]
+    ];
+
+    for (const [ni, nj] of neighbors) {
+        if (ni &lt; 0 || ni >= rows || nj &lt; 0 || nj >= cols) continue;
+
+        const cell = grid[ni][nj];
+        const material = MATERIALS[cell.type];
+
+        // Only spread to flammable materials not already burning
+        // The flammable check narrows `material` so ignitionTemp/spreadChance
+        // are guaranteed to exist below — TS verifies the discriminated union.
+        if (material.flammable && !cell.burning) {
+            // Heat the neighbor
+            cell.temperature += 50;
+
+            // Try to ignite based on temperature and spread chance
+            if (cell.temperature > material.ignitionTemp) {
+                if (Math.random() &lt; material.spreadChance) {
+                    cell.burning = true;
+                    cell.burnTime = 0;
+                }
+            }
+        }
+
+        // Water extinguishes nearby fire
+        if ('extinguishes' in material && material.extinguishes && cell.burning) {
             cell.burning = false;
             cell.temperature = 20;
         }
