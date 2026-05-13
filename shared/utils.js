@@ -473,3 +473,110 @@ function createDemoController(canvas, animateFn, options = {}) {
         isRunning: () => isRunning
     };
 }
+
+// ===================================
+// ISOMETRIC HELPERS
+// Used by the Isometric Strategy game-tutorial track.
+// Diamond (2:1) projection — tileW is the on-screen width, tileH the on-screen height.
+// Convention: cart coords (cx, cy) index the tile grid; screen coords (sx, sy) are pixels.
+// originX / originY is the screen pixel for tile (0, 0).
+// ===================================
+
+/**
+ * Convert cartesian (tile-grid) coordinates to screen pixels.
+ * Diamond projection: each step in cx moves (+tileW/2, +tileH/2);
+ *                     each step in cy moves (-tileW/2, +tileH/2).
+ * @param {number} cx Tile x (can be fractional for smooth movement)
+ * @param {number} cy Tile y
+ * @param {number} tileW Tile width in pixels (typical: 64)
+ * @param {number} tileH Tile height in pixels (typical: 32 for a 2:1 diamond)
+ * @param {number} originX Screen pixel x corresponding to tile (0, 0)
+ * @param {number} originY Screen pixel y corresponding to tile (0, 0)
+ * @returns {{x:number,y:number}} Screen pixel position
+ */
+function cartToIso(cx, cy, tileW, tileH, originX = 0, originY = 0) {
+    return {
+        x: originX + (cx - cy) * (tileW / 2),
+        y: originY + (cx + cy) * (tileH / 2)
+    };
+}
+
+/**
+ * Inverse of cartToIso — convert screen pixels back to fractional tile coordinates.
+ * Floor the result to get the integer tile under a mouse cursor.
+ * @param {number} sx Screen pixel x
+ * @param {number} sy Screen pixel y
+ * @param {number} tileW Tile width in pixels
+ * @param {number} tileH Tile height in pixels
+ * @param {number} originX Screen pixel x corresponding to tile (0, 0)
+ * @param {number} originY Screen pixel y corresponding to tile (0, 0)
+ * @returns {{x:number,y:number}} Fractional tile coordinates
+ */
+function isoToCart(sx, sy, tileW, tileH, originX = 0, originY = 0) {
+    const dx = sx - originX;
+    const dy = sy - originY;
+    // Derivation: from cartToIso, dx = (cx - cy) * tileW/2, dy = (cx + cy) * tileH/2.
+    // Solving the system: cx = dx/tileW + dy/tileH, cy = dy/tileH - dx/tileW.
+    return {
+        x: dx / tileW + dy / tileH,
+        y: dy / tileH - dx / tileW
+    };
+}
+
+/**
+ * Draw a single isometric (diamond) tile centered on the given screen position.
+ * The screen position is the *top* of the diamond, matching the cartToIso output for
+ * the tile's logical top-corner.
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {number} sx Screen x of the diamond's top vertex
+ * @param {number} sy Screen y of the diamond's top vertex
+ * @param {number} tileW Tile width in pixels
+ * @param {number} tileH Tile height in pixels
+ * @param {string} fillStyle Fill color, or null to skip
+ * @param {string} strokeStyle Outline color, or null to skip
+ */
+function drawIsoTile(ctx, sx, sy, tileW, tileH, fillStyle = '#3a4a6a', strokeStyle = '#4fc3f7') {
+    const halfW = tileW / 2;
+    const halfH = tileH / 2;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);                  // top
+    ctx.lineTo(sx + halfW, sy + halfH);  // right
+    ctx.lineTo(sx, sy + tileH);          // bottom
+    ctx.lineTo(sx - halfW, sy + halfH);  // left
+    ctx.closePath();
+    if (fillStyle) {
+        ctx.fillStyle = fillStyle;
+        ctx.fill();
+    }
+    if (strokeStyle) {
+        ctx.strokeStyle = strokeStyle;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+    }
+}
+
+/**
+ * Full mouse → integer tile-coordinate pipeline.
+ * Returns {x, y} clamped to integers (the tile the mouse is hovering).
+ * If mapW / mapH are provided, returns null for out-of-bounds picks.
+ * @param {number} mouseX Mouse x relative to the canvas
+ * @param {number} mouseY Mouse y relative to the canvas
+ * @param {number} originX Tile-(0,0) screen x
+ * @param {number} originY Tile-(0,0) screen y
+ * @param {number} tileW
+ * @param {number} tileH
+ * @param {number} [mapW] Optional grid width for bounds-check
+ * @param {number} [mapH] Optional grid height for bounds-check
+ * @returns {{x:number,y:number}|null}
+ */
+function pickTileFromMouse(mouseX, mouseY, originX, originY, tileW, tileH, mapW = null, mapH = null) {
+    // The cartToIso math places the top vertex of tile (cx, cy) at originY + (cx+cy)*tileH/2.
+    // For mouse-picking we want the tile whose diamond *contains* the mouse — that means
+    // offsetting Y by tileH/2 so we measure from the diamond's center, not its top vertex.
+    const cart = isoToCart(mouseX, mouseY - tileH / 2, tileW, tileH, originX, originY);
+    const tx = Math.floor(cart.x);
+    const ty = Math.floor(cart.y);
+    if (mapW !== null && (tx < 0 || tx >= mapW)) return null;
+    if (mapH !== null && (ty < 0 || ty >= mapH)) return null;
+    return { x: tx, y: ty };
+}

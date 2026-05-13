@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beginner — Isometric Strategy Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <!-- Prism.js Syntax Highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>🏰 Beginner — Isometric Foundations</h1>
+        <p class="subtitle">Three projections compared, the diamond-tile math, and your first paint-the-grid editor</p>
+
+        <!-- Navigation -->
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="beginner.html" class="nav-button active">Beginner</a>
+            <a href="intermediate.html" class="nav-button">Intermediate →</a>
+        </div>
+
+        <!-- Table of Contents -->
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#intro">What is an Isometric Game?</a></li>
+                <li><a href="#projections">Three Projection Variants Compared</a></li>
+                <li><a href="#commit-diamond">Why We Pick Diamond 2:1</a></li>
+                <li><a href="#math">Cartesian ↔ Isometric Coordinate Math</a></li>
+                <li><a href="#drawing">Drawing Tiles &amp; Grids</a></li>
+                <li><a href="#picking">Picking a Tile From a Mouse Click</a></li>
+                <li><a href="#paint-grid">Mini-Project: Paint-the-Grid Editor</a></li>
+            </ul>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- INTRO -->
+        <!-- ============================================ -->
+        <div id="intro" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🎮 What is an Isometric Game?</h2>
+
+            <p>
+                Isometric games show a 3D-looking world using only 2D drawing. Instead of looking at the world
+                from straight above (top-down) or from the side (platformer), the camera is tilted at an angle
+                so you can see the <strong>tops</strong> and <strong>fronts</strong> of objects at the same time.
+                You get the spatial feel of 3D without any actual 3D math.
+            </p>
+
+            <div class="example-box">
+                <h4>🕹️ Games you've probably played</h4>
+                <ul>
+                    <li><strong>Age of Empires II</strong> — the inspiration for this track</li>
+                    <li><strong>Red Alert 2 / Command &amp; Conquer</strong> — classic RTS look</li>
+                    <li><strong>Diablo II</strong> — same projection, action-RPG</li>
+                    <li><strong>SimCity 2000 / RollerCoaster Tycoon</strong> — city builders love iso</li>
+                    <li><strong>Monument Valley</strong> — a modern stylized take</li>
+                </ul>
+            </div>
+
+            <h3>Compare three camera styles</h3>
+            <p>The same scene — a player, a tree, and a building — drawn three different ways. Click each button.</p>
+            <div class="diagram">
+                <canvas id="cameraCompare" width="800" height="380"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnCamTopDown">Top-down</button>
+                <button id="btnCamSide">Side (platformer)</button>
+                <button id="btnCamIso">Isometric</button>
+            </div>
+            <div id="cameraCompareInfo" class="info-display">Click a button to switch camera style</div>
+
+            <div class="key-point">
+                <strong>💡 Key insight:</strong> Isometric isn't a real 3D camera — it's a 2D drawing trick.
+                We don't have a Z axis; we just <em>shear</em> the X and Y axes so they slant on screen.
+                That's why iso games run fast on hardware that can't handle real 3D.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- PROJECTIONS -->
+        <!-- ============================================ -->
+        <div id="projections" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>📐 Three Projection Variants Compared</h2>
+
+            <p>
+                Not all "isometric" games are projected the same way. Three flavors dominate. Knowing the
+                difference saves you from copy-pasting math that's subtly wrong for your style.
+            </p>
+
+            <h3>1. True isometric (30° / 30°)</h3>
+            <div class="concept-box">
+                <p>
+                    The mathematically pure case: each grid axis is rotated <strong>30° from horizontal</strong>.
+                    A unit step on X moves you (<code>cos 30°</code>, <code>sin 30°</code>) ≈ (0.866, 0.5) pixels.
+                    Equal length on all three axes (X, Y, Z) — that's literally what "iso-metric" means.
+                </p>
+                <p><strong>Used by:</strong> Q*bert, classic arcade-era iso games. Looks "purest" but pixel-art
+                tiles end up with awkward step patterns because 0.866 isn't a clean integer.</p>
+            </div>
+
+            <h3>2. Diamond (2:1) — the pixel-art standard</h3>
+            <div class="concept-box">
+                <p>
+                    A pragmatic cheat: pretend the projection is "26.57°" so tile width is exactly
+                    <strong>twice</strong> the tile height. A 64×32 tile is the classic. Pixel-art lines have
+                    a clean 2-pixels-right-for-every-1-pixel-down slope — no anti-aliasing fuzz needed.
+                </p>
+                <p><strong>Used by:</strong> Age of Empires II, Red Alert 2, Diablo II, StarCraft.
+                <strong>This is what we'll build with.</strong></p>
+            </div>
+
+            <h3>3. Staggered isometric</h3>
+            <div class="concept-box">
+                <p>
+                    Tiles are drawn on a regular rectangular grid, but every other <em>row</em> is offset
+                    horizontally by half a tile. Looks identical to diamond visually, but the underlying
+                    map data is a normal 2D array — no diagonal math needed for storage.
+                </p>
+                <p><strong>Used by:</strong> Civilization II, many Tiled-editor maps. Easier to store but
+                neighbor-finding gets weird (you have different neighbor offsets for odd vs even rows).</p>
+            </div>
+
+            <h3>Visual comparison</h3>
+            <p>
+                The same 4×4 grid drawn three ways. Notice how the diamond and true-iso variants look almost
+                identical at a glance — the real difference shows up when you zoom in on the pixel slope.
+            </p>
+            <div class="diagram">
+                <canvas id="projectionCompare" width="800" height="400"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnProjTrue">True Iso (30°)</button>
+                <button id="btnProjDiamond">Diamond (2:1)</button>
+                <button id="btnProjStaggered">Staggered</button>
+            </div>
+            <div id="projectionCompareInfo" class="info-display">Click to switch projection</div>
+
+            <div class="challenge-box">
+                <h4>🎯 Try this</h4>
+                <p>Switch between True Iso and Diamond. Look at the <em>slope</em> of the grid lines.
+                True iso lines have a 0.577 slope (1/√3) — fractional. Diamond lines have exactly 0.5
+                slope — meaning every horizontal pair of pixels drops by exactly one pixel.
+                That's why diamond looks crisp in pixel art and true iso doesn't.</p>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- COMMIT TO DIAMOND -->
+        <!-- ============================================ -->
+        <div id="commit-diamond" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>💎 Why We Pick Diamond 2:1</h2>
+
+            <p>From here on, "isometric" in this track means <strong>diamond 2:1</strong>. We pick it because:</p>
+
+            <ul>
+                <li><strong>Industry lineage</strong> — AoE2, RA2, Diablo II, StarCraft all use it. If you
+                learn it, you can read any classic RTS codebase.</li>
+                <li><strong>Pixel-clean math</strong> — tile dimensions are integers (typically 64×32) and
+                slopes are exactly ±0.5. No anti-aliasing artifacts.</li>
+                <li><strong>Simple coordinate transforms</strong> — the cart↔iso math is two lines per direction.
+                We'll derive it next.</li>
+            </ul>
+
+            <div class="example-box">
+                <h4>🎮 The tile we're committing to</h4>
+                <p>
+                    Tile dimensions throughout this track: <strong>tileW = 64</strong>, <strong>tileH = 32</strong>.
+                    Visualized as a diamond with the top vertex at the tile's logical origin:
+                </p>
+            </div>
+
+            <div class="diagram">
+                <canvas id="tileAnatomy" width="500" height="240"></canvas>
+            </div>
+            <div id="tileAnatomyInfo" class="info-display">A single 64×32 diamond tile, labeled</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- MATH -->
+        <!-- ============================================ -->
+        <div id="math" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🧮 Cartesian ↔ Isometric Coordinate Math</h2>
+
+            <p>
+                Two coordinate systems live side by side: the <strong>cartesian</strong> tile grid
+                (the logical map — <code>(0,0)</code>, <code>(1,0)</code>, <code>(2,0)</code>, …) and the
+                <strong>screen</strong> position in pixels. Converting between them is the entire job of the iso projection.
+            </p>
+
+            <h3>Cartesian → Isometric (drawing)</h3>
+            <div class="concept-box">
+                <h4>The formula</h4>
+                <div class="formula">
+                    screenX = originX + (cartX − cartY) × (tileW / 2)<br>
+                    screenY = originY + (cartX + cartY) × (tileH / 2)
+                </div>
+                <p>
+                    Read it geometrically: moving <strong>+1 in cartX</strong> takes you <em>right and down</em>
+                    (along the front-right axis of the diamond). Moving <strong>+1 in cartY</strong> takes you
+                    <em>left and down</em>. Together they tile the screen with diamonds.
+                </p>
+            </div>
+
+            <div class="step">
+                <span class="step-number">1</span>
+                <strong>Implement <code>cartToIso</code> — the drawing direction:</strong>
+            </div>
+
+            <details>
+                <summary>📝 Click to see: cartToIso</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Convert tile-grid coordinates to screen pixels.
+// originX / originY is where tile (0, 0) lives on screen.
+function cartToIso(cx, cy, tileW, tileH, originX = 0, originY = 0) {
+    return {
+        x: originX + (cx - cy) * (tileW / 2),
+        y: originY + (cx + cy) * (tileH / 2)
+    };
+}
+
+// Example: with a 64x32 tile, tile (3, 1) lands at...
+const p = cartToIso(3, 1, 64, 32, 400, 50);
+// p = { x: 464, y: 114 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Convert tile-grid coordinates to screen pixels.
+// originX / originY is where tile (0, 0) lives on screen.
+function cartToIso(
+    cx: number,
+    cy: number,
+    tileW: number,
+    tileH: number,
+    originX: number = 0,
+    originY: number = 0
+): { x: number; y: number } {
+    return {
+        x: originX + (cx - cy) * (tileW / 2),
+        y: originY + (cx + cy) * (tileH / 2)
+    };
+}
+
+// Example: with a 64x32 tile, tile (3, 1) lands at...
+const p: { x: number; y: number } = cartToIso(3, 1, 64, 32, 400, 50);
+// p = { x: 464, y: 114 }</code></pre>
+                </div>
+
+                <div class="key-point">
+                    <strong>💡 Already in shared/utils.js:</strong> we shipped this in <code>shared/utils.js</code>
+                    so every demo and future tier file can use it. You don't need to copy it — it's already
+                    available as a global function on every page in this track.
+                </div>
+            </details>
+
+            <h3>Isometric → Cartesian (picking)</h3>
+            <p>
+                Going the other way — given a screen pixel (say, a mouse click), what tile is under it? — is
+                just the inverse of the forward transform. Because the projection is a linear 2D transform,
+                its inverse is also linear.
+            </p>
+
+            <div class="concept-box">
+                <h4>Deriving the inverse</h4>
+                <p>Starting from the two equations:</p>
+                <div class="formula">
+                    dx = (cx − cy) × (tileW / 2)<br>
+                    dy = (cx + cy) × (tileH / 2)
+                </div>
+                <p>Solve for cx and cy:</p>
+                <div class="formula">
+                    cartX = dx / tileW + dy / tileH<br>
+                    cartY = dy / tileH − dx / tileW
+                </div>
+                <p>(where <code>dx = screenX − originX</code>, <code>dy = screenY − originY</code>)</p>
+            </div>
+
+            <div class="step">
+                <span class="step-number">2</span>
+                <strong>Implement <code>isoToCart</code> — the picking direction:</strong>
+            </div>
+
+            <details>
+                <summary>📝 Click to see: isoToCart</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Inverse of cartToIso. Returns fractional tile coordinates;
+// floor() them to get the integer tile.
+function isoToCart(sx, sy, tileW, tileH, originX = 0, originY = 0) {
+    const dx = sx - originX;
+    const dy = sy - originY;
+    return {
+        x: dx / tileW + dy / tileH,
+        y: dy / tileH - dx / tileW
+    };
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Inverse of cartToIso. Returns fractional tile coordinates;
+// floor() them to get the integer tile.
+function isoToCart(
+    sx: number,
+    sy: number,
+    tileW: number,
+    tileH: number,
+    originX: number = 0,
+    originY: number = 0
+): { x: number; y: number } {
+    const dx: number = sx - originX;
+    const dy: number = sy - originY;
+    return {
+        x: dx / tileW + dy / tileH,
+        y: dy / tileH - dx / tileW
+    };
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>See the math in action</h3>
+            <p>
+                Drag the dot — it walks along cartesian rows/columns, but its <em>screen</em> position follows
+                the iso formula. The label shows both cartesian (cx, cy) and screen (sx, sy) values.
+            </p>
+            <div class="diagram">
+                <canvas id="mathDemo" width="800" height="380"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnMathStepX">Step +1 in cartX</button>
+                <button id="btnMathStepY">Step +1 in cartY</button>
+                <button id="btnMathReset">Reset to (0, 0)</button>
+            </div>
+            <div id="mathDemoInfo" class="info-display">Step through the grid and watch screen coords update</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- DRAWING -->
+        <!-- ============================================ -->
+        <div id="drawing" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🖌️ Drawing Tiles &amp; Grids</h2>
+
+            <p>One tile is four points and a polygon. A grid is a nested loop calling <code>drawIsoTile</code> with offsets.</p>
+
+            <h3>A single diamond</h3>
+            <details>
+                <summary>📝 Click to see: drawIsoTile</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Draws a diamond whose *top* vertex is at (sx, sy).
+function drawIsoTile(ctx, sx, sy, tileW, tileH, fillStyle, strokeStyle) {
+    const halfW = tileW / 2;
+    const halfH = tileH / 2;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);                  // top
+    ctx.lineTo(sx + halfW, sy + halfH);  // right
+    ctx.lineTo(sx, sy + tileH);          // bottom
+    ctx.lineTo(sx - halfW, sy + halfH);  // left
+    ctx.closePath();
+    if (fillStyle) { ctx.fillStyle = fillStyle; ctx.fill(); }
+    if (strokeStyle) { ctx.strokeStyle = strokeStyle; ctx.stroke(); }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Draws a diamond whose *top* vertex is at (sx, sy).
+function drawIsoTile(
+    ctx: CanvasRenderingContext2D,
+    sx: number,
+    sy: number,
+    tileW: number,
+    tileH: number,
+    fillStyle: string | null,
+    strokeStyle: string | null
+): void {
+    const halfW: number = tileW / 2;
+    const halfH: number = tileH / 2;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);                  // top
+    ctx.lineTo(sx + halfW, sy + halfH);  // right
+    ctx.lineTo(sx, sy + tileH);          // bottom
+    ctx.lineTo(sx - halfW, sy + halfH);  // left
+    ctx.closePath();
+    if (fillStyle) { ctx.fillStyle = fillStyle; ctx.fill(); }
+    if (strokeStyle) { ctx.strokeStyle = strokeStyle; ctx.stroke(); }
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>A 10×10 grid</h3>
+            <details>
+                <summary>📝 Click to see: drawing a full grid</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">function drawGridIso(ctx, mapW, mapH, tileW, tileH, originX, originY) {
+    // Iterate in row-major order. Each (cx, cy) becomes a screen position
+    // via cartToIso, and we draw a diamond there.
+    for (let cy = 0; cy &lt; mapH; cy++) {
+        for (let cx = 0; cx &lt; mapW; cx++) {
+            const p = cartToIso(cx, cy, tileW, tileH, originX, originY);
+            drawIsoTile(ctx, p.x, p.y, tileW, tileH, '#2a3550', '#4fc3f7');
+        }
+    }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function drawGridIso(
+    ctx: CanvasRenderingContext2D,
+    mapW: number,
+    mapH: number,
+    tileW: number,
+    tileH: number,
+    originX: number,
+    originY: number
+): void {
+    for (let cy: number = 0; cy &lt; mapH; cy++) {
+        for (let cx: number = 0; cx &lt; mapW; cx++) {
+            const p = cartToIso(cx, cy, tileW, tileH, originX, originY);
+            drawIsoTile(ctx, p.x, p.y, tileW, tileH, '#2a3550', '#4fc3f7');
+        }
+    }
+}</code></pre>
+                </div>
+            </details>
+
+            <p>Adjust the controls below to see how grid size and tile dimensions interact:</p>
+            <div class="diagram">
+                <canvas id="gridDemo" width="800" height="420"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnGridShrink">Smaller tiles (32×16)</button>
+                <button id="btnGridDefault">Default (64×32)</button>
+                <button id="btnGridGrow">Bigger tiles (96×48)</button>
+                <button id="btnGridMore">More tiles (12×12)</button>
+                <button id="btnGridFewer">Fewer tiles (6×6)</button>
+            </div>
+            <div id="gridDemoInfo" class="info-display">Default 10×10 grid at 64×32 tiles</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- PICKING -->
+        <!-- ============================================ -->
+        <div id="picking" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🎯 Picking a Tile From a Mouse Click</h2>
+
+            <p>
+                In a top-down game, mouse-to-tile is trivial: <code>floor(mouseX / tileW)</code>. In an iso
+                game, the diagonal grid means you can't just divide. You run the screen position back through
+                <code>isoToCart</code>, then <code>floor</code> the result.
+            </p>
+
+            <div class="concept-box">
+                <h4>One subtle gotcha</h4>
+                <p>
+                    Because <code>cartToIso</code> places tile (0,0) at its <strong>top vertex</strong>,
+                    a literal inverse picks the tile <em>above</em> where the mouse is. The fix: shift the
+                    mouse Y down by half a tile before inverting. This way the mouse sits in the
+                    <em>center</em> of the diamond instead of at its top.
+                </p>
+            </div>
+
+            <details>
+                <summary>📝 Click to see: pickTileFromMouse (with the Y-offset fix)</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">function pickTileFromMouse(mouseX, mouseY, originX, originY, tileW, tileH) {
+    // Offset Y by tileH/2 so we measure from the diamond's CENTER, not its top vertex.
+    const cart = isoToCart(mouseX, mouseY - tileH / 2, tileW, tileH, originX, originY);
+    return { x: Math.floor(cart.x), y: Math.floor(cart.y) };
+}
+
+// Inside a mousemove handler:
+canvas.addEventListener('mousemove', (e) =&gt; {
+    const rect = canvas.getBoundingClientRect();
+    const tile = pickTileFromMouse(
+        e.clientX - rect.left,
+        e.clientY - rect.top,
+        originX, originY, tileW, tileH
+    );
+    console.log('Hovering tile', tile.x, tile.y);
+});</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function pickTileFromMouse(
+    mouseX: number,
+    mouseY: number,
+    originX: number,
+    originY: number,
+    tileW: number,
+    tileH: number
+): { x: number; y: number } {
+    const cart = isoToCart(mouseX, mouseY - tileH / 2, tileW, tileH, originX, originY);
+    return { x: Math.floor(cart.x), y: Math.floor(cart.y) };
+}
+
+// Inside a mousemove handler:
+canvas.addEventListener('mousemove', (e: MouseEvent) =&gt; {
+    const rect: DOMRect = canvas.getBoundingClientRect();
+    const tile = pickTileFromMouse(
+        e.clientX - rect.left,
+        e.clientY - rect.top,
+        originX, originY, tileW, tileH
+    );
+    console.log('Hovering tile', tile.x, tile.y);
+});</code></pre>
+                </div>
+            </details>
+
+            <h3>Try it</h3>
+            <p>Move your mouse over the grid. The tile under the cursor lights up; the label shows its (cx, cy).</p>
+            <div class="diagram">
+                <canvas id="pickDemo" width="800" height="420"></canvas>
+            </div>
+            <div id="pickDemoInfo" class="info-display">Hover over a tile to see its cartesian coordinates</div>
+
+            <div class="thinking-prompt">
+                <h4>🤔 Try this yourself</h4>
+                <p>
+                    Move the mouse slowly along the top edge of a tile, then the bottom edge. Notice how the
+                    picked tile changes exactly when you cross a diamond edge — that's the <code>Math.floor</code>
+                    boundary in action. If we forgot the Y-offset fix, the boundaries would feel one tile off.
+                </p>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- PAINT GRID MINI-PROJECT -->
+        <!-- ============================================ -->
+        <div id="paint-grid" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🎨 Mini-Project: Paint-the-Grid Editor</h2>
+
+            <p>
+                Time to put it all together. We have:
+            </p>
+            <ul>
+                <li><code>cartToIso</code> for drawing tiles at the right screen position</li>
+                <li><code>drawIsoTile</code> for the diamond shape</li>
+                <li><code>pickTileFromMouse</code> for translating clicks back to tile coords</li>
+            </ul>
+            <p>
+                That's enough to build a tiny tile editor. Click a paint color, then click (or drag) on the
+                grid to paint cells. This is also the seed of the map editor we'll grow in the Advanced tier.
+            </p>
+
+            <details>
+                <summary>📝 Click to see: the full paint-the-grid logic</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Map data: a 2D array storing the paint color per tile (or null for "empty").
+const MAP_W = 10, MAP_H = 10;
+const TILE_W = 64, TILE_H = 32;
+const ORIGIN_X = canvas.width / 2;
+const ORIGIN_Y = 40;
+
+const tiles = Array.from({ length: MAP_H }, () =&gt; Array(MAP_W).fill(null));
+let currentColor = '#66bb6a';
+let isPainting = false;
+
+function paintAt(mouseX, mouseY) {
+    const t = pickTileFromMouse(mouseX, mouseY, ORIGIN_X, ORIGIN_Y, TILE_W, TILE_H, MAP_W, MAP_H);
+    if (t) tiles[t.y][t.x] = currentColor;
+}
+
+canvas.addEventListener('mousedown', (e) =&gt; {
+    isPainting = true;
+    const r = canvas.getBoundingClientRect();
+    paintAt(e.clientX - r.left, e.clientY - r.top);
+});
+canvas.addEventListener('mousemove', (e) =&gt; {
+    if (!isPainting) return;
+    const r = canvas.getBoundingClientRect();
+    paintAt(e.clientX - r.left, e.clientY - r.top);
+});
+canvas.addEventListener('mouseup',   () =&gt; { isPainting = false; });
+canvas.addEventListener('mouseleave', () =&gt; { isPainting = false; });
+
+function render() {
+    clearCanvas(ctx, canvas.width, canvas.height);
+    // Painter's algorithm: back-to-front so closer tiles overlap farther ones.
+    for (let cy = 0; cy &lt; MAP_H; cy++) {
+        for (let cx = 0; cx &lt; MAP_W; cx++) {
+            const p = cartToIso(cx, cy, TILE_W, TILE_H, ORIGIN_X, ORIGIN_Y);
+            const fill = tiles[cy][cx] || '#1a233a';
+            drawIsoTile(ctx, p.x, p.y, TILE_W, TILE_H, fill, '#4fc3f7');
+        }
+    }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Map data: a 2D array storing the paint color per tile (or null for "empty").
+const MAP_W: number = 10, MAP_H: number = 10;
+const TILE_W: number = 64, TILE_H: number = 32;
+const ORIGIN_X: number = canvas.width / 2;
+const ORIGIN_Y: number = 40;
+
+type TileColor = string | null;
+const tiles: TileColor[][] = Array.from(
+    { length: MAP_H },
+    () =&gt; Array(MAP_W).fill(null) as TileColor[]
+);
+let currentColor: string = '#66bb6a';
+let isPainting: boolean = false;
+
+function paintAt(mouseX: number, mouseY: number): void {
+    const t = pickTileFromMouse(mouseX, mouseY, ORIGIN_X, ORIGIN_Y, TILE_W, TILE_H, MAP_W, MAP_H);
+    if (t) tiles[t.y][t.x] = currentColor;
+}
+
+canvas.addEventListener('mousedown', (e: MouseEvent) =&gt; {
+    isPainting = true;
+    const r: DOMRect = canvas.getBoundingClientRect();
+    paintAt(e.clientX - r.left, e.clientY - r.top);
+});
+canvas.addEventListener('mousemove', (e: MouseEvent) =&gt; {
+    if (!isPainting) return;
+    const r: DOMRect = canvas.getBoundingClientRect();
+    paintAt(e.clientX - r.left, e.clientY - r.top);
+});
+canvas.addEventListener('mouseup',    () =&gt; { isPainting = false; });
+canvas.addEventListener('mouseleave', () =&gt; { isPainting = false; });</code></pre>
+                </div>
+            </details>
+
+            <h3>The editor</h3>
+            <div class="diagram">
+                <canvas id="paintGrid" width="800" height="460"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnPaintGrass" class="active" style="background-color: #66bb6a;">🌿 Grass</button>
+                <button id="btnPaintWater" style="background-color: #4fc3f7;">💧 Water</button>
+                <button id="btnPaintSand"  style="background-color: #d7c878;">🏖️ Sand</button>
+                <button id="btnPaintStone" style="background-color: #8a8a8a;">🪨 Stone</button>
+                <button id="btnPaintErase" style="background-color: #2d3354;">🧽 Erase</button>
+                <button id="btnPaintClear">Clear all</button>
+            </div>
+            <div id="paintGridInfo" class="info-display">Click and drag to paint. Pick a color above.</div>
+
+            <div class="example-box">
+                <h4>🎮 What you just built</h4>
+                <p>
+                    A 10×10 isometric tile editor in roughly 30 lines of glue code. The Intermediate tier
+                    extends this with terrain types, layered drawing, and a moving unit on top of the grid.
+                </p>
+            </div>
+
+            <div class="key-point">
+                <strong>💡 What's next:</strong> the <a href="intermediate.html">Intermediate tier</a> turns
+                the painted grid into a real tile-map data model, adds a pannable camera, and puts a
+                walking unit on the map. From there the Expert tier introduces pathfinding and combat.
+            </div>
+        </div>
+
+        <!-- Next Steps -->
+        <div class="section" style="text-align: center;">
+            <h2>✅ Beginner Tier Complete</h2>
+            <p style="font-size: 1.1em; margin: 24px 0;">
+                You can now project tile coords to screen, draw a grid of diamonds, pick a tile under the
+                mouse, and paint cells. That's the entire visual foundation of every iso game.
+            </p>
+            <a href="intermediate.html" class="nav-button" style="font-size: 1.2em; padding: 20px 40px;">
+                Continue to Intermediate →
+            </a>
+            <p style="margin-top: 20px;"><em>Intermediate isn't written yet — coming in the next phase. Track your progress on the <a href="index.html">track index</a>.</em></p>
+        </div>
+    </div>
+
+    <!-- Scroll to Top Button -->
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <!-- Load shared utilities. Paths are relative to this subdirectory. -->
+    <script src="../shared/utils.js"></script>
+
+    <!-- Code-tab toggle (JavaScript / TypeScript). Same script the Fundamentals pages use. -->
+    <script src="../shared/code-tabs.js"></script>
+
+    <!-- Page-specific interactive demos. -->
+    <script src="beginner-demos.js"></script>
+</body>
+</html>
