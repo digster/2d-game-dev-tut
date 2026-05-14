@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expert — Isometric Strategy Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>🏰 Expert — Gameplay Systems</h1>
+        <p class="subtitle">The RTS loop: select, command, pathfind, build, gather, fight</p>
+
+        <!-- Navigation -->
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="intermediate.html" class="nav-button">← Intermediate</a>
+            <a href="expert.html" class="nav-button active">Expert</a>
+            <a href="advanced.html" class="nav-button">Advanced →</a>
+        </div>
+
+        <!-- Table of Contents -->
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#selection">Selection: Single, Drag-Box, Type-Select</a></li>
+                <li><a href="#commands">Commands &amp; Command Queue</a></li>
+                <li><a href="#pathfinding">A* Pathfinding on the Grid</a></li>
+                <li><a href="#buildings">Building Placement (Multi-Tile)</a></li>
+                <li><a href="#gathering">Resource Gathering Loop</a></li>
+                <li><a href="#production">Production Buildings with a Queue</a></li>
+                <li><a href="#combat">Basic Combat (HP, Range, Damage)</a></li>
+                <li><a href="#skirmish">Mini-Project: Tiny Skirmish</a></li>
+            </ul>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- SELECTION -->
+        <!-- ============================================ -->
+        <div id="selection" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🖱️ Selection: Single, Drag-Box, Type-Select</h2>
+
+            <p>
+                RTS selection has three modes everyone expects:
+            </p>
+            <ul>
+                <li><strong>Single-click</strong> — picks the topmost unit under the cursor.</li>
+                <li><strong>Drag-box</strong> — click empty space, drag a rectangle, release to select
+                everything inside.</li>
+                <li><strong>Double-click on a unit type</strong> — selects all visible units of the same type.</li>
+            </ul>
+
+            <details>
+                <summary>📝 Click to see: a Selection manager</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class Selection {
+    constructor() {
+        this.selected = new Set();   // unit ids
+        this.drag = null;            // {sx, sy, ex, ey} during a drag-box
+    }
+    clear() { this.selected.clear(); }
+    add(id) { this.selected.add(id); }
+    has(id) { return this.selected.has(id); }
+    size()  { return this.selected.size; }
+
+    startDrag(sx, sy) { this.drag = { sx, sy, ex: sx, ey: sy }; }
+    updateDrag(ex, ey) { if (this.drag) { this.drag.ex = ex; this.drag.ey = ey; } }
+    finishDrag(units, screenOf) {
+        if (!this.drag) return;
+        const { sx, sy, ex, ey } = this.drag;
+        const x1 = Math.min(sx, ex), x2 = Math.max(sx, ex);
+        const y1 = Math.min(sy, ey), y2 = Math.max(sy, ey);
+        this.selected.clear();
+        for (const u of units) {
+            const p = screenOf(u);   // current screen position
+            if (p.x &gt;= x1 &amp;&amp; p.x &lt;= x2 &amp;&amp; p.y &gt;= y1 &amp;&amp; p.y &lt;= y2) {
+                this.selected.add(u.id);
+            }
+        }
+        this.drag = null;
+    }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface Unit { id: number; type: string; cx: number; cy: number; }
+type DragBox = { sx: number; sy: number; ex: number; ey: number; };
+
+class Selection {
+    selected: Set&lt;number&gt; = new Set();
+    drag: DragBox | null = null;
+
+    clear(): void { this.selected.clear(); }
+    add(id: number): void { this.selected.add(id); }
+    has(id: number): boolean { return this.selected.has(id); }
+    size(): number { return this.selected.size; }
+
+    startDrag(sx: number, sy: number): void { this.drag = { sx, sy, ex: sx, ey: sy }; }
+    updateDrag(ex: number, ey: number): void { if (this.drag) { this.drag.ex = ex; this.drag.ey = ey; } }
+    finishDrag(units: Unit[], screenOf: (u: Unit) =&gt; { x: number; y: number }): void {
+        if (!this.drag) return;
+        const { sx, sy, ex, ey } = this.drag;
+        const x1 = Math.min(sx, ex), x2 = Math.max(sx, ex);
+        const y1 = Math.min(sy, ey), y2 = Math.max(sy, ey);
+        this.selected.clear();
+        for (const u of units) {
+            const p = screenOf(u);
+            if (p.x &gt;= x1 &amp;&amp; p.x &lt;= x2 &amp;&amp; p.y &gt;= y1 &amp;&amp; p.y &lt;= y2) {
+                this.selected.add(u.id);
+            }
+        }
+        this.drag = null;
+    }
+}</code></pre>
+                </div>
+
+                <div class="key-point">
+                    <strong>💡 Selection lives in screen space.</strong> The drag-box is a screen
+                    rectangle, and we compare each unit's <em>current</em> screen position (via
+                    <code>cartToIso</code>) against it. Tile coords would work too, but screen-space
+                    feels right because the box is what the player sees.
+                </div>
+            </details>
+
+            <h3>Try it</h3>
+            <p>
+                Left-click an empty tile and drag to box-select. Click a unit to single-select.
+                Double-click a unit to grab all of the same type. <strong>Shift+click</strong> on a unit adds/removes from the selection.
+            </p>
+            <div class="diagram">
+                <canvas id="selectionDemo" width="800" height="420"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnSelClear">Clear selection</button>
+                <button id="btnSelReset">Reset units</button>
+            </div>
+            <div id="selectionDemoInfo" class="info-display">Drag a box, click a unit, or double-click to select by type.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- COMMANDS -->
+        <!-- ============================================ -->
+        <div id="commands" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>📣 Commands &amp; Command Queue</h2>
+
+            <p>
+                With units selected, the player issues commands. Two suffice for now:
+            </p>
+            <ul>
+                <li><strong>Move</strong> — right-click a tile; selected units walk there.</li>
+                <li><strong>Attack-move</strong> — like move, but the unit will engage any enemy
+                it sees along the way. (For the demo we mock this as a colored marker; real combat
+                is in the Combat section.)</li>
+            </ul>
+
+            <div class="concept-box">
+                <h4>Command queue</h4>
+                <p>
+                    Holding <kbd>Shift</kbd> while issuing a command <em>queues</em> it. The unit
+                    finishes the current order then takes the next. We store an array of orders
+                    per unit and pop them as they complete.
+                </p>
+            </div>
+
+            <details>
+                <summary>📝 Click to see: a tiny order queue</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// An "order" is just { type, cx, cy }. Simple, but easy to extend.
+function issueOrder(unit, order, queue) {
+    if (queue) unit.orders.push(order);
+    else unit.orders = [order];
+}
+
+function tickUnit(unit, dt, map) {
+    const o = unit.orders[0];
+    if (!o) return;
+    // Walk toward (o.cx, o.cy). When close enough, pop this order.
+    const dx = o.cx - unit.cx, dy = o.cy - unit.cy;
+    const d = Math.hypot(dx, dy);
+    if (d &lt; 0.05) { unit.orders.shift(); return; }
+    const step = unit.speed * dt;
+    if (step &gt;= d) { unit.cx = o.cx; unit.cy = o.cy; unit.orders.shift(); }
+    else { unit.cx += dx / d * step; unit.cy += dy / d * step; }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">type Order = { type: 'move' | 'attack-move'; cx: number; cy: number; };
+interface Unit { id: number; cx: number; cy: number; speed: number; orders: Order[]; }
+
+function issueOrder(unit: Unit, order: Order, queue: boolean): void {
+    if (queue) unit.orders.push(order);
+    else unit.orders = [order];
+}
+
+function tickUnit(unit: Unit, dt: number): void {
+    const o: Order | undefined = unit.orders[0];
+    if (!o) return;
+    const dx: number = o.cx - unit.cx;
+    const dy: number = o.cy - unit.cy;
+    const d: number = Math.hypot(dx, dy);
+    if (d &lt; 0.05) { unit.orders.shift(); return; }
+    const step: number = unit.speed * dt;
+    if (step &gt;= d) { unit.cx = o.cx; unit.cy = o.cy; unit.orders.shift(); }
+    else { unit.cx += dx / d * step; unit.cy += dy / d * step; }
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>Try it</h3>
+            <p>Left-click to select. Right-click to move. <strong>Shift+right-click</strong> to queue waypoints. Watch the dotted line trail show queued orders.</p>
+            <div class="diagram">
+                <canvas id="commandsDemo" width="800" height="420"></canvas>
+            </div>
+            <div id="commandsDemoInfo" class="info-display">Select a unit, then right-click to move. Hold Shift to queue.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- PATHFINDING -->
+        <!-- ============================================ -->
+        <div id="pathfinding" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🧭 A* Pathfinding on the Grid</h2>
+
+            <p>
+                Straight-line movement walks through walls and water. To navigate around obstacles
+                we run <strong>A*</strong> — a graph search that finds the shortest path from start
+                to goal, guided by a heuristic (estimated remaining distance).
+            </p>
+
+            <div class="concept-box">
+                <h4>Why A* (and not BFS or Dijkstra)?</h4>
+                <p>
+                    BFS works on uniform-cost grids but explores wastefully. Dijkstra is good for
+                    weighted graphs. <strong>A* = Dijkstra + heuristic</strong>: it explores cells
+                    in order of "cost so far + estimated cost to goal", so it beelines toward the
+                    target. For grid pathfinding the heuristic is just the
+                    <a href="../advanced.html#pathfinding">octile distance</a> or
+                    Manhattan distance.
+                </p>
+            </div>
+
+            <details>
+                <summary>📝 Click to see: a minimal A* on a tile grid</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// 4-connected grid A*. For 8-connected, add the diagonals and use octile distance.
+function aStar(map, start, goal, isWalkable) {
+    const key = (x, y) =&gt; `${x},${y}`;
+    const h = (x, y) =&gt; Math.abs(x - goal.x) + Math.abs(y - goal.y); // Manhattan
+
+    const open = [{ x: start.x, y: start.y, g: 0, f: h(start.x, start.y), parent: null }];
+    const visited = new Map();
+
+    while (open.length) {
+        // Pick lowest-f node (sorted array; fine for tutorial-sized grids)
+        open.sort((a, b) =&gt; a.f - b.f);
+        const cur = open.shift();
+        const k = key(cur.x, cur.y);
+        if (visited.has(k)) continue;
+        visited.set(k, cur);
+
+        if (cur.x === goal.x &amp;&amp; cur.y === goal.y) {
+            // Reconstruct
+            const path = [];
+            let n = cur;
+            while (n) { path.unshift({ x: n.x, y: n.y }); n = n.parent; }
+            return path;
+        }
+
+        const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+        for (const [dx, dy] of dirs) {
+            const nx = cur.x + dx, ny = cur.y + dy;
+            if (!isWalkable(nx, ny) || visited.has(key(nx, ny))) continue;
+            open.push({ x: nx, y: ny, g: cur.g + 1, f: cur.g + 1 + h(nx, ny), parent: cur });
+        }
+    }
+    return null; // no path
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">type Pt = { x: number; y: number; };
+type Node = Pt &amp; { g: number; f: number; parent: Node | null; };
+
+function aStar(
+    start: Pt,
+    goal: Pt,
+    isWalkable: (x: number, y: number) =&gt; boolean
+): Pt[] | null {
+    const key = (x: number, y: number): string =&gt; `${x},${y}`;
+    const h   = (x: number, y: number): number =&gt; Math.abs(x - goal.x) + Math.abs(y - goal.y);
+
+    const open: Node[] = [{ x: start.x, y: start.y, g: 0, f: h(start.x, start.y), parent: null }];
+    const visited: Map&lt;string, Node&gt; = new Map();
+
+    while (open.length) {
+        open.sort((a, b) =&gt; a.f - b.f);
+        const cur: Node = open.shift()!;
+        const k: string = key(cur.x, cur.y);
+        if (visited.has(k)) continue;
+        visited.set(k, cur);
+
+        if (cur.x === goal.x &amp;&amp; cur.y === goal.y) {
+            const path: Pt[] = [];
+            let n: Node | null = cur;
+            while (n) { path.unshift({ x: n.x, y: n.y }); n = n.parent; }
+            return path;
+        }
+
+        for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+            const nx = cur.x + dx, ny = cur.y + dy;
+            if (!isWalkable(nx, ny) || visited.has(key(nx, ny))) continue;
+            open.push({ x: nx, y: ny, g: cur.g + 1, f: cur.g + 1 + h(nx, ny), parent: cur });
+        }
+    }
+    return null;
+}</code></pre>
+                </div>
+                <div class="key-point">
+                    <strong>💡 Production caveat:</strong> sorting the open list every iteration is
+                    O(n log n). For small grids that's fine. The
+                    <a href="advanced.html">Advanced tier</a> swaps it for a proper binary heap when
+                    we scale to 1000 units pathfinding simultaneously.
+                </div>
+            </details>
+
+            <h3>Watch A* in action</h3>
+            <p>
+                Click anywhere on the grid to set a goal. The unit pathfinds around the water.
+                <strong>Yellow cells</strong> = visited (closed set), <strong>orange</strong> = path.
+            </p>
+            <div class="diagram">
+                <canvas id="pathfindingDemo" width="800" height="440"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnPathClear">Clear path / reset unit</button>
+                <button id="btnPathToggleHeatmap" class="active">Show visited cells</button>
+            </div>
+            <div id="pathfindingDemoInfo" class="info-display">Click a tile to send the unit through a path that avoids water.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- BUILDINGS -->
+        <!-- ============================================ -->
+        <div id="buildings" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🏗️ Building Placement (Multi-Tile)</h2>
+
+            <p>
+                Buildings cover more than one tile. A 2×2 barracks occupies four cells; a 3×3 town
+                center occupies nine. The placement rules:
+            </p>
+            <ul>
+                <li>Every tile the footprint covers must be <strong>walkable</strong>.</li>
+                <li>No existing building or unit may occupy any footprint tile.</li>
+                <li>The cursor cell becomes the building's <em>anchor</em> (top-left of the footprint).</li>
+            </ul>
+
+            <details>
+                <summary>📝 Click to see: footprint validity check</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">function canPlaceBuilding(anchorX, anchorY, footprint, map, blockedSet) {
+    // footprint is {w, h}; iterate every covered tile
+    for (let dy = 0; dy &lt; footprint.h; dy++) {
+        for (let dx = 0; dx &lt; footprint.w; dx++) {
+            const cx = anchorX + dx, cy = anchorY + dy;
+            if (!isWalkable(map, cx, cy)) return false;
+            if (blockedSet.has(`${cx},${cy}`)) return false;
+        }
+    }
+    return true;
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">type Footprint = { w: number; h: number; };
+
+function canPlaceBuilding(
+    anchorX: number,
+    anchorY: number,
+    footprint: Footprint,
+    map: TileMap,
+    blockedSet: Set&lt;string&gt;
+): boolean {
+    for (let dy: number = 0; dy &lt; footprint.h; dy++) {
+        for (let dx: number = 0; dx &lt; footprint.w; dx++) {
+            const cx: number = anchorX + dx, cy: number = anchorY + dy;
+            if (!isWalkable(map, cx, cy)) return false;
+            if (blockedSet.has(`${cx},${cy}`)) return false;
+        }
+    }
+    return true;
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>Try it</h3>
+            <p>
+                Pick a building, then hover the grid. Green ghost = valid; red = invalid (water,
+                stone, or overlapping). Click to place.
+            </p>
+            <div class="diagram">
+                <canvas id="buildingDemo" width="800" height="440"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnBuild2x2" class="active">🏠 House (2×2)</button>
+                <button id="btnBuild3x3">🏰 Town Center (3×3)</button>
+                <button id="btnBuild1x2">🛡️ Wall (1×2)</button>
+                <button id="btnBuildClear">Clear all</button>
+            </div>
+            <div id="buildingDemoInfo" class="info-display">Hover for placement ghost. Click to place.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- GATHERING -->
+        <!-- ============================================ -->
+        <div id="gathering" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🌲 Resource Gathering Loop</h2>
+
+            <p>
+                A worker is a state machine. From the moment you assign it to a resource node, it
+                shuttles back and forth: <em>walk to resource → chop/mine → walk to drop-off →
+                deposit → repeat</em>. The whole loop runs without further player input — that's
+                what makes RTS "macro" feel so satisfying.
+            </p>
+
+            <details>
+                <summary>📝 Click to see: worker state machine</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// States: 'idle' | 'walking_to_resource' | 'gathering' | 'walking_to_dropoff' | 'depositing'
+function tickWorker(w, dt, world) {
+    switch (w.state) {
+        case 'walking_to_resource':
+            if (walkToward(w, w.resource, dt)) {
+                w.state = 'gathering';
+                w.gatherTimer = 1.5; // seconds
+            }
+            break;
+        case 'gathering':
+            w.gatherTimer -= dt;
+            if (w.gatherTimer &lt;= 0) {
+                w.carrying = 10;
+                w.state = 'walking_to_dropoff';
+            }
+            break;
+        case 'walking_to_dropoff':
+            if (walkToward(w, w.dropoff, dt)) {
+                world.resources += w.carrying;
+                w.carrying = 0;
+                w.state = 'walking_to_resource';
+            }
+            break;
+    }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">type WorkerState =
+    | 'idle'
+    | 'walking_to_resource'
+    | 'gathering'
+    | 'walking_to_dropoff';
+
+interface Worker {
+    cx: number; cy: number; speed: number;
+    state: WorkerState;
+    resource: { cx: number; cy: number };
+    dropoff:  { cx: number; cy: number };
+    gatherTimer: number;
+    carrying: number;
+}
+
+function tickWorker(w: Worker, dt: number, world: { resources: number }): void {
+    switch (w.state) {
+        case 'walking_to_resource':
+            if (walkToward(w, w.resource, dt)) {
+                w.state = 'gathering';
+                w.gatherTimer = 1.5;
+            }
+            break;
+        case 'gathering':
+            w.gatherTimer -= dt;
+            if (w.gatherTimer &lt;= 0) {
+                w.carrying = 10;
+                w.state = 'walking_to_dropoff';
+            }
+            break;
+        case 'walking_to_dropoff':
+            if (walkToward(w, w.dropoff, dt)) {
+                world.resources += w.carrying;
+                w.carrying = 0;
+                w.state = 'walking_to_resource';
+            }
+            break;
+    }
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>The loop in motion</h3>
+            <p>Two workers, a tree (resource), and a stockpile (drop-off). Watch the wood tally climb.</p>
+            <div class="diagram">
+                <canvas id="gatheringDemo" width="800" height="420"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnGatherFaster">Speed up workers</button>
+                <button id="btnGatherSlower">Slow down workers</button>
+                <button id="btnGatherReset">Reset</button>
+            </div>
+            <div id="gatheringDemoInfo" class="info-display">Wood collected: 0</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- PRODUCTION -->
+        <!-- ============================================ -->
+        <div id="production" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🛠️ Production Buildings with a Queue</h2>
+
+            <p>
+                A barracks holds a <em>queue</em> of unit orders. Each order takes a fixed build
+                time. When complete, the unit spawns at a designated <strong>rally point</strong>
+                near the building.
+            </p>
+
+            <details>
+                <summary>📝 Click to see: production queue tick</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">function tickProductionBuilding(b, dt, world) {
+    const job = b.queue[0];
+    if (!job) return;
+    b.progress += dt;
+    if (b.progress &gt;= job.buildTime) {
+        // Spawn a unit at the rally point
+        world.units.push({
+            id: world.nextId++,
+            type: job.unitType,
+            cx: b.rally.cx,
+            cy: b.rally.cy,
+            speed: 3,
+            orders: []
+        });
+        b.queue.shift();
+        b.progress = 0;
+    }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface Job { unitType: string; buildTime: number; }
+interface ProductionBuilding {
+    queue: Job[];
+    progress: number;
+    rally: { cx: number; cy: number };
+}
+
+function tickProductionBuilding(b: ProductionBuilding, dt: number, world: World): void {
+    const job: Job | undefined = b.queue[0];
+    if (!job) return;
+    b.progress += dt;
+    if (b.progress &gt;= job.buildTime) {
+        world.units.push({
+            id: world.nextId++,
+            type: job.unitType,
+            cx: b.rally.cx,
+            cy: b.rally.cy,
+            speed: 3,
+            orders: []
+        } as Unit);
+        b.queue.shift();
+        b.progress = 0;
+    }
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>Train units from the barracks</h3>
+            <p>Click "Train" to add to the queue. Spawned units walk to the rally point.</p>
+            <div class="diagram">
+                <canvas id="productionDemo" width="800" height="420"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnTrainSoldier">⚔️ Train Soldier (2s)</button>
+                <button id="btnTrainArcher">🏹 Train Archer (3s)</button>
+                <button id="btnCancelJob">Cancel current</button>
+                <button id="btnSetRally">Set rally (click on grid)</button>
+            </div>
+            <div id="productionDemoInfo" class="info-display">Queue is empty.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- COMBAT -->
+        <!-- ============================================ -->
+        <div id="combat" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>⚔️ Basic Combat (HP, Range, Damage)</h2>
+
+            <p>
+                The smallest viable combat model: each unit has <em>HP</em>, <em>attackDamage</em>,
+                <em>attackRange</em> (in tiles), and <em>attackCooldown</em> (seconds between shots).
+                Each frame, find an enemy in range; if cooldown is zero, fire and reset cooldown.
+            </p>
+
+            <details>
+                <summary>📝 Click to see: combat tick</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">function tickCombat(unit, dt, enemies) {
+    unit.cooldown = Math.max(0, unit.cooldown - dt);
+    // Find nearest enemy in range
+    let nearest = null, bestD = Infinity;
+    for (const e of enemies) {
+        if (e.hp &lt;= 0) continue;
+        const d = Math.hypot(e.cx - unit.cx, e.cy - unit.cy);
+        if (d &lt;= unit.attackRange &amp;&amp; d &lt; bestD) { bestD = d; nearest = e; }
+    }
+    if (nearest &amp;&amp; unit.cooldown === 0) {
+        nearest.hp -= unit.attackDamage;
+        unit.cooldown = unit.attackCooldownMax;
+        // (a real game would spawn a projectile / sound / hit anim here)
+    }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface CombatUnit {
+    cx: number; cy: number;
+    hp: number;
+    attackDamage: number;
+    attackRange: number;
+    attackCooldown: number;
+    attackCooldownMax: number;
+}
+
+function tickCombat(unit: CombatUnit, dt: number, enemies: CombatUnit[]): void {
+    unit.attackCooldown = Math.max(0, unit.attackCooldown - dt);
+    let nearest: CombatUnit | null = null;
+    let bestD: number = Infinity;
+    for (const e of enemies) {
+        if (e.hp &lt;= 0) continue;
+        const d: number = Math.hypot(e.cx - unit.cx, e.cy - unit.cy);
+        if (d &lt;= unit.attackRange &amp;&amp; d &lt; bestD) { bestD = d; nearest = e; }
+    }
+    if (nearest &amp;&amp; unit.attackCooldown === 0) {
+        nearest.hp -= unit.attackDamage;
+        unit.attackCooldown = unit.attackCooldownMax;
+    }
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>Watch a melee vs ranged duel</h3>
+            <p>
+                A red enemy with HP 100 vs a blue player with HP 80. Use the buttons to choose who's
+                melee (range 1, fast cooldown) and who's ranged (range 3, slow cooldown).
+            </p>
+            <div class="diagram">
+                <canvas id="combatDemo" width="800" height="380"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnCombatStart">▶ Start fight</button>
+                <button id="btnCombatReset">Reset</button>
+                <button id="btnCombatSwap">Swap roles (melee ↔ ranged)</button>
+            </div>
+            <div id="combatDemoInfo" class="info-display">Press Start. Player is ranged, enemy is melee.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- SKIRMISH MINI-PROJECT -->
+        <!-- ============================================ -->
+        <div id="skirmish" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🎮 Mini-Project: Tiny Skirmish</h2>
+
+            <p>
+                The full Expert tier composed: a small map with water, a worker harvesting wood,
+                a barracks producing soldiers, an enemy patrol that walks across — and you, the
+                player, with drag-box selection, A* pathfinding, and right-click commands.
+            </p>
+
+            <div class="example-box">
+                <h4>🎯 What's wired up</h4>
+                <ul>
+                    <li>14×10 tile map with a river</li>
+                    <li>Player base: 2×2 town centre + worker + a stockpile of resources</li>
+                    <li>Enemy base: 2×2 barracks across the river that spawns one melee soldier on a timer</li>
+                    <li>Drag-box selection of player units; right-click to move (A* around water)</li>
+                    <li>Combat triggers when a player unit is in range of an enemy</li>
+                </ul>
+            </div>
+
+            <div class="diagram">
+                <canvas id="skirmishDemo" width="800" height="500" tabindex="0"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnSkirmishStart">▶ Start / Resume</button>
+                <button id="btnSkirmishPause">⏸ Pause</button>
+                <button id="btnSkirmishTrain">Train soldier (player)</button>
+                <button id="btnSkirmishReset">Reset</button>
+            </div>
+            <div id="skirmishDemoInfo" class="info-display">Drag-select your units, right-click to move, click "Train soldier" to grow your army.</div>
+
+            <div class="key-point">
+                <strong>💡 What's still missing</strong> — fog of war, real AI for the enemy, group
+                movement that avoids unit collisions, multi-tile pathing for buildings. Those land in
+                the <a href="advanced.html">Advanced tier</a>.
+            </div>
+        </div>
+
+        <!-- Next Steps -->
+        <div class="section" style="text-align: center;">
+            <h2>✅ Expert Tier Complete</h2>
+            <p style="font-size: 1.1em; margin: 24px 0;">
+                You have a working RTS gameplay loop: select, command, pathfind, build, gather,
+                fight. The next tier polishes and scales it.
+            </p>
+            <a href="advanced.html" class="nav-button" style="font-size: 1.2em; padding: 20px 40px;">
+                Continue to Advanced →
+            </a>
+            <p style="margin-top: 20px;"><em>Advanced isn't written yet — coming next phase. Track progress on the <a href="index.html">track index</a>.</em></p>
+        </div>
+    </div>
+
+    <!-- Scroll to Top Button -->
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <script src="../shared/utils.js"></script>
+    <script src="../shared/code-tabs.js"></script>
+    <script src="expert-demos.js"></script>
+</body>
+</html>
