@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Intermediate — Isometric Strategy Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <!-- Prism.js Syntax Highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>🏰 Intermediate — Maps, Units &amp; Camera</h1>
+        <p class="subtitle">Build a real tile-map data model, draw layers in the right order, pan/zoom the camera, and put a walking unit on the grid</p>
+
+        <!-- Navigation -->
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="beginner.html" class="nav-button">← Beginner</a>
+            <a href="intermediate.html" class="nav-button active">Intermediate</a>
+            <a href="expert.html" class="nav-button">Expert →</a>
+        </div>
+
+        <!-- Table of Contents -->
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#tile-map">Tile-Map Data Structure</a></li>
+                <li><a href="#layers">Terrain Layers (Ground / Decoration / Entity)</a></li>
+                <li><a href="#depth-sort">Depth Sorting (Painter's Algorithm)</a></li>
+                <li><a href="#camera">Camera: Pan, Edge-Scroll, Zoom</a></li>
+                <li><a href="#units">Spawning Units &amp; Tile-to-Tile Movement</a></li>
+                <li><a href="#eight-dir">8-Direction Sprite Selection</a></li>
+                <li><a href="#mini-project">Mini-Project: Click-to-Walk</a></li>
+            </ul>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- TILE-MAP DATA STRUCTURE -->
+        <!-- ============================================ -->
+        <div id="tile-map" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🗺️ Tile-Map Data Structure</h2>
+
+            <p>
+                In the Beginner tier we painted colors directly. To build a real game we need a proper
+                data model: each tile stores a <strong>terrain type</strong> (an enum or string), and the map
+                is a 2D array indexed <code>map[y][x]</code>.
+            </p>
+
+            <div class="concept-box">
+                <h4>Why <code>map[y][x]</code> (row-major) and not <code>map[x][y]</code>?</h4>
+                <p>Two reasons:</p>
+                <ul>
+                    <li><strong>Loop order matches draw order.</strong> Isometric drawing iterates rows
+                        first (back to front for depth sort). <code>for (y) for (x)</code> reads contiguous
+                        memory in row-major arrays, which the CPU loves.</li>
+                    <li><strong>Convention.</strong> Every tile-editor file format (Tiled, AoE2's .scx) is
+                        row-major. Matching that means zero-friction interop later.</li>
+                </ul>
+            </div>
+
+            <details>
+                <summary>📝 Click to see: a minimal TileMap class</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Terrain types as a const enum — easy to extend later
+const Terrain = Object.freeze({
+    GRASS: 'grass',
+    WATER: 'water',
+    SAND:  'sand',
+    STONE: 'stone'
+});
+
+class TileMap {
+    constructor(width, height, defaultTerrain = Terrain.GRASS) {
+        this.width = width;
+        this.height = height;
+        // Row-major: tiles[y][x]
+        this.tiles = Array.from({ length: height }, () =&gt;
+            Array.from({ length: width }, () =&gt; defaultTerrain)
+        );
+    }
+    get(cx, cy) {
+        if (cx &lt; 0 || cx &gt;= this.width || cy &lt; 0 || cy &gt;= this.height) return null;
+        return this.tiles[cy][cx];
+    }
+    set(cx, cy, terrain) {
+        if (cx &lt; 0 || cx &gt;= this.width || cy &lt; 0 || cy &gt;= this.height) return;
+        this.tiles[cy][cx] = terrain;
+    }
+    isWalkable(cx, cy) {
+        // For RTS movement, water and stone are typically obstacles
+        const t = this.get(cx, cy);
+        return t === Terrain.GRASS || t === Terrain.SAND;
+    }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Terrain types as a string-literal union
+type Terrain = 'grass' | 'water' | 'sand' | 'stone';
+
+class TileMap {
+    width: number;
+    height: number;
+    tiles: Terrain[][];
+
+    constructor(width: number, height: number, defaultTerrain: Terrain = 'grass') {
+        this.width = width;
+        this.height = height;
+        this.tiles = Array.from({ length: height }, () =&gt;
+            Array.from({ length: width }, () =&gt; defaultTerrain)
+        );
+    }
+    get(cx: number, cy: number): Terrain | null {
+        if (cx &lt; 0 || cx &gt;= this.width || cy &lt; 0 || cy &gt;= this.height) return null;
+        return this.tiles[cy][cx];
+    }
+    set(cx: number, cy: number, terrain: Terrain): void {
+        if (cx &lt; 0 || cx &gt;= this.width || cy &lt; 0 || cy &gt;= this.height) return;
+        this.tiles[cy][cx] = terrain;
+    }
+    isWalkable(cx: number, cy: number): boolean {
+        const t: Terrain | null = this.get(cx, cy);
+        return t === 'grass' || t === 'sand';
+    }
+}</code></pre>
+                </div>
+
+                <div class="example-box">
+                    <h4>🎮 Creating a map with a river through it</h4>
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">const map = new TileMap(12, 10);
+
+// A horizontal river at y = 5
+for (let x = 0; x &lt; 12; x++) map.set(x, 5, Terrain.WATER);
+
+// Some sandy shore tiles either side
+for (let x = 0; x &lt; 12; x++) {
+    map.set(x, 4, Terrain.SAND);
+    map.set(x, 6, Terrain.SAND);
+}
+
+// A stone outcrop
+map.set(2, 2, Terrain.STONE);
+map.set(3, 2, Terrain.STONE);</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">const map: TileMap = new TileMap(12, 10);
+
+// A horizontal river at y = 5
+for (let x: number = 0; x &lt; 12; x++) map.set(x, 5, 'water');
+
+for (let x: number = 0; x &lt; 12; x++) {
+    map.set(x, 4, 'sand');
+    map.set(x, 6, 'sand');
+}
+
+map.set(2, 2, 'stone');
+map.set(3, 2, 'stone');</code></pre>
+                    </div>
+                </div>
+            </details>
+
+            <h3>The map, rendered</h3>
+            <p>The TileMap above, drawn with one diamond per cell, color-coded by terrain.</p>
+            <div class="diagram">
+                <canvas id="tileMapDemo" width="800" height="380"></canvas>
+            </div>
+            <div id="tileMapDemoInfo" class="info-display">12×10 tile map with a river, beaches and a stone outcrop</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- LAYERS -->
+        <!-- ============================================ -->
+        <div id="layers" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🍰 Terrain Layers (Ground / Decoration / Entity)</h2>
+
+            <p>
+                Real maps have <em>more than one thing</em> per tile. A grass tile might have a tree on it; a
+                stone tile might have a building. We split the world into <strong>layers</strong>, each drawn in a
+                pass. From bottom to top:
+            </p>
+
+            <ul>
+                <li><strong>Ground layer</strong> — terrain (grass, water, sand…). One cell, one terrain.</li>
+                <li><strong>Decoration layer</strong> — static props (trees, rocks, flowers). Optional per cell.</li>
+                <li><strong>Entity layer</strong> — moving things (units, projectiles). Indexed differently —
+                    not by tile, but by entity ID, because entities move between tiles.</li>
+            </ul>
+
+            <div class="concept-box">
+                <h4>Why layers instead of "one big array of stuff per tile"?</h4>
+                <p>
+                    Two reasons. <strong>Different update rates</strong>: ground never changes, decoration
+                    changes occasionally, entities update every frame. Splitting lets you cache the ground
+                    layer on an offscreen canvas. <strong>Different sort rules</strong>: the ground always
+                    draws bottom-to-top by tile, but entities have to be sorted by their *fractional* tile
+                    position (since they can sit between tiles).
+                </p>
+            </div>
+
+            <details>
+                <summary>📝 Click to see: drawing in three passes</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">function renderWorld(ctx, world, camera) {
+    // Pass 1 — ground (one diamond per cell)
+    for (let cy = 0; cy &lt; world.map.height; cy++) {
+        for (let cx = 0; cx &lt; world.map.width; cx++) {
+            const p = cartToIso(cx, cy, TILE_W, TILE_H, camera.originX, camera.originY);
+            drawIsoTile(ctx, p.x, p.y, TILE_W, TILE_H,
+                        terrainColor(world.map.get(cx, cy)), '#3a4a6a');
+        }
+    }
+    // Pass 2 — decorations (props), sorted back-to-front like the ground
+    for (let cy = 0; cy &lt; world.map.height; cy++) {
+        for (let cx = 0; cx &lt; world.map.width; cx++) {
+            const deco = world.decorations.get(cx, cy);
+            if (deco) drawDecoration(ctx, deco, cx, cy, camera);
+        }
+    }
+    // Pass 3 — entities, sorted by (y + x) so closer ones overlap farther ones
+    const sorted = [...world.entities].sort((a, b) =&gt;
+        (a.cy + a.cx) - (b.cy + b.cx)
+    );
+    for (const e of sorted) drawEntity(ctx, e, camera);
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function renderWorld(
+    ctx: CanvasRenderingContext2D,
+    world: World,
+    camera: Camera
+): void {
+    // Pass 1 — ground
+    for (let cy: number = 0; cy &lt; world.map.height; cy++) {
+        for (let cx: number = 0; cx &lt; world.map.width; cx++) {
+            const p = cartToIso(cx, cy, TILE_W, TILE_H, camera.originX, camera.originY);
+            drawIsoTile(ctx, p.x, p.y, TILE_W, TILE_H,
+                        terrainColor(world.map.get(cx, cy)), '#3a4a6a');
+        }
+    }
+    // Pass 2 — decorations
+    for (let cy: number = 0; cy &lt; world.map.height; cy++) {
+        for (let cx: number = 0; cx &lt; world.map.width; cx++) {
+            const deco = world.decorations.get(cx, cy);
+            if (deco) drawDecoration(ctx, deco, cx, cy, camera);
+        }
+    }
+    // Pass 3 — entities, depth-sorted by (cy + cx)
+    const sorted: Entity[] = [...world.entities].sort(
+        (a, b) =&gt; (a.cy + a.cx) - (b.cy + b.cx)
+    );
+    for (const e of sorted) drawEntity(ctx, e, camera);
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>See it pass by pass</h3>
+            <p>Toggle each layer on or off to see the contribution of each pass.</p>
+            <div class="diagram">
+                <canvas id="layersDemo" width="800" height="420"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnLayerGround" class="active">Ground</button>
+                <button id="btnLayerDeco" class="active">Decoration</button>
+                <button id="btnLayerEntity" class="active">Entities</button>
+            </div>
+            <div id="layersDemoInfo" class="info-display">All three layers visible. Toggle to see each in isolation.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- DEPTH SORT -->
+        <!-- ============================================ -->
+        <div id="depth-sort" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🎨 Depth Sorting (Painter's Algorithm)</h2>
+
+            <p>
+                In iso games the "depth" of an object — how close to the camera it appears — is determined
+                by its tile-grid coordinates. A tile at <code>(cx=3, cy=5)</code> draws on top of
+                <code>(cx=2, cy=4)</code> because it's geometrically closer to the front of the screen.
+                The sort key is simply <strong>cx + cy</strong> (or equivalently <code>cy + cx</code>).
+            </p>
+
+            <div class="concept-box">
+                <h4>The sort key, derived</h4>
+                <p>
+                    From <code>cartToIso</code>, screenY = originY + (cx + cy) × tileH/2. So objects with a
+                    higher (cx + cy) sum draw <em>lower</em> on the screen — which in iso means closer to
+                    the viewer. Sort entities by (cx + cy) ascending, draw in that order, and closer
+                    things naturally overpaint farther things.
+                </p>
+            </div>
+
+            <h3>Bug demo: sort vs no-sort</h3>
+            <p>
+                Same scene with a tree, a building, and a player walking across. With depth sort off, the
+                draw order is whatever insertion order the array happens to have — often visually broken.
+                Toggle the button.
+            </p>
+            <div class="diagram">
+                <canvas id="depthSortDemo" width="800" height="420"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnSortOn" class="active">Depth sort ON</button>
+                <button id="btnSortOff">Depth sort OFF (broken)</button>
+                <button id="btnSortAnimate">▶ Walk player through scene</button>
+            </div>
+            <div id="depthSortDemoInfo" class="info-display">Watch the player walk behind/in-front-of the tree as their (cx+cy) crosses it.</div>
+
+            <div class="challenge-box">
+                <h4>🎯 Spot the bug</h4>
+                <p>With depth sort OFF, the player will be drawn either always-on-top or always-behind
+                regardless of position. With it ON, the player correctly hides behind the tree when
+                they're "behind" it (lower cx+cy) and appears in front when they're closer.</p>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- CAMERA -->
+        <!-- ============================================ -->
+        <div id="camera" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>📷 Camera: Pan, Edge-Scroll, Zoom</h2>
+
+            <p>
+                A camera in 2D iso is just an offset (the <strong>origin</strong> where tile (0,0) draws)
+                and a scale factor (how big <code>tileW</code>/<code>tileH</code> are). Pan changes the
+                offset; zoom changes the scale.
+            </p>
+
+            <details>
+                <summary>📝 Click to see: a minimal Camera class</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class Camera {
+    constructor(originX, originY) {
+        this.originX = originX;
+        this.originY = originY;
+        this.zoom = 1;           // 1 = native size, 0.5 = zoomed out, 2 = zoomed in
+    }
+    pan(dx, dy) {
+        this.originX += dx;
+        this.originY += dy;
+    }
+    setZoom(z) {
+        // Clamp to avoid pixel-soup zoom-out or unreadable zoom-in
+        this.zoom = clamp(z, 0.5, 2.5);
+    }
+    // Effective tile dimensions at the current zoom
+    tileW(baseW) { return baseW * this.zoom; }
+    tileH(baseH) { return baseH * this.zoom; }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">class Camera {
+    originX: number;
+    originY: number;
+    zoom: number = 1;
+
+    constructor(originX: number, originY: number) {
+        this.originX = originX;
+        this.originY = originY;
+    }
+    pan(dx: number, dy: number): void {
+        this.originX += dx;
+        this.originY += dy;
+    }
+    setZoom(z: number): void {
+        this.zoom = clamp(z, 0.5, 2.5);
+    }
+    tileW(baseW: number): number { return baseW * this.zoom; }
+    tileH(baseH: number): number { return baseH * this.zoom; }
+}</code></pre>
+                </div>
+
+                <div class="key-point">
+                    <strong>💡 Mouse picking with a camera:</strong> when you call
+                    <code>pickTileFromMouse</code>, pass the camera's current <code>originX/originY</code>
+                    AND the zoomed <code>tileW/tileH</code>. The math doesn't change — it just uses
+                    different values. This is the entire reason we parameterized those functions in the
+                    beginner tier.
+                </div>
+            </details>
+
+            <h3>Try the camera</h3>
+            <p>
+                <strong>Drag</strong> the canvas to pan. <strong>Scroll wheel</strong> to zoom. <strong>Arrow keys</strong>
+                also pan (click the canvas first to focus it). The tile under your cursor stays highlighted
+                regardless — proof that picking works through the camera transform.
+            </p>
+            <div class="diagram">
+                <canvas id="cameraDemo" width="800" height="440" tabindex="0"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnCamReset">Reset camera</button>
+                <button id="btnCamZoomIn">Zoom In</button>
+                <button id="btnCamZoomOut">Zoom Out</button>
+            </div>
+            <div id="cameraDemoInfo" class="info-display">Drag to pan, scroll to zoom, arrow keys to nudge.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- UNITS -->
+        <!-- ============================================ -->
+        <div id="units" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🚶 Spawning Units &amp; Tile-to-Tile Movement</h2>
+
+            <p>
+                A unit is an entity with a <strong>fractional</strong> tile position. Stationary units sit
+                at integer coords; walking units tween smoothly between them. Each frame we update the
+                fractional position toward the destination, then render with <code>cartToIso</code> using
+                those fractional coords directly.
+            </p>
+
+            <details>
+                <summary>📝 Click to see: a minimal Unit class with smooth movement</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class Unit {
+    constructor(cx, cy, speed = 4) {
+        this.cx = cx;             // fractional tile x
+        this.cy = cy;             // fractional tile y
+        this.targetX = cx;        // destination
+        this.targetY = cy;
+        this.speed = speed;       // tiles per second
+    }
+
+    moveTo(tx, ty) {
+        this.targetX = tx;
+        this.targetY = ty;
+    }
+
+    update(dt) {
+        const dx = this.targetX - this.cx;
+        const dy = this.targetY - this.cy;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist &lt; 0.01) {
+            // Snap to destination when very close
+            this.cx = this.targetX;
+            this.cy = this.targetY;
+            return;
+        }
+        const step = this.speed * dt;
+        if (step &gt;= dist) {
+            this.cx = this.targetX;
+            this.cy = this.targetY;
+        } else {
+            this.cx += (dx / dist) * step;
+            this.cy += (dy / dist) * step;
+        }
+    }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">class Unit {
+    cx: number;
+    cy: number;
+    targetX: number;
+    targetY: number;
+    speed: number;
+
+    constructor(cx: number, cy: number, speed: number = 4) {
+        this.cx = cx;
+        this.cy = cy;
+        this.targetX = cx;
+        this.targetY = cy;
+        this.speed = speed;
+    }
+
+    moveTo(tx: number, ty: number): void {
+        this.targetX = tx;
+        this.targetY = ty;
+    }
+
+    update(dt: number): void {
+        const dx: number = this.targetX - this.cx;
+        const dy: number = this.targetY - this.cy;
+        const dist: number = Math.sqrt(dx * dx + dy * dy);
+        if (dist &lt; 0.01) {
+            this.cx = this.targetX;
+            this.cy = this.targetY;
+            return;
+        }
+        const step: number = this.speed * dt;
+        if (step &gt;= dist) {
+            this.cx = this.targetX;
+            this.cy = this.targetY;
+        } else {
+            this.cx += (dx / dist) * step;
+            this.cy += (dy / dist) * step;
+        }
+    }
+}</code></pre>
+                </div>
+
+                <div class="key-point">
+                    <strong>💡 Note:</strong> this version does straight-line movement (no pathfinding).
+                    If the destination is across water, the unit walks through it. The
+                    <a href="expert.html">Expert tier</a> adds A* pathfinding around obstacles.
+                </div>
+            </details>
+
+            <h3>Try it</h3>
+            <p>Click anywhere on the grid to set the unit's destination. Watch the fractional tile coords update.</p>
+            <div class="diagram">
+                <canvas id="unitDemo" width="800" height="420"></canvas>
+            </div>
+            <div id="unitDemoInfo" class="info-display">Click a tile to send the unit there.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- 8-DIRECTION -->
+        <!-- ============================================ -->
+        <div id="eight-dir" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🧭 8-Direction Sprite Selection</h2>
+
+            <p>
+                AoE2-era units have sprite sheets with frames for 8 facings: N, NE, E, SE, S, SW, W, NW.
+                Given a velocity vector, you pick the closest direction and use that sprite. The math is
+                straightforward — angle to direction index.
+            </p>
+
+            <details>
+                <summary>📝 Click to see: facing from velocity</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Maps a velocity vector to one of 8 direction names.
+// Note: in iso games, "north" is the screen-up direction, which corresponds to
+// negative *both* cx and cy in cartesian — the diamond grid is rotated.
+const DIRECTIONS = ['E', 'SE', 'S', 'SW', 'W', 'NW', 'N', 'NE'];
+
+function facingFromVelocity(vx, vy) {
+    if (vx === 0 &amp;&amp; vy === 0) return null;
+    // Angle in radians, then bucket into one of 8 pie slices.
+    // Add PI/8 so the buckets are centered on the cardinals (not on the boundaries).
+    const angle = Math.atan2(vy, vx) + Math.PI / 8;
+    let idx = Math.floor(((angle + Math.PI * 2) % (Math.PI * 2)) / (Math.PI / 4));
+    return DIRECTIONS[idx % 8];
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">type Direction = 'E' | 'SE' | 'S' | 'SW' | 'W' | 'NW' | 'N' | 'NE';
+
+const DIRECTIONS: Direction[] = ['E', 'SE', 'S', 'SW', 'W', 'NW', 'N', 'NE'];
+
+function facingFromVelocity(vx: number, vy: number): Direction | null {
+    if (vx === 0 &amp;&amp; vy === 0) return null;
+    const angle: number = Math.atan2(vy, vx) + Math.PI / 8;
+    const idx: number = Math.floor(
+        ((angle + Math.PI * 2) % (Math.PI * 2)) / (Math.PI / 4)
+    );
+    return DIRECTIONS[idx % 8];
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>Visualize the 8 directions</h3>
+            <p>Drag the arrow head around. The label shows which of the 8 directions you'd pick.</p>
+            <div class="diagram">
+                <canvas id="eightDirDemo" width="800" height="400"></canvas>
+            </div>
+            <div id="eightDirDemoInfo" class="info-display">Drag the arrow head to see which direction wins.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- MINI-PROJECT -->
+        <!-- ============================================ -->
+        <div id="mini-project" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🎮 Mini-Project: Click-to-Walk</h2>
+
+            <p>
+                Everything in this tier composed together: a real tile map (with water as an obstacle),
+                layered rendering with depth sort, a pannable/zoomable camera, a walking unit that picks
+                its facing from its velocity, and click-to-move on the visible map.
+            </p>
+
+            <div class="example-box">
+                <h4>🎯 What's wired up</h4>
+                <ul>
+                    <li>12×10 tile map with grass, water (river), sand, and stone</li>
+                    <li>A tree decoration layer that the unit must depth-sort against</li>
+                    <li>Drag to pan, scroll-wheel to zoom</li>
+                    <li>Click a walkable tile to send the unit there</li>
+                    <li>Unit walks in straight-line — through water if you let it (no pathfinding yet)</li>
+                    <li>Facing arrow above the unit's head shows the picked direction</li>
+                </ul>
+            </div>
+
+            <div class="diagram">
+                <canvas id="miniProject" width="800" height="500" tabindex="0"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnMiniReset">Reset</button>
+                <button id="btnMiniHidePath">Hide debug path</button>
+            </div>
+            <div id="miniProjectInfo" class="info-display">Click a tile to walk there. Drag to pan, scroll to zoom.</div>
+
+            <div class="key-point">
+                <strong>💡 What's missing (and that's intentional):</strong> the unit walks through water
+                because we don't have pathfinding yet. We don't have selection or commands either — just
+                a single hard-coded unit you click to direct. Those gameplay systems land in the
+                <a href="expert.html">Expert tier</a>.
+            </div>
+        </div>
+
+        <!-- Next Steps -->
+        <div class="section" style="text-align: center;">
+            <h2>✅ Intermediate Tier Complete</h2>
+            <p style="font-size: 1.1em; margin: 24px 0;">
+                You now have a real map, a smooth-walking unit, and a camera that lets the player navigate
+                the world. That's a strategy game's <em>view</em> layer — next we add the gameplay loop.
+            </p>
+            <a href="expert.html" class="nav-button" style="font-size: 1.2em; padding: 20px 40px;">
+                Continue to Expert →
+            </a>
+            <p style="margin-top: 20px;"><em>Expert isn't written yet — coming next phase. Track progress on the <a href="index.html">track index</a>.</em></p>
+        </div>
+    </div>
+
+    <!-- Scroll to Top Button -->
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <!-- Load shared utilities; subdirectory paths -->
+    <script src="../shared/utils.js"></script>
+    <script src="../shared/code-tabs.js"></script>
+
+    <!-- Page-specific interactive demos -->
+    <script src="intermediate-demos.js"></script>
+</body>
+</html>
