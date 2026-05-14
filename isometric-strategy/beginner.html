@@ -215,7 +215,7 @@
                 <strong>Implement <code>cartToIso</code> — the drawing direction:</strong>
             </div>
 
-            <details>
+            <details data-demo-id="iso_mathDemo" data-deps="iso_colors,iso_clearCanvas,iso_cartToIso,iso_drawIsoTile">
                 <summary>📝 Click to see: cartToIso</summary>
                 <div class="code-container" data-code-tabs>
                     <div class="code-tabs" role="tablist">
@@ -289,7 +289,7 @@ const p: { x: number; y: number } = cartToIso(3, 1, 64, 32, 400, 50);
                 <strong>Implement <code>isoToCart</code> — the picking direction:</strong>
             </div>
 
-            <details>
+            <details data-demo-id="iso_mathDemo" data-deps="iso_colors,iso_clearCanvas,iso_cartToIso,iso_drawIsoTile">
                 <summary>📝 Click to see: isoToCart</summary>
                 <div class="code-container" data-code-tabs>
                     <div class="code-tabs" role="tablist">
@@ -352,7 +352,7 @@ function isoToCart(
             <p>One tile is four points and a polygon. A grid is a nested loop calling <code>drawIsoTile</code> with offsets.</p>
 
             <h3>A single diamond</h3>
-            <details>
+            <details data-demo-id="iso_gridDemo" data-deps="iso_colors,iso_clearCanvas,iso_cartToIso,iso_drawIsoTile">
                 <summary>📝 Click to see: drawIsoTile</summary>
                 <div class="code-container" data-code-tabs>
                     <div class="code-tabs" role="tablist">
@@ -397,7 +397,7 @@ function drawIsoTile(
             </details>
 
             <h3>A 10×10 grid</h3>
-            <details>
+            <details data-demo-id="iso_gridDemo" data-deps="iso_colors,iso_clearCanvas,iso_cartToIso,iso_drawIsoTile">
                 <summary>📝 Click to see: drawing a full grid</summary>
                 <div class="code-container" data-code-tabs>
                     <div class="code-tabs" role="tablist">
@@ -470,7 +470,7 @@ function drawIsoTile(
                 </p>
             </div>
 
-            <details>
+            <details data-demo-id="iso_pickDemo" data-deps="iso_colors,iso_clearCanvas,iso_cartToIso,iso_isoToCart,iso_drawIsoTile,iso_pickTileFromMouse">
                 <summary>📝 Click to see: pickTileFromMouse (with the Y-offset fix)</summary>
                 <div class="code-container" data-code-tabs>
                     <div class="code-tabs" role="tablist">
@@ -555,7 +555,7 @@ canvas.addEventListener('mousemove', (e: MouseEvent) =&gt; {
                 grid to paint cells. This is also the seed of the map editor we'll grow in the Advanced tier.
             </p>
 
-            <details>
+            <details data-demo-id="iso_paintGrid" data-deps="iso_colors,iso_clearCanvas,iso_cartToIso,iso_isoToCart,iso_drawIsoTile,iso_pickTileFromMouse">
                 <summary>📝 Click to see: the full paint-the-grid logic</summary>
                 <div class="code-container" data-code-tabs>
                     <div class="code-tabs" role="tablist">
@@ -689,5 +689,13 @@ canvas.addEventListener('mouseleave', () =&gt; { isPainting = false; });</code><
 
     <!-- Page-specific interactive demos. -->
     <script src="beginner-demos.js"></script>
+
+    <!-- Iso-specific bundles for the Export button.
+         If the file isn't present yet (other tiers during rollout), the 404
+         is harmless and the Export buttons simply don't render. -->
+    <script src="bundles-beginner.js"></script>
+    <!-- Shared export-demo injector. Looks for <details data-demo-id="...">
+         and attaches a 📋 Export button that copies a runnable HTML to the clipboard. -->
+    <script src="../shared/export-demo.js"></script>
 </body>
 </html>
