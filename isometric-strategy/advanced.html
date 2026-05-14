@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced — Isometric Strategy Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>🏰 Advanced — Polish, Scale &amp; AI</h1>
+        <p class="subtitle">Fog of war, flow fields, 1000-unit performance, save/load, map editor, and a real AI opponent</p>
+
+        <!-- Navigation -->
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="expert.html" class="nav-button">← Expert</a>
+            <a href="advanced.html" class="nav-button active">Advanced</a>
+            <a href="simulations.html" class="nav-button">Simulations →</a>
+        </div>
+
+        <!-- Table of Contents -->
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#fog-of-war">Fog of War &amp; Line of Sight</a></li>
+                <li><a href="#flow-fields">Flow Fields for Group Movement</a></li>
+                <li><a href="#multi-tile-pathing">Multi-Tile Structures &amp; Pathing Around Them</a></li>
+                <li><a href="#spatial-hash">Spatial Hash for Fast Neighbor Queries</a></li>
+                <li><a href="#save-load">Save / Load via JSON</a></li>
+                <li><a href="#map-editor">Mini Map Editor</a></li>
+                <li><a href="#ai">AI Opponent: State Machine + Economy</a></li>
+                <li><a href="#stress-test">Stress Test: 500 Units Pathfinding</a></li>
+            </ul>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- FOG OF WAR -->
+        <!-- ============================================ -->
+        <div id="fog-of-war" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🌫️ Fog of War &amp; Line of Sight</h2>
+
+            <p>
+                Fog of war hides parts of the map the player hasn't seen. It has three states per tile:
+            </p>
+            <ul>
+                <li><strong>Visible</strong> — a friendly unit can see this tile right now. Render normally.</li>
+                <li><strong>Explored</strong> — was visible before but isn't now. Render dimmed; show terrain
+                    but hide enemy units.</li>
+                <li><strong>Hidden</strong> — never seen. Render solid black/dark.</li>
+            </ul>
+
+            <div class="concept-box">
+                <h4>The data structure</h4>
+                <p>
+                    A per-team visibility grid the size of the map. Each frame, set all cells back to
+                    <em>explored</em> (if they were ever visible), then walk every friendly unit and stamp
+                    its vision radius back to <em>visible</em>. The cost is O(units × radius²); cheap for
+                    the unit counts in this track.
+                </p>
+            </div>
+
+            <details>
+                <summary>📝 Click to see: a minimal FoW updater</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// States: 0 = hidden, 1 = explored, 2 = visible
+function updateFog(fog, units, map) {
+    // Demote anything currently "visible" back to "explored"
+    for (let i = 0; i &lt; fog.length; i++) {
+        if (fog[i] === 2) fog[i] = 1;
+    }
+    // Stamp each unit's vision circle as "visible"
+    for (const u of units) {
+        const r = u.visionRadius;
+        for (let dy = -r; dy &lt;= r; dy++) {
+            for (let dx = -r; dx &lt;= r; dx++) {
+                if (dx * dx + dy * dy &gt; r * r) continue;       // circle, not square
+                const cx = Math.round(u.cx) + dx;
+                const cy = Math.round(u.cy) + dy;
+                if (cx &lt; 0 || cx &gt;= map.width || cy &lt; 0 || cy &gt;= map.height) continue;
+                fog[cy * map.width + cx] = 2;
+            }
+        }
+    }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">type FogState = 0 | 1 | 2; // 0 hidden, 1 explored, 2 visible
+type FogGrid = Uint8Array;
+
+function updateFog(fog: FogGrid, units: Unit[], map: TileMap): void {
+    for (let i: number = 0; i &lt; fog.length; i++) {
+        if (fog[i] === 2) fog[i] = 1;
+    }
+    for (const u of units) {
+        const r: number = u.visionRadius;
+        for (let dy: number = -r; dy &lt;= r; dy++) {
+            for (let dx: number = -r; dx &lt;= r; dx++) {
+                if (dx * dx + dy * dy &gt; r * r) continue;
+                const cx: number = Math.round(u.cx) + dx;
+                const cy: number = Math.round(u.cy) + dy;
+                if (cx &lt; 0 || cx &gt;= map.width || cy &lt; 0 || cy &gt;= map.height) continue;
+                fog[cy * map.width + cx] = 2;
+            }
+        }
+    }
+}</code></pre>
+                </div>
+                <div class="key-point">
+                    <strong>💡 Real LoS is more involved.</strong> Production games shoot rays from the
+                    unit through the terrain heightmap so walls/cliffs block vision. This circle approach
+                    is fine for flat-terrain RTS like AoE2 on plain maps; AoE2 actually does
+                    raycasting with elevation. The
+                    <a href="../advanced.html#shadows">Shadow Casting</a> topic in Fundamentals covers
+                    the per-cell raycast approach.
+                </div>
+            </details>
+
+            <h3>Drag your unit around to reveal</h3>
+            <p>The blue unit has vision radius 4. Drag it across the map and watch the fog peel back; the trail it leaves stays "explored" (dimmed) but enemy units in those tiles aren't drawn.</p>
+            <div class="diagram">
+                <canvas id="fogDemo" width="800" height="440"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnFogResetExplore">Reset exploration</button>
+                <button id="btnFogToggle" class="active">Fog ON</button>
+            </div>
+            <div id="fogDemoInfo" class="info-display">Drag the blue unit to reveal the map. Red enemies are only visible when in your line of sight.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- FLOW FIELDS -->
+        <!-- ============================================ -->
+        <div id="flow-fields" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🌊 Flow Fields for Group Movement</h2>
+
+            <p>
+                Running A* once per unit per move command costs <code>N × O(W·H log(W·H))</code>. When
+                <em>many</em> units need to go to the <em>same</em> place — a Patrick Star group of 100
+                soldiers — it's wasteful: they all want the same path. <strong>Flow fields</strong> flip
+                the problem on its head.
+            </p>
+
+            <div class="concept-box">
+                <h4>The idea</h4>
+                <p>
+                    Pick the destination. Run a <strong>single BFS from the goal outward</strong>,
+                    storing for each cell the "cost so far" to reach the goal. Then, at every cell,
+                    record the direction toward the lowest-cost neighbor — that's the
+                    <strong>flow vector</strong>. Now every unit, no matter where it stands, can just
+                    read its current cell's vector and walk in that direction. <strong>One BFS, many followers.</strong>
+                </p>
+            </div>
+
+            <details>
+                <summary>📝 Click to see: computing a flow field</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// 1) Cost field — BFS distance from goal (∞ for unreachable / unwalkable).
+// 2) Flow field — for each cell, a 2D direction to the lowest-cost 4-neighbor.
+function computeFlowField(map, goal, isWalkable) {
+    const W = map.width, H = map.height;
+    const cost = new Float32Array(W * H).fill(Infinity);
+    const flow = new Array(W * H).fill(null);
+    if (!isWalkable(goal.x, goal.y)) return { cost, flow };
+
+    cost[goal.y * W + goal.x] = 0;
+    const queue = [{ x: goal.x, y: goal.y }];
+    while (queue.length) {
+        const c = queue.shift();
+        const here = cost[c.y * W + c.x];
+        for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+            const nx = c.x + dx, ny = c.y + dy;
+            if (nx &lt; 0 || nx &gt;= W || ny &lt; 0 || ny &gt;= H) continue;
+            if (!isWalkable(nx, ny)) continue;
+            if (cost[ny * W + nx] &lt;= here + 1) continue;
+            cost[ny * W + nx] = here + 1;
+            queue.push({ x: nx, y: ny });
+        }
+    }
+    // Derive flow from cost
+    for (let y = 0; y &lt; H; y++) {
+        for (let x = 0; x &lt; W; x++) {
+            if (cost[y * W + x] === Infinity) continue;
+            let best = null, bestC = cost[y * W + x];
+            for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+                const nx = x + dx, ny = y + dy;
+                if (nx &lt; 0 || nx &gt;= W || ny &lt; 0 || ny &gt;= H) continue;
+                const c = cost[ny * W + nx];
+                if (c &lt; bestC) { bestC = c; best = { dx, dy }; }
+            }
+            flow[y * W + x] = best;
+        }
+    }
+    return { cost, flow };
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">type Vec2 = { dx: number; dy: number; };
+
+interface FlowResult {
+    cost: Float32Array;
+    flow: (Vec2 | null)[];
+}
+
+function computeFlowField(
+    map: TileMap,
+    goal: { x: number; y: number },
+    isWalkable: (x: number, y: number) =&gt; boolean
+): FlowResult {
+    const W: number = map.width, H: number = map.height;
+    const cost: Float32Array = new Float32Array(W * H).fill(Infinity);
+    const flow: (Vec2 | null)[] = new Array(W * H).fill(null);
+    if (!isWalkable(goal.x, goal.y)) return { cost, flow };
+
+    cost[goal.y * W + goal.x] = 0;
+    const queue: { x: number; y: number }[] = [{ x: goal.x, y: goal.y }];
+    while (queue.length) {
+        const c = queue.shift()!;
+        const here: number = cost[c.y * W + c.x];
+        for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+            const nx: number = c.x + dx, ny: number = c.y + dy;
+            if (nx &lt; 0 || nx &gt;= W || ny &lt; 0 || ny &gt;= H) continue;
+            if (!isWalkable(nx, ny)) continue;
+            if (cost[ny * W + nx] &lt;= here + 1) continue;
+            cost[ny * W + nx] = here + 1;
+            queue.push({ x: nx, y: ny });
+        }
+    }
+    for (let y: number = 0; y &lt; H; y++) {
+        for (let x: number = 0; x &lt; W; x++) {
+            if (cost[y * W + x] === Infinity) continue;
+            let best: Vec2 | null = null, bestC: number = cost[y * W + x];
+            for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+                const nx: number = x + dx, ny: number = y + dy;
+                if (nx &lt; 0 || nx &gt;= W || ny &lt; 0 || ny &gt;= H) continue;
+                const c: number = cost[ny * W + nx];
+                if (c &lt; bestC) { bestC = c; best = { dx, dy }; }
+            }
+            flow[y * W + x] = best;
+        }
+    }
+    return { cost, flow };
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>Click to set a goal; the field repaints; the swarm follows</h3>
+            <p>Cells are color-coded by cost (closer to goal = brighter). Arrows show flow direction. 60 units follow the field.</p>
+            <div class="diagram">
+                <canvas id="flowDemo" width="800" height="460"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnFlowToggleArrows" class="active">Show flow arrows</button>
+                <button id="btnFlowToggleCost" class="active">Show cost heatmap</button>
+                <button id="btnFlowReset">Reset units</button>
+            </div>
+            <div id="flowDemoInfo" class="info-display">Click any tile to set the swarm goal.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- MULTI-TILE PATHING -->
+        <!-- ============================================ -->
+        <div id="multi-tile-pathing" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🧱 Multi-Tile Structures &amp; Pathing Around Them</h2>
+
+            <p>
+                A 2×2 building is four obstacle tiles, not one. Pathfinding must treat the building's
+                footprint as a hard wall. The trick is keeping a separate <strong>"blocked" grid</strong>
+                that's the union of terrain obstacles and building footprints. Pathfinding queries
+                <em>that</em> grid instead of just the map.
+            </p>
+
+            <details>
+                <summary>📝 Click to see: building a blocked-grid</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// blocked is a Uint8Array — 1 = blocked, 0 = open. Rebuilt whenever a building
+// is placed/removed (rare). The hot path (A* / flow field) just checks it.
+function rebuildBlockedGrid(map, buildings) {
+    const W = map.width, H = map.height;
+    const blocked = new Uint8Array(W * H);
+    for (let y = 0; y &lt; H; y++) {
+        for (let x = 0; x &lt; W; x++) {
+            if (!isWalkable(map, x, y)) blocked[y * W + x] = 1;
+        }
+    }
+    for (const b of buildings) {
+        for (let dy = 0; dy &lt; b.h; dy++) {
+            for (let dx = 0; dx &lt; b.w; dx++) {
+                const cx = b.anchorX + dx, cy = b.anchorY + dy;
+                if (cx &gt;= 0 &amp;&amp; cx &lt; W &amp;&amp; cy &gt;= 0 &amp;&amp; cy &lt; H) blocked[cy * W + cx] = 1;
+            }
+        }
+    }
+    return blocked;
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface Building { anchorX: number; anchorY: number; w: number; h: number; }
+
+function rebuildBlockedGrid(map: TileMap, buildings: Building[]): Uint8Array {
+    const W: number = map.width, H: number = map.height;
+    const blocked: Uint8Array = new Uint8Array(W * H);
+    for (let y: number = 0; y &lt; H; y++) {
+        for (let x: number = 0; x &lt; W; x++) {
+            if (!isWalkable(map, x, y)) blocked[y * W + x] = 1;
+        }
+    }
+    for (const b of buildings) {
+        for (let dy: number = 0; dy &lt; b.h; dy++) {
+            for (let dx: number = 0; dx &lt; b.w; dx++) {
+                const cx: number = b.anchorX + dx, cy: number = b.anchorY + dy;
+                if (cx &gt;= 0 &amp;&amp; cx &lt; W &amp;&amp; cy &gt;= 0 &amp;&amp; cy &lt; H) blocked[cy * W + cx] = 1;
+            }
+        }
+    }
+    return blocked;
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>Pathing around a building maze</h3>
+            <p>Click anywhere to send the unit on an A* path that routes around the buildings.</p>
+            <div class="diagram">
+                <canvas id="multiTileDemo" width="800" height="440"></canvas>
+            </div>
+            <div id="multiTileDemoInfo" class="info-display">Click a tile to pathfind. Buildings are 2×2 obstacles.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- SPATIAL HASH -->
+        <!-- ============================================ -->
+        <div id="spatial-hash" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🗂️ Spatial Hash for Fast Neighbor Queries</h2>
+
+            <p>
+                "Find every unit within 3 tiles of this point" is the inner loop of combat targeting,
+                vision, AoE damage, and unit collision. A naive O(N) scan over all units works for 50
+                but tanks at 500. A <strong>spatial hash</strong> brings it to roughly O(K), where K is
+                the number of units in the relevant buckets.
+            </p>
+
+            <div class="concept-box">
+                <h4>Mechanically simple</h4>
+                <p>
+                    Divide the world into a coarse grid of cells (say 4 tiles per cell). Each unit lives
+                    in one cell. To query a radius, look up the bucket cells the radius overlaps and walk
+                    their unit lists. Rebuild from scratch each frame — cheap because it's a single
+                    sequential pass.
+                </p>
+            </div>
+
+            <details>
+                <summary>📝 Click to see: a tiny spatial hash</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class SpatialHash {
+    constructor(cellSize) {
+        this.cellSize = cellSize;
+        this.buckets = new Map();    // "cx,cy" → array of units
+    }
+    rebuild(units) {
+        this.buckets.clear();
+        for (const u of units) {
+            const k = this.keyFor(u.cx, u.cy);
+            let bucket = this.buckets.get(k);
+            if (!bucket) { bucket = []; this.buckets.set(k, bucket); }
+            bucket.push(u);
+        }
+    }
+    keyFor(cx, cy) {
+        return `${Math.floor(cx / this.cellSize)},${Math.floor(cy / this.cellSize)}`;
+    }
+    queryRadius(cx, cy, r) {
+        const r2 = r * r;
+        const minX = Math.floor((cx - r) / this.cellSize);
+        const maxX = Math.floor((cx + r) / this.cellSize);
+        const minY = Math.floor((cy - r) / this.cellSize);
+        const maxY = Math.floor((cy + r) / this.cellSize);
+        const results = [];
+        for (let by = minY; by &lt;= maxY; by++) {
+            for (let bx = minX; bx &lt;= maxX; bx++) {
+                const bucket = this.buckets.get(`${bx},${by}`);
+                if (!bucket) continue;
+                for (const u of bucket) {
+                    const dx = u.cx - cx, dy = u.cy - cy;
+                    if (dx * dx + dy * dy &lt;= r2) results.push(u);
+                }
+            }
+        }
+        return results;
+    }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">class SpatialHash&lt;T extends { cx: number; cy: number }&gt; {
+    cellSize: number;
+    buckets: Map&lt;string, T[]&gt; = new Map();
+
+    constructor(cellSize: number) { this.cellSize = cellSize; }
+
+    rebuild(units: T[]): void {
+        this.buckets.clear();
+        for (const u of units) {
+            const k: string = this.keyFor(u.cx, u.cy);
+            let bucket: T[] | undefined = this.buckets.get(k);
+            if (!bucket) { bucket = []; this.buckets.set(k, bucket); }
+            bucket.push(u);
+        }
+    }
+    keyFor(cx: number, cy: number): string {
+        return `${Math.floor(cx / this.cellSize)},${Math.floor(cy / this.cellSize)}`;
+    }
+    queryRadius(cx: number, cy: number, r: number): T[] {
+        const r2: number = r * r;
+        const minX: number = Math.floor((cx - r) / this.cellSize);
+        const maxX: number = Math.floor((cx + r) / this.cellSize);
+        const minY: number = Math.floor((cy - r) / this.cellSize);
+        const maxY: number = Math.floor((cy + r) / this.cellSize);
+        const results: T[] = [];
+        for (let by: number = minY; by &lt;= maxY; by++) {
+            for (let bx: number = minX; bx &lt;= maxX; bx++) {
+                const bucket: T[] | undefined = this.buckets.get(`${bx},${by}`);
+                if (!bucket) continue;
+                for (const u of bucket) {
+                    const dx: number = u.cx - cx, dy: number = u.cy - cy;
+                    if (dx * dx + dy * dy &lt;= r2) results.push(u);
+                }
+            }
+        }
+        return results;
+    }
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>Naive vs spatial: query timings on 300 units</h3>
+            <p>The hash buckets are drawn as a faint grid. Hover anywhere to query "units within radius 3"; the readout shows query time for both methods.</p>
+            <div class="diagram">
+                <canvas id="spatialHashDemo" width="800" height="440"></canvas>
+            </div>
+            <div id="spatialHashDemoInfo" class="info-display">Hover to query. Highlighted = found within radius.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- SAVE / LOAD -->
+        <!-- ============================================ -->
+        <div id="save-load" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>💾 Save / Load via JSON</h2>
+
+            <p>
+                The cleanest serialization is also the simplest: <code>JSON.stringify</code> your
+                game state. The catch is what counts as "state" — pure data is trivial, but anything
+                with circular references, functions, or non-JSON types (Map, Set, BigInt, Date) needs
+                a custom <em>replacer</em>.
+            </p>
+
+            <div class="concept-box">
+                <h4>The rule of thumb</h4>
+                <p>
+                    Keep <em>game state</em> (what defines the world) <em>plain</em>. References to other
+                    entities use IDs, not direct pointers. Then save = <code>JSON.stringify(world)</code>
+                    and load = <code>JSON.parse(...)</code> with no transformer needed. If you need
+                    runtime caches (path arrays, animation timers), recompute them on load.
+                </p>
+            </div>
+
+            <details>
+                <summary>📝 Click to see: a small save/load API</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">function save(world) {
+    // Tiny version: explicit allow-list of fields to keep snapshots stable
+    return JSON.stringify({
+        version: 1,
+        map: world.map,
+        units: world.units.map(u =&gt; ({
+            id: u.id, team: u.team, type: u.type,
+            cx: u.cx, cy: u.cy, hp: u.hp
+        })),
+        buildings: world.buildings.map(b =&gt; ({
+            id: b.id, team: b.team, anchorX: b.anchorX, anchorY: b.anchorY,
+            w: b.w, h: b.h, kind: b.kind
+        })),
+        resources: world.resources
+    });
+}
+
+function load(json) {
+    const data = JSON.parse(json);
+    if (data.version !== 1) throw new Error('unsupported save');
+    return data;
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface SaveFile {
+    version: 1;
+    map: TileMap;
+    units: SerializedUnit[];
+    buildings: SerializedBuilding[];
+    resources: number;
+}
+
+function save(world: World): string {
+    const data: SaveFile = {
+        version: 1,
+        map: world.map,
+        units: world.units.map(u =&gt; ({
+            id: u.id, team: u.team, type: u.type,
+            cx: u.cx, cy: u.cy, hp: u.hp
+        })),
+        buildings: world.buildings.map(b =&gt; ({
+            id: b.id, team: b.team, anchorX: b.anchorX, anchorY: b.anchorY,
+            w: b.w, h: b.h, kind: b.kind
+        })),
+        resources: world.resources
+    };
+    return JSON.stringify(data);
+}
+
+function load(json: string): SaveFile {
+    const data: SaveFile = JSON.parse(json);
+    if (data.version !== 1) throw new Error('unsupported save');
+    return data;
+}</code></pre>
+                </div>
+                <div class="key-point">
+                    <strong>💡 The <code>version</code> field matters.</strong> The day you change your
+                    state shape (rename a field, add a new unit type), old saves will silently break
+                    without a version number. Add it from day one.
+                </div>
+            </details>
+
+            <h3>Round-trip a tiny world</h3>
+            <p>Drag units around, place buildings, then save → clear → load. The world should restore exactly.</p>
+            <div class="diagram">
+                <canvas id="saveLoadDemo" width="800" height="380"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnSave">💾 Save</button>
+                <button id="btnLoad">📂 Load</button>
+                <button id="btnSaveClear">🗑 Clear world</button>
+                <button id="btnSaveAddUnit">➕ Add unit (random)</button>
+            </div>
+            <div id="saveLoadDemoInfo" class="info-display">Drag units; click "Save", "Clear", then "Load" to test the round trip.</div>
+            <details>
+                <summary>📋 Saved JSON (click after pressing Save)</summary>
+                <pre id="saveJsonOut" style="max-height: 200px; overflow: auto;"><code class="language-javascript">(empty)</code></pre>
+            </details>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- MAP EDITOR -->
+        <!-- ============================================ -->
+        <div id="map-editor" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🛠️ Mini Map Editor</h2>
+
+            <p>
+                A map editor is the same UI as the paint-the-grid demo from Beginner — plus a building
+                palette, plus an "Export JSON" button. Once you have an editor, content creation moves
+                from "edit a hard-coded array in the source" to "open the editor, click around, export."
+            </p>
+
+            <div class="diagram">
+                <canvas id="mapEditorDemo" width="800" height="460"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnEdGrass" class="active" style="background-color: #4a7c3a;">🌿 Grass</button>
+                <button id="btnEdWater" style="background-color: #3ba0d8;">💧 Water</button>
+                <button id="btnEdSand"  style="background-color: #d7c878;">🏖️ Sand</button>
+                <button id="btnEdStone" style="background-color: #6a6a6a;">🪨 Stone</button>
+                <button id="btnEdHouse" style="background-color: #ab47bc;">🏠 House (2×2)</button>
+                <button id="btnEdErase" style="background-color: #2d3354;">🧽 Erase</button>
+                <button id="btnEdClear">Clear map</button>
+                <button id="btnEdExport">📤 Export JSON</button>
+            </div>
+            <div id="mapEditorDemoInfo" class="info-display">Pick a brush. Click or drag to paint. Buildings click-once.</div>
+            <details>
+                <summary>📋 Exported JSON</summary>
+                <pre id="mapEditorOut" style="max-height: 200px; overflow: auto;"><code class="language-javascript">(empty)</code></pre>
+            </details>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- AI -->
+        <!-- ============================================ -->
+        <div id="ai" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🤖 AI Opponent: State Machine + Economy</h2>
+
+            <p>
+                A computer opponent runs a high-level state machine on a slow tick (every second or so)
+                while units it controls execute the previous tier's gameplay logic. A solid first
+                AI has just three states:
+            </p>
+            <ul>
+                <li><strong>Scout</strong> — send a worker or cheap unit to reveal the player's base.</li>
+                <li><strong>Expand</strong> — gather wood, train workers, build production buildings.</li>
+                <li><strong>Attack</strong> — once a unit count threshold is hit, send soldiers at the player.</li>
+            </ul>
+
+            <details>
+                <summary>📝 Click to see: AI state-machine tick</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">function tickAI(ai, world, dt) {
+    ai.timer -= dt;
+    if (ai.timer &gt; 0) return;       // slow tick — once per second
+    ai.timer = 1.0;
+
+    const army  = world.units.filter(u =&gt; u.team === 'ai' &amp;&amp; u.type === 'soldier').length;
+    const worker = world.units.filter(u =&gt; u.team === 'ai' &amp;&amp; u.type === 'worker').length;
+    const wood   = world.aiResources;
+
+    switch (ai.state) {
+        case 'scout':
+            if (ai.scoutSent) ai.state = 'expand';
+            break;
+        case 'expand':
+            // Train workers until 3, then start training soldiers
+            if (worker &lt; 3 &amp;&amp; wood &gt;= 20) queueTrain(ai.base, 'worker', 20, world);
+            else if (army &lt; ai.attackThreshold &amp;&amp; wood &gt;= 30) queueTrain(ai.base, 'soldier', 30, world);
+            if (army &gt;= ai.attackThreshold) ai.state = 'attack';
+            break;
+        case 'attack':
+            // Send all soldiers at the player base
+            for (const u of world.units) {
+                if (u.team === 'ai' &amp;&amp; u.type === 'soldier' &amp;&amp; u.orders.length === 0) {
+                    u.orders.push({ type: 'attack-move', cx: world.playerBase.cx, cy: world.playerBase.cy });
+                }
+            }
+            // If we lose too many, fall back to expand
+            if (army &lt; 2) ai.state = 'expand';
+            break;
+    }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">type AIState = 'scout' | 'expand' | 'attack';
+
+interface AI {
+    state: AIState;
+    timer: number;
+    base: ProductionBuilding;
+    attackThreshold: number;
+    scoutSent: boolean;
+}
+
+function tickAI(ai: AI, world: World, dt: number): void {
+    ai.timer -= dt;
+    if (ai.timer &gt; 0) return;
+    ai.timer = 1.0;
+
+    const army: number  = world.units.filter(u =&gt; u.team === 'ai' &amp;&amp; u.type === 'soldier').length;
+    const worker: number = world.units.filter(u =&gt; u.team === 'ai' &amp;&amp; u.type === 'worker').length;
+    const wood: number   = world.aiResources;
+
+    switch (ai.state) {
+        case 'scout':
+            if (ai.scoutSent) ai.state = 'expand';
+            break;
+        case 'expand':
+            if (worker &lt; 3 &amp;&amp; wood &gt;= 20) queueTrain(ai.base, 'worker', 20, world);
+            else if (army &lt; ai.attackThreshold &amp;&amp; wood &gt;= 30) queueTrain(ai.base, 'soldier', 30, world);
+            if (army &gt;= ai.attackThreshold) ai.state = 'attack';
+            break;
+        case 'attack':
+            for (const u of world.units) {
+                if (u.team === 'ai' &amp;&amp; u.type === 'soldier' &amp;&amp; u.orders.length === 0) {
+                    u.orders.push({ type: 'attack-move', cx: world.playerBase.cx, cy: world.playerBase.cy });
+                }
+            }
+            if (army &lt; 2) ai.state = 'expand';
+            break;
+    }
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>Watch the AI play itself</h3>
+            <p>Two AIs running the same state machine compete on a small map. The HUD shows the state and unit count of each.</p>
+            <div class="diagram">
+                <canvas id="aiDemo" width="800" height="460"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnAiStart">▶ Start / Resume</button>
+                <button id="btnAiPause">⏸ Pause</button>
+                <button id="btnAiReset">Reset</button>
+                <button id="btnAiSpeed">⏩ Speed × 1</button>
+            </div>
+            <div id="aiDemoInfo" class="info-display">Watch two AI opponents play each other out.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- STRESS TEST -->
+        <!-- ============================================ -->
+        <div id="stress-test" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🚀 Stress Test: 500 Units Pathfinding</h2>
+
+            <p>
+                The Expert tier's sorted-array A* doesn't scale to hundreds of units. Two changes turn it
+                into a stress test we can survive:
+            </p>
+            <ul>
+                <li>Replace the open list with a <strong>binary heap</strong> (priority queue) so the
+                    hot extract-min is O(log n) instead of O(n log n).</li>
+                <li>Use a <strong>shared flow field</strong> for grouped move commands — one BFS, all
+                    units follow it.</li>
+            </ul>
+
+            <details>
+                <summary>📝 Click to see: a minimal MinHeap</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Binary heap keyed by .f (lowest first). Just enough for A*.
+class MinHeap {
+    constructor() { this.data = []; }
+    push(node) {
+        this.data.push(node);
+        let i = this.data.length - 1;
+        while (i &gt; 0) {
+            const parent = (i - 1) &gt;&gt; 1;
+            if (this.data[parent].f &lt;= this.data[i].f) break;
+            [this.data[parent], this.data[i]] = [this.data[i], this.data[parent]];
+            i = parent;
+        }
+    }
+    pop() {
+        const top = this.data[0];
+        const last = this.data.pop();
+        if (this.data.length) {
+            this.data[0] = last;
+            let i = 0;
+            const n = this.data.length;
+            while (true) {
+                const l = 2 * i + 1, r = 2 * i + 2;
+                let smallest = i;
+                if (l &lt; n &amp;&amp; this.data[l].f &lt; this.data[smallest].f) smallest = l;
+                if (r &lt; n &amp;&amp; this.data[r].f &lt; this.data[smallest].f) smallest = r;
+                if (smallest === i) break;
+                [this.data[i], this.data[smallest]] = [this.data[smallest], this.data[i]];
+                i = smallest;
+            }
+        }
+        return top;
+    }
+    size() { return this.data.length; }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">class MinHeap&lt;T extends { f: number }&gt; {
+    data: T[] = [];
+
+    push(node: T): void {
+        this.data.push(node);
+        let i: number = this.data.length - 1;
+        while (i &gt; 0) {
+            const parent: number = (i - 1) &gt;&gt; 1;
+            if (this.data[parent].f &lt;= this.data[i].f) break;
+            [this.data[parent], this.data[i]] = [this.data[i], this.data[parent]];
+            i = parent;
+        }
+    }
+    pop(): T {
+        const top: T = this.data[0];
+        const last: T = this.data.pop()!;
+        if (this.data.length) {
+            this.data[0] = last;
+            let i: number = 0;
+            const n: number = this.data.length;
+            while (true) {
+                const l: number = 2 * i + 1, r: number = 2 * i + 2;
+                let smallest: number = i;
+                if (l &lt; n &amp;&amp; this.data[l].f &lt; this.data[smallest].f) smallest = l;
+                if (r &lt; n &amp;&amp; this.data[r].f &lt; this.data[smallest].f) smallest = r;
+                if (smallest === i) break;
+                [this.data[i], this.data[smallest]] = [this.data[smallest], this.data[i]];
+                i = smallest;
+            }
+        }
+        return top;
+    }
+    size(): number { return this.data.length; }
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>500 units, one flow field, one frame-rate counter</h3>
+            <p>
+                Click anywhere on the canvas to send all 500 units there via a freshly-computed flow
+                field. Watch the FPS counter — on a modern laptop this stays at 60.
+            </p>
+            <div class="diagram">
+                <canvas id="stressDemo" width="800" height="500"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnStressMore">+100 units</button>
+                <button id="btnStressFewer">−100 units</button>
+                <button id="btnStressReset">Reset to 500</button>
+            </div>
+            <div id="stressDemoInfo" class="info-display">Click anywhere to set a goal for the swarm.</div>
+        </div>
+
+        <!-- Next Steps -->
+        <div class="section" style="text-align: center;">
+            <h2>✅ Advanced Tier Complete</h2>
+            <p style="font-size: 1.1em; margin: 24px 0;">
+                You have a complete, polished RTS engine: fog of war, flow-field crowds, fast neighbor
+                queries, persistent state, a content tool, and a working AI. The Simulations tier dives
+                deeper into the math behind each of these.
+            </p>
+            <a href="simulations.html" class="nav-button" style="font-size: 1.2em; padding: 20px 40px;">
+                Continue to Simulations →
+            </a>
+            <p style="margin-top: 20px;"><em>Simulations tier ships next — track progress on the <a href="index.html">track index</a>.</em></p>
+        </div>
+    </div>
+
+    <!-- Scroll to Top Button -->
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <script src="../shared/utils.js"></script>
+    <script src="../shared/code-tabs.js"></script>
+    <script src="advanced-demos.js"></script>
+</body>
+</html>
