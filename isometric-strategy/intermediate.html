@@ -10,6 +10,20 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+    <style>
+        /* Page-local slider styling for the Animation section.
+           Same shape as simulations.html — promote to shared/styles.css if a third page picks it up. */
+        .slider-row {
+            display: grid;
+            grid-template-columns: 160px 1fr 60px;
+            gap: 14px;
+            align-items: center;
+            margin: 10px 0;
+        }
+        .slider-row label { color: #c9d1d9; font-weight: 500; }
+        .slider-row input[type="range"] { width: 100%; accent-color: #4fc3f7; }
+        .slider-row .value { color: #4fc3f7; font-family: monospace; font-weight: bold; text-align: right; }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -35,6 +49,7 @@
                 <li><a href="#camera">Camera: Pan, Edge-Scroll, Zoom</a></li>
                 <li><a href="#units">Spawning Units &amp; Tile-to-Tile Movement</a></li>
                 <li><a href="#eight-dir">8-Direction Sprite Selection</a></li>
+                <li><a href="#animation">Sprite-Frame Animation, State Machines &amp; Easing</a></li>
                 <li><a href="#mini-project">Mini-Project: Click-to-Walk</a></li>
             </ul>
         </div>
@@ -577,6 +592,322 @@ function facingFromVelocity(vx: number, vy: number): Direction | null {
                 <canvas id="eightDirDemo" width="800" height="400"></canvas>
             </div>
             <div id="eightDirDemoInfo" class="info-display">Drag the arrow head to see which direction wins.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- ANIMATION (sprite-frame cycling, state machine, easing) -->
+        <!-- ============================================ -->
+        <div id="animation" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🎞️ Sprite-Frame Animation, State Machines &amp; Easing</h2>
+
+            <p>
+                So far we've moved units by interpolating their <em>position</em> over time
+                (Section "Spawning Units"). Real games also interpolate the <em>visual frame</em>
+                over time — a walking unit cycles through 6 poses, an attacking one swings through
+                3, a dying one collapses through 4. This section adds the missing layer: <strong>frame
+                animation</strong>, the <strong>state machine</strong> that coordinates them, and
+                the <strong>easing</strong> curves that make motion feel snappy instead of robotic.
+            </p>
+
+            <div class="concept-box">
+                <h4>Three layers, one unit</h4>
+                <ul>
+                    <li><strong>Motion</strong> — position changes over time (already covered).</li>
+                    <li><strong>Animation</strong> — visual frame changes over time (this section).</li>
+                    <li><strong>Facing</strong> — which row of frames to play (the previous section).</li>
+                </ul>
+                <p>
+                    Put together: the 8-direction logic picks the <em>row</em> of frames for the unit's
+                    current facing, animation picks the <em>column</em> (which frame within that row),
+                    and motion updates the unit's screen <em>position</em>. Three independent dimensions
+                    of "interpolating something over time" composed into one walking unit.
+                </p>
+            </div>
+
+            <!-- ============================================ -->
+            <h3>1. Sprite-frame cycling</h3>
+            <!-- ============================================ -->
+
+            <p>
+                An "animation" is just an array of frames plus a playback speed. The playhead is a
+                time accumulator that wraps when it crosses <code>frames.length / fps</code>. Each
+                draw call asks "which frame should I render right now?" — index = <code>floor(time * fps) % frames.length</code>.
+            </p>
+
+            <details>
+                <summary>📝 Click to see: a minimal <code>AnimationClip</code> class</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class AnimationClip {
+    constructor(frames, fps = 8, loop = true) {
+        this.frames = frames;   // array of opaque frame data (poses, sprite indices...)
+        this.fps    = fps;
+        this.loop   = loop;
+        this.time   = 0;        // seconds elapsed since clip start
+        this.done   = false;
+    }
+
+    reset() { this.time = 0; this.done = false; }
+
+    update(dt) {
+        if (this.done) return;
+        this.time += dt;
+        const totalLen = this.frames.length / this.fps;
+        if (this.time &gt;= totalLen) {
+            if (this.loop) this.time %= totalLen;
+            else { this.time = totalLen - 0.0001; this.done = true; }
+        }
+    }
+
+    currentFrame() {
+        const idx = Math.floor(this.time * this.fps);
+        return this.frames[Math.min(idx, this.frames.length - 1)];
+    }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">class AnimationClip&lt;T&gt; {
+    frames: T[];
+    fps:    number;
+    loop:   boolean;
+    time:   number = 0;
+    done:   boolean = false;
+
+    constructor(frames: T[], fps: number = 8, loop: boolean = true) {
+        this.frames = frames;
+        this.fps    = fps;
+        this.loop   = loop;
+    }
+
+    reset(): void { this.time = 0; this.done = false; }
+
+    update(dt: number): void {
+        if (this.done) return;
+        this.time += dt;
+        const totalLen: number = this.frames.length / this.fps;
+        if (this.time &gt;= totalLen) {
+            if (this.loop) this.time %= totalLen;
+            else { this.time = totalLen - 0.0001; this.done = true; }
+        }
+    }
+
+    currentFrame(): T {
+        const idx: number = Math.floor(this.time * this.fps);
+        return this.frames[Math.min(idx, this.frames.length - 1)];
+    }
+}</code></pre>
+                </div>
+                <div class="key-point">
+                    <strong>💡 Frames are opaque.</strong> In a real game, a frame is a sprite-sheet
+                    rect or a 3D pose. Here, each frame is a tiny object describing limb angles for
+                    a stick-figure walker — the walker is <em>procedurally drawn</em> from those
+                    angles. This sidesteps the "we have no sprite assets" problem while still
+                    teaching the actual mechanism.
+                </div>
+            </details>
+
+            <div class="diagram">
+                <canvas id="walkerDemo" width="800" height="320"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnWalkerPlay" class="active">⏸ Pause</button>
+                <button id="btnWalkerStep">Step one frame</button>
+                <button id="btnWalkerReset">Reset to frame 0</button>
+            </div>
+            <div class="slider-row">
+                <label for="walkerFps">Playback FPS</label>
+                <input type="range" id="walkerFps" min="1" max="24" step="1" value="8">
+                <span class="value" id="walkerFpsVal">8</span>
+            </div>
+            <div class="slider-row">
+                <label for="walkerScrub">Manual scrubber</label>
+                <input type="range" id="walkerScrub" min="0" max="5" step="1" value="0">
+                <span class="value" id="walkerScrubVal">0</span>
+            </div>
+            <div id="walkerDemoInfo" class="info-display">Procedurally-drawn 6-frame walk cycle. Adjust FPS and watch the playhead crawl.</div>
+
+            <!-- ============================================ -->
+            <h3>2. Animation state machine &amp; per-frame events</h3>
+            <!-- ============================================ -->
+
+            <p>
+                Real units have <em>multiple</em> animations — one per state (idle / walk / attack /
+                death). A small state machine decides which clip is playing right now, and a
+                <strong>per-frame event</strong> table fires gameplay logic at the right visual
+                moment. The canonical example: damage lands on the swing-down frame of the attack,
+                not the wind-up frame.
+            </p>
+
+            <details>
+                <summary>📝 Click to see: <code>AnimationStateMachine</code> with frame events</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class AnimationStateMachine {
+    constructor(clips, events = {}) {
+        this.clips  = clips;          // { idle: AnimationClip, walk: AnimationClip, ... }
+        this.events = events;         // { attack: [{ frame: 1, kind: 'damage' }] }
+        this.state  = 'idle';
+        this.lastFrameIdx = -1;       // for edge-detecting per-frame events
+        this.onEvent = null;          // callback(kind, frameIdx)
+    }
+
+    transition(newState) {
+        if (this.state === newState) return;
+        this.state = newState;
+        this.clips[newState].reset();
+        this.lastFrameIdx = -1;
+    }
+
+    update(dt) {
+        const clip = this.clips[this.state];
+        clip.update(dt);
+        const idx = Math.floor(clip.time * clip.fps);
+        if (idx !== this.lastFrameIdx) {
+            // We just entered a new frame — fire any events scheduled for it
+            const evs = this.events[this.state] || [];
+            for (const e of evs) {
+                if (e.frame === idx &amp;&amp; this.onEvent) this.onEvent(e.kind, idx);
+            }
+            this.lastFrameIdx = idx;
+        }
+        if (clip.done &amp;&amp; this.state !== 'idle') this.transition('idle');
+    }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">type FrameEvent = { frame: number; kind: string; };
+
+class AnimationStateMachine&lt;T&gt; {
+    clips:  Record&lt;string, AnimationClip&lt;T&gt;&gt;;
+    events: Record&lt;string, FrameEvent[]&gt;;
+    state:  string = 'idle';
+    lastFrameIdx: number = -1;
+    onEvent: ((kind: string, frame: number) =&gt; void) | null = null;
+
+    constructor(
+        clips: Record&lt;string, AnimationClip&lt;T&gt;&gt;,
+        events: Record&lt;string, FrameEvent[]&gt; = {}
+    ) {
+        this.clips  = clips;
+        this.events = events;
+    }
+
+    transition(newState: string): void {
+        if (this.state === newState) return;
+        this.state = newState;
+        this.clips[newState].reset();
+        this.lastFrameIdx = -1;
+    }
+
+    update(dt: number): void {
+        const clip = this.clips[this.state];
+        clip.update(dt);
+        const idx: number = Math.floor(clip.time * clip.fps);
+        if (idx !== this.lastFrameIdx) {
+            const evs: FrameEvent[] = this.events[this.state] || [];
+            for (const e of evs) {
+                if (e.frame === idx &amp;&amp; this.onEvent) this.onEvent(e.kind, idx);
+            }
+            this.lastFrameIdx = idx;
+        }
+        if (clip.done &amp;&amp; this.state !== 'idle') this.transition('idle');
+    }
+}</code></pre>
+                </div>
+                <div class="key-point">
+                    <strong>💡 Edge-detected events.</strong> We only fire when <code>idx !== lastFrameIdx</code>.
+                    Without this check the event would fire every <em>frame the renderer ran</em>
+                    while inside that animation frame — at 60fps that's 7-8 spurious damages per
+                    attack. Edge-detection is what makes the "damage on frame 2" pattern actually
+                    fire exactly once per cycle.
+                </div>
+            </details>
+
+            <div class="diagram">
+                <canvas id="stateMachineDemo" width="800" height="340"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnSMIdle" class="active">😐 Idle</button>
+                <button id="btnSMWalk">🚶 Walk</button>
+                <button id="btnSMAttack">⚔️ Attack</button>
+                <button id="btnSMDeath">💀 Death</button>
+                <button id="btnSMReset">Reset</button>
+            </div>
+            <div id="stateMachineDemoInfo" class="info-display">Click a state. Watch the playhead. Attack fires a 💥 DAMAGE event on frame 1 of its 3-frame swing.</div>
+
+            <!-- ============================================ -->
+            <h3>3. Easing curves: snappy &gt; linear</h3>
+            <!-- ============================================ -->
+
+            <p>
+                Our tile-to-tile movement uses linear lerp — constant speed start to finish. That
+                works but feels mechanical. Real games <em>ease</em> motion: accelerate at the start
+                (anticipation), decelerate at the end (settle), or both. The math is one-line
+                pure functions over <code>t ∈ [0, 1]</code>.
+            </p>
+
+            <details>
+                <summary>📝 Click to see: four easing functions, no library</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// All take t in [0, 1] and return an eased t' in [0, 1].
+// Apply them by lerping with the eased value:  pos = lerp(a, b, easeFn(rawT))
+const linear        = (t) =&gt; t;
+const easeInCubic   = (t) =&gt; t * t * t;
+const easeOutCubic  = (t) =&gt; 1 - Math.pow(1 - t, 3);
+const easeInOutCubic = (t) =&gt; t &lt; 0.5
+    ? 4 * t * t * t
+    : 1 - Math.pow(-2 * t + 2, 3) / 2;</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// All take t in [0, 1] and return an eased t' in [0, 1].
+type EaseFn = (t: number) =&gt; number;
+
+const linear:        EaseFn = (t) =&gt; t;
+const easeInCubic:   EaseFn = (t) =&gt; t * t * t;
+const easeOutCubic:  EaseFn = (t) =&gt; 1 - Math.pow(1 - t, 3);
+const easeInOutCubic: EaseFn = (t) =&gt; t &lt; 0.5
+    ? 4 * t * t * t
+    : 1 - Math.pow(-2 * t + 2, 3) / 2;</code></pre>
+                </div>
+                <div class="key-point">
+                    <strong>💡 When to pick which</strong> — <em>ease-out</em> for things landing in place
+                    (UI panels sliding in, camera settling onto a target). <em>Ease-in</em> for
+                    departures (a unit starting to walk, a missile launching). <em>Ease-in-out</em>
+                    for transitions between two resting positions (a camera move from base A to base B).
+                    Pure linear is fine for continuous motion that never "stops" — bullets, conveyor
+                    belts.
+                </div>
+            </details>
+
+            <p>
+                Four small panels, same A→B distance, four different curves. The curve plot below
+                each panel shows how the eased value rises over the duration.
+            </p>
+            <div class="diagram">
+                <canvas id="easingDemo" width="800" height="320"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnEasingRestart">▶ Restart</button>
+                <button id="btnEasingSlower">Slower</button>
+                <button id="btnEasingFaster">Faster</button>
+            </div>
+            <div id="easingDemoInfo" class="info-display">Watch the four dots race the same distance. Same time, different feels.</div>
+
+            <div class="thinking-prompt">
+                <h4>🤔 Where these compose</h4>
+                <p>
+                    The mini-project demo below has been updated: the walking unit now plays a
+                    2-pose leg cycle whenever it's moving, then freezes when it arrives. That's a
+                    <em>state machine</em> with two states (idle / walk) driven by velocity
+                    magnitude, plus a tiny <em>AnimationClip</em> per state — all three concepts
+                    from this section in 25 lines of glue.
+                </p>
+            </div>
         </div>
 
         <!-- ============================================ -->

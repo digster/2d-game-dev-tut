@@ -709,3 +709,465 @@ function drawUnit(ctx, cx, cy, tileW, tileH, originX, originY, color, facing = n
 
     requestAnimationFrame(frame);
 })();
+
+// =============================================================================
+// ANIMATION SECTION (Phase 7)
+// Three demos that introduce sprite-frame cycling, state machines with
+// per-frame events, and easing curves. All frames are procedurally drawn —
+// no external sprite sheets needed.
+// =============================================================================
+
+// ---- shared walker frame data ---------------------------------------------
+// Each "frame" is a tiny object of limb angles (radians). The renderer reads
+// these and draws four line segments. Real production code would swap this
+// substrate for a sprite-sheet rect lookup; the playhead logic above stays
+// identical.
+const WALK_FRAMES = [
+    { lLeg:  0.6, rLeg: -0.6, lArm: -0.5, rArm:  0.5 },
+    { lLeg:  0.3, rLeg: -0.3, lArm: -0.25, rArm:  0.25 },
+    { lLeg:  0.0, rLeg:  0.0, lArm:  0.0,  rArm:  0.0  },
+    { lLeg: -0.6, rLeg:  0.6, lArm:  0.5,  rArm: -0.5  },
+    { lLeg: -0.3, rLeg:  0.3, lArm:  0.25, rArm: -0.25 },
+    { lLeg:  0.0, rLeg:  0.0, lArm:  0.0,  rArm:  0.0  }
+];
+const IDLE_FRAMES = [
+    { lLeg: 0, rLeg: 0, lArm: -0.05, rArm: 0.05, bob: 0 },
+    { lLeg: 0, rLeg: 0, lArm:  0.05, rArm: -0.05, bob: 2 }
+];
+const ATTACK_FRAMES = [
+    // 0 = wind-up, 1 = swing-down (DAMAGE), 2 = follow-through
+    { lLeg: 0, rLeg: 0, lArm: -1.2, rArm:  0.0, sword: -1.2, phase: 'wind' },
+    { lLeg: 0, rLeg: 0, lArm:  0.3, rArm: -0.4, sword:  1.0, phase: 'strike' },
+    { lLeg: 0, rLeg: 0, lArm:  0.6, rArm: -0.2, sword:  1.4, phase: 'recover' }
+];
+const DEATH_FRAMES = [
+    { lLeg:  0.4, rLeg: -0.4, lArm: -0.3, rArm: 0.3, tilt: 0.2 },
+    { lLeg:  0.6, rLeg: -0.6, lArm: -0.6, rArm: 0.6, tilt: 0.6 },
+    { lLeg:  0.8, rLeg: -0.8, lArm: -1.0, rArm: 1.0, tilt: 1.0 },
+    { lLeg:  0.9, rLeg: -0.9, lArm: -1.3, rArm: 1.3, tilt: 1.45 }
+];
+
+// Reusable AnimationClip (matches the class shown in the page's code blocks).
+function makeClip(frames, fps = 8, loop = true) {
+    return { frames, fps, loop, time: 0, done: false };
+}
+function clipUpdate(clip, dt) {
+    if (clip.done) return;
+    clip.time += dt;
+    const total = clip.frames.length / clip.fps;
+    if (clip.time >= total) {
+        if (clip.loop) clip.time %= total;
+        else { clip.time = total - 0.0001; clip.done = true; }
+    }
+}
+function clipFrame(clip) {
+    const idx = Math.floor(clip.time * clip.fps);
+    return { idx, data: clip.frames[Math.min(idx, clip.frames.length - 1)] };
+}
+function clipReset(clip) { clip.time = 0; clip.done = false; }
+
+// Procedurally-draw the walker at (sx, sy) using one frame's limb angles.
+function drawWalker(ctx, sx, sy, frame, color = IM_COLORS.player, extras = {}) {
+    const f = frame || { lLeg: 0, rLeg: 0, lArm: 0, rArm: 0 };
+    const tilt = (f.tilt || 0) + (extras.tilt || 0);
+    const bob  = (f.bob  || 0);
+    ctx.save();
+    ctx.translate(sx, sy + bob);
+    ctx.rotate(tilt);
+    // Body
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    // Head
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(0, -42, 8, 0, Math.PI * 2);
+    ctx.fill();
+    // Torso
+    ctx.beginPath();
+    ctx.moveTo(0, -34); ctx.lineTo(0, -10);
+    ctx.stroke();
+    // Legs (rotated from torso bottom)
+    const lLegX = Math.sin(f.lLeg) * 16, lLegY = Math.cos(f.lLeg) * 18;
+    const rLegX = Math.sin(f.rLeg) * 16, rLegY = Math.cos(f.rLeg) * 18;
+    ctx.beginPath();
+    ctx.moveTo(0, -10); ctx.lineTo(lLegX, -10 + lLegY);
+    ctx.moveTo(0, -10); ctx.lineTo(rLegX, -10 + rLegY);
+    ctx.stroke();
+    // Arms (rotated from shoulders)
+    const lArmX = Math.sin(f.lArm) * 14, lArmY = Math.cos(f.lArm) * 14;
+    const rArmX = Math.sin(f.rArm) * 14, rArmY = Math.cos(f.rArm) * 14;
+    ctx.beginPath();
+    ctx.moveTo(0, -30); ctx.lineTo(lArmX, -30 + lArmY);
+    ctx.moveTo(0, -30); ctx.lineTo(rArmX, -30 + rArmY);
+    ctx.stroke();
+    // Optional sword (used by attack frames)
+    if (f.sword !== undefined) {
+        ctx.strokeStyle = '#cfd8dc';
+        ctx.lineWidth = 4;
+        const swordX = Math.sin(f.sword) * 28;
+        const swordY = Math.cos(f.sword) * 28;
+        ctx.beginPath();
+        ctx.moveTo(rArmX, -30 + rArmY);
+        ctx.lineTo(rArmX + swordX, -30 + rArmY - Math.abs(swordY) - 10);
+        ctx.stroke();
+    }
+    ctx.restore();
+}
+
+// =============================================================================
+// DEMO 8 — Walker (sprite-frame cycling)
+// =============================================================================
+(function walkerDemo() {
+    const canvas = document.getElementById('walkerDemo');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const info = document.getElementById('walkerDemoInfo');
+
+    const clip = makeClip(WALK_FRAMES, 8, true);
+    let playing = true;
+    let lastT = performance.now();
+
+    const fpsEl = document.getElementById('walkerFps');
+    const fpsVal = document.getElementById('walkerFpsVal');
+    const scrubEl = document.getElementById('walkerScrub');
+    const scrubVal = document.getElementById('walkerScrubVal');
+
+    fpsEl?.addEventListener('input', () => {
+        clip.fps = parseInt(fpsEl.value, 10);
+        fpsVal.textContent = String(clip.fps);
+    });
+    scrubEl?.addEventListener('input', () => {
+        const idx = parseInt(scrubEl.value, 10);
+        scrubVal.textContent = String(idx);
+        clip.time = idx / clip.fps;
+        // Scrubbing implies pause so the user can hold a single frame
+        if (playing) {
+            playing = false;
+            document.getElementById('btnWalkerPlay').textContent = '▶ Play';
+            document.getElementById('btnWalkerPlay').classList.remove('active');
+        }
+    });
+
+    document.getElementById('btnWalkerPlay')?.addEventListener('click', (e) => {
+        playing = !playing;
+        e.target.textContent = playing ? '⏸ Pause' : '▶ Play';
+        e.target.classList.toggle('active', playing);
+    });
+    document.getElementById('btnWalkerStep')?.addEventListener('click', () => {
+        clip.time = ((Math.floor(clip.time * clip.fps) + 1) % clip.frames.length) / clip.fps;
+        if (playing) {
+            playing = false;
+            document.getElementById('btnWalkerPlay').textContent = '▶ Play';
+            document.getElementById('btnWalkerPlay').classList.remove('active');
+        }
+    });
+    document.getElementById('btnWalkerReset')?.addEventListener('click', () => {
+        clipReset(clip);
+        scrubEl.value = '0';
+        scrubVal.textContent = '0';
+    });
+
+    function frame(now) {
+        const dt = Math.min((now - lastT) / 1000, 0.05);
+        lastT = now;
+        if (playing) clipUpdate(clip, dt);
+        render();
+        requestAnimationFrame(frame);
+    }
+
+    function render() {
+        clearCanvas(ctx, canvas.width, canvas.height);
+        // Ground line
+        ctx.strokeStyle = IM_COLORS.muted;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 4]);
+        ctx.beginPath();
+        ctx.moveTo(40, 240); ctx.lineTo(canvas.width - 40, 240);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Big preview walker
+        const cf = clipFrame(clip);
+        drawWalker(ctx, canvas.width / 2, 240, cf.data, IM_COLORS.player);
+
+        // Filmstrip: render all 6 frames as small thumbnails along the bottom
+        const stripY = 280;
+        const stripPadX = 60;
+        const stripGap = (canvas.width - stripPadX * 2) / (WALK_FRAMES.length - 1);
+        for (let i = 0; i < WALK_FRAMES.length; i++) {
+            const fx = stripPadX + i * stripGap;
+            // Highlight current frame
+            if (i === cf.idx) {
+                ctx.fillStyle = 'rgba(255, 167, 38, 0.18)';
+                ctx.fillRect(fx - 28, stripY - 30, 56, 38);
+                ctx.strokeStyle = '#ffa726';
+                ctx.lineWidth = 1.5;
+                ctx.strokeRect(fx - 28, stripY - 30, 56, 38);
+            }
+            // Mini walker (scaled down by drawing on a translated/scaled context)
+            ctx.save();
+            ctx.translate(fx, stripY + 4);
+            ctx.scale(0.4, 0.4);
+            drawWalker(ctx, 0, 0, WALK_FRAMES[i], i === cf.idx ? IM_COLORS.accent : IM_COLORS.muted);
+            ctx.restore();
+            ctx.fillStyle = i === cf.idx ? '#ffa726' : IM_COLORS.muted;
+            ctx.font = 'bold 11px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(String(i), fx, stripY + 30);
+            ctx.textAlign = 'start';
+        }
+        // HUD
+        ctx.fillStyle = IM_COLORS.label;
+        ctx.font = 'bold 12px sans-serif';
+        ctx.fillText(`time ${clip.time.toFixed(2)}s · frame ${cf.idx} / ${WALK_FRAMES.length - 1} · fps ${clip.fps}`, 14, 20);
+        info.innerHTML = `Frame <strong>${cf.idx}</strong> of ${WALK_FRAMES.length}. ` +
+            (playing ? 'Playing.' : 'Paused — use Step or the scrubber.');
+    }
+
+    requestAnimationFrame(frame);
+})();
+
+// =============================================================================
+// DEMO 9 — State machine + per-frame events
+// =============================================================================
+(function stateMachineDemo() {
+    const canvas = document.getElementById('stateMachineDemo');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const info = document.getElementById('stateMachineDemoInfo');
+
+    const sm = {
+        clips: {
+            idle:   makeClip(IDLE_FRAMES,   3, true),
+            walk:   makeClip(WALK_FRAMES,   8, true),
+            attack: makeClip(ATTACK_FRAMES, 6, false),
+            death:  makeClip(DEATH_FRAMES,  4, false)
+        },
+        events: {
+            attack: [{ frame: 1, kind: 'damage' }]
+        },
+        state: 'idle',
+        lastFrameIdx: -1
+    };
+    let damageEventCount = 0;
+    let lastDamagePulse = 0;
+
+    function transition(newState) {
+        if (sm.state === newState) return;
+        sm.state = newState;
+        clipReset(sm.clips[newState]);
+        sm.lastFrameIdx = -1;
+        // Update button active states
+        ['btnSMIdle', 'btnSMWalk', 'btnSMAttack', 'btnSMDeath'].forEach((id, i) => {
+            const states = ['idle', 'walk', 'attack', 'death'];
+            document.getElementById(id)?.classList.toggle('active', states[i] === newState);
+        });
+    }
+
+    function update(dt) {
+        const clip = sm.clips[sm.state];
+        clipUpdate(clip, dt);
+        const idx = Math.floor(clip.time * clip.fps);
+        if (idx !== sm.lastFrameIdx) {
+            const evs = sm.events[sm.state] || [];
+            for (const e of evs) {
+                if (e.frame === idx) {
+                    if (e.kind === 'damage') {
+                        damageEventCount++;
+                        lastDamagePulse = performance.now();
+                    }
+                }
+            }
+            sm.lastFrameIdx = idx;
+        }
+        // Attack and death auto-return to idle when done
+        if (clip.done && sm.state === 'attack') transition('idle');
+    }
+
+    let lastT = performance.now();
+    function frame(now) {
+        const dt = Math.min((now - lastT) / 1000, 0.05);
+        lastT = now;
+        update(dt);
+        render();
+        requestAnimationFrame(frame);
+    }
+
+    function render() {
+        clearCanvas(ctx, canvas.width, canvas.height);
+        // Ground line
+        ctx.strokeStyle = IM_COLORS.muted;
+        ctx.setLineDash([3, 4]);
+        ctx.beginPath();
+        ctx.moveTo(40, 240); ctx.lineTo(canvas.width - 40, 240);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Character
+        const cf = clipFrame(sm.clips[sm.state]);
+        const color = sm.state === 'death' ? '#9e9e9e' : IM_COLORS.player;
+        drawWalker(ctx, canvas.width / 2, 240, cf.data, color);
+
+        // Damage flash
+        const elapsedSincePulse = (performance.now() - lastDamagePulse) / 1000;
+        if (elapsedSincePulse < 0.5) {
+            const a = 1 - elapsedSincePulse / 0.5;
+            ctx.fillStyle = `rgba(239, 83, 80, ${a})`;
+            ctx.font = 'bold 36px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('💥 DAMAGE', canvas.width / 2 + 90, 100);
+            ctx.textAlign = 'start';
+        }
+
+        // State machine diagram (top-left)
+        ctx.fillStyle = 'rgba(13, 17, 23, 0.78)';
+        ctx.fillRect(8, 8, 300, 86);
+        ctx.fillStyle = IM_COLORS.label;
+        ctx.font = 'bold 13px sans-serif';
+        ctx.fillText(`state: ${sm.state}`, 18, 28);
+        const clip = sm.clips[sm.state];
+        ctx.fillText(`frame ${cf.idx} / ${clip.frames.length - 1} · fps ${clip.fps}`, 18, 48);
+        ctx.fillText(`damage events fired: ${damageEventCount}`, 18, 68);
+        ctx.fillStyle = IM_COLORS.muted;
+        ctx.font = '11px sans-serif';
+        ctx.fillText(sm.state === 'attack'
+            ? 'Damage fires on frame 1 (the swing-down). Edge-detected → exactly once.'
+            : (sm.state === 'death' ? 'Death does not loop. Reset to revive.' : 'Click a state above.'),
+            18, 88);
+
+        info.innerHTML = `State: <strong>${sm.state}</strong> · frame ${cf.idx} · damage events fired so far: <strong>${damageEventCount}</strong>`;
+    }
+
+    document.getElementById('btnSMIdle')?.addEventListener('click',   () => transition('idle'));
+    document.getElementById('btnSMWalk')?.addEventListener('click',   () => transition('walk'));
+    document.getElementById('btnSMAttack')?.addEventListener('click', () => transition('attack'));
+    document.getElementById('btnSMDeath')?.addEventListener('click',  () => transition('death'));
+    document.getElementById('btnSMReset')?.addEventListener('click',  () => {
+        damageEventCount = 0;
+        for (const k in sm.clips) clipReset(sm.clips[k]);
+        transition('idle');
+    });
+
+    requestAnimationFrame(frame);
+})();
+
+// =============================================================================
+// DEMO 10 — Easing curves
+// =============================================================================
+(function easingDemo() {
+    const canvas = document.getElementById('easingDemo');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const info = document.getElementById('easingDemoInfo');
+
+    const ease = {
+        linear:        (t) => t,
+        easeInCubic:   (t) => t * t * t,
+        easeOutCubic:  (t) => 1 - Math.pow(1 - t, 3),
+        easeInOutCubic: (t) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
+    };
+    const easingNames = ['linear', 'easeInCubic', 'easeOutCubic', 'easeInOutCubic'];
+
+    let duration = 1.5;
+    let elapsed = 0;
+    let lastT = performance.now();
+
+    function frame(now) {
+        const dt = Math.min((now - lastT) / 1000, 0.05);
+        lastT = now;
+        elapsed += dt;
+        if (elapsed >= duration + 0.5) elapsed = 0;
+        render();
+        requestAnimationFrame(frame);
+    }
+
+    function render() {
+        clearCanvas(ctx, canvas.width, canvas.height);
+        const panelW = canvas.width / 4;
+        const panelH = canvas.height;
+        const trackY = 110;
+        const trackPad = 30;
+        const trackLen = panelW - trackPad * 2;
+        const t = Math.min(1, elapsed / duration);
+
+        for (let i = 0; i < 4; i++) {
+            const px = i * panelW;
+            const name = easingNames[i];
+            // Panel separator
+            if (i > 0) {
+                ctx.strokeStyle = IM_COLORS.outline;
+                ctx.beginPath();
+                ctx.moveTo(px, 16); ctx.lineTo(px, panelH - 16); ctx.stroke();
+            }
+            // Title
+            ctx.fillStyle = IM_COLORS.label;
+            ctx.font = 'bold 13px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(name, px + panelW / 2, 28);
+            ctx.textAlign = 'start';
+
+            // Track line
+            ctx.strokeStyle = IM_COLORS.muted;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(px + trackPad, trackY); ctx.lineTo(px + trackPad + trackLen, trackY); ctx.stroke();
+            // Start and end markers
+            ctx.fillStyle = IM_COLORS.muted;
+            ctx.beginPath(); ctx.arc(px + trackPad, trackY, 4, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(px + trackPad + trackLen, trackY, 4, 0, Math.PI * 2); ctx.fill();
+
+            // Moving dot
+            const easedT = ease[name](t);
+            const dotX = px + trackPad + trackLen * easedT;
+            ctx.fillStyle = IM_COLORS.accent;
+            ctx.beginPath(); ctx.arc(dotX, trackY, 8, 0, Math.PI * 2); ctx.fill();
+
+            // Curve plot (below the track)
+            const plotX = px + trackPad;
+            const plotY = trackY + 30;
+            const plotW = trackLen;
+            const plotH = 90;
+            // Plot box
+            ctx.strokeStyle = IM_COLORS.outline;
+            ctx.strokeRect(plotX, plotY, plotW, plotH);
+            // Diagonal reference (identity)
+            ctx.strokeStyle = 'rgba(158, 158, 158, 0.3)';
+            ctx.setLineDash([3, 3]);
+            ctx.beginPath();
+            ctx.moveTo(plotX, plotY + plotH); ctx.lineTo(plotX + plotW, plotY); ctx.stroke();
+            ctx.setLineDash([]);
+            // Curve
+            ctx.strokeStyle = IM_COLORS.accent;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            for (let xs = 0; xs <= plotW; xs += 2) {
+                const tt = xs / plotW;
+                const ee = ease[name](tt);
+                const y = plotY + plotH - ee * plotH;
+                if (xs === 0) ctx.moveTo(plotX + xs, y); else ctx.lineTo(plotX + xs, y);
+            }
+            ctx.stroke();
+            // Playhead marker on the curve
+            const phX = plotX + t * plotW;
+            const phY = plotY + plotH - easedT * plotH;
+            ctx.fillStyle = '#fff';
+            ctx.beginPath(); ctx.arc(phX, phY, 3, 0, Math.PI * 2); ctx.fill();
+
+            // Current t value
+            ctx.fillStyle = IM_COLORS.muted;
+            ctx.font = '10px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText(`t=${t.toFixed(2)}  →  ${easedT.toFixed(2)}`, px + panelW / 2, plotY + plotH + 16);
+            ctx.textAlign = 'start';
+        }
+        info.innerHTML = `t = <strong>${t.toFixed(2)}</strong> · duration <strong>${duration.toFixed(1)}s</strong>. ` +
+            `Linear holds constant speed; the cubics accelerate/decelerate at the edges.`;
+    }
+
+    document.getElementById('btnEasingRestart')?.addEventListener('click', () => { elapsed = 0; });
+    document.getElementById('btnEasingSlower')?.addEventListener('click',  () => { duration = Math.min(4, duration + 0.5); elapsed = 0; });
+    document.getElementById('btnEasingFaster')?.addEventListener('click',  () => { duration = Math.max(0.5, duration - 0.5); elapsed = 0; });
+
+    requestAnimationFrame(frame);
+})();
