@@ -79,7 +79,7 @@
                 </ul>
             </div>
 
-            <details>
+            <details data-demo-id="iso_tileMapDemo" data-deps="iso_im_colors,iso_clearCanvas,iso_cartToIso,iso_drawIsoTile,iso_terrainColor,iso_buildRiverMap,iso_drawGroundLayer">
                 <summary>📝 Click to see: a minimal TileMap class</summary>
                 <div class="code-container" data-code-tabs>
                     <div class="code-tabs" role="tablist">
@@ -223,7 +223,7 @@ map.set(3, 2, 'stone');</code></pre>
                 </p>
             </div>
 
-            <details>
+            <details data-demo-id="iso_layersDemo" data-deps="iso_im_colors,iso_clearCanvas,iso_cartToIso,iso_drawIsoTile,iso_terrainColor,iso_buildRiverMap,iso_drawGroundLayer,iso_drawTree,iso_drawUnit">
                 <summary>📝 Click to see: drawing in three passes</summary>
                 <div class="code-container" data-code-tabs>
                     <div class="code-tabs" role="tablist">
@@ -324,6 +324,60 @@ map.set(3, 2, 'stone');</code></pre>
                 draw order is whatever insertion order the array happens to have — often visually broken.
                 Toggle the button.
             </p>
+
+            <details data-demo-id="iso_depthSortDemo" data-deps="iso_im_colors,iso_clearCanvas,iso_cartToIso,iso_drawIsoTile,iso_terrainColor,iso_buildRiverMap,iso_drawGroundLayer,iso_drawTree,iso_drawUnit">
+                <summary>📝 Click to see: the depth-sort toggle demo</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Two drawables share a tile row; sort key is (cx + cy) ascending.
+const items = [
+    { kind: 'tree',   cx: tree.cx,   cy: tree.cy },
+    { kind: 'player', cx: player.cx, cy: player.cy }
+];
+
+const ordered = (sortMode === 'on')
+    ? [...items].sort((a, b) =&gt; (a.cy + a.cx) - (b.cy + b.cx))
+    : items;  // broken: insertion order means tree always wins
+
+for (const it of ordered) {
+    if (it.kind === 'tree')   drawTree(ctx, it.cx, it.cy, tileW, tileH, originX, originY);
+    else                       drawUnit(ctx, it.cx, it.cy, tileW, tileH, originX, originY, IM_COLORS.player);
+}
+
+// Animate the player across the tree row to make the bug obvious.
+function tick(now) {
+    const dt = Math.min((now - lastTime) / 1000, 0.05);
+    lastTime = now;
+    if (walking) {
+        player.cx += player.dir * 1.6 * dt;
+        if (player.cx &gt; map.width - 1) { player.cx = map.width - 1; player.dir = -1; }
+        if (player.cx &lt; 0)              { player.cx = 0;              player.dir = 1;  }
+    }
+    render();
+    if (walking) requestAnimationFrame(tick);
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">type Drawable = { kind: 'tree' | 'player'; cx: number; cy: number };
+type SortMode = 'on' | 'off';
+
+const items: Drawable[] = [
+    { kind: 'tree',   cx: tree.cx,   cy: tree.cy },
+    { kind: 'player', cx: player.cx, cy: player.cy }
+];
+
+const ordered: Drawable[] = (sortMode === 'on')
+    ? [...items].sort((a, b) =&gt; (a.cy + a.cx) - (b.cy + b.cx))
+    : items;
+
+for (const it of ordered) {
+    if (it.kind === 'tree')   drawTree(ctx, it.cx, it.cy, tileW, tileH, originX, originY);
+    else                       drawUnit(ctx, it.cx, it.cy, tileW, tileH, originX, originY, IM_COLORS.player);
+}</code></pre>
+                </div>
+            </details>
+
             <div class="diagram">
                 <canvas id="depthSortDemo" width="800" height="420"></canvas>
             </div>
@@ -355,7 +409,7 @@ map.set(3, 2, 'stone');</code></pre>
                 offset; zoom changes the scale.
             </p>
 
-            <details>
+            <details data-demo-id="iso_cameraDemo" data-deps="iso_im_colors,iso_clearCanvas,iso_cartToIso,iso_drawIsoTile,iso_terrainColor,iso_buildRiverMap,iso_isoToCart,iso_pickTileFromMouse,iso_clamp">
                 <summary>📝 Click to see: a minimal Camera class</summary>
                 <div class="code-container" data-code-tabs>
                     <div class="code-tabs" role="tablist">
@@ -441,7 +495,7 @@ map.set(3, 2, 'stone');</code></pre>
                 those fractional coords directly.
             </p>
 
-            <details>
+            <details data-demo-id="iso_unitDemo" data-deps="iso_im_colors,iso_clearCanvas,iso_cartToIso,iso_drawIsoTile,iso_terrainColor,iso_buildRiverMap,iso_drawGroundLayer,iso_isoToCart,iso_pickTileFromMouse,iso_drawUnit">
                 <summary>📝 Click to see: a minimal Unit class with smooth movement</summary>
                 <div class="code-container" data-code-tabs>
                     <div class="code-tabs" role="tablist">
@@ -551,7 +605,7 @@ map.set(3, 2, 'stone');</code></pre>
                 straightforward — angle to direction index.
             </p>
 
-            <details>
+            <details data-demo-id="iso_eightDirDemo" data-deps="iso_im_colors,iso_clearCanvas,iso_facingFromVelocity">
                 <summary>📝 Click to see: facing from velocity</summary>
                 <div class="code-container" data-code-tabs>
                     <div class="code-tabs" role="tablist">
@@ -635,7 +689,7 @@ function facingFromVelocity(vx: number, vy: number): Direction | null {
                 draw call asks "which frame should I render right now?" — index = <code>floor(time * fps) % frames.length</code>.
             </p>
 
-            <details>
+            <details data-demo-id="iso_walkerDemo" data-deps="iso_im_colors,iso_clearCanvas,iso_walkFrames,iso_makeClip,iso_clipUpdate,iso_clipFrame,iso_clipReset,iso_drawWalker">
                 <summary>📝 Click to see: a minimal <code>AnimationClip</code> class</summary>
                 <div class="code-container" data-code-tabs>
                     <div class="code-tabs" role="tablist">
@@ -740,7 +794,7 @@ function facingFromVelocity(vx: number, vy: number): Direction | null {
                 not the wind-up frame.
             </p>
 
-            <details>
+            <details data-demo-id="iso_stateMachineDemo" data-deps="iso_im_colors,iso_clearCanvas,iso_walkFrames,iso_idleFrames,iso_attackFrames,iso_deathFrames,iso_makeClip,iso_clipUpdate,iso_clipFrame,iso_clipReset,iso_drawWalker">
                 <summary>📝 Click to see: <code>AnimationStateMachine</code> with frame events</summary>
                 <div class="code-container" data-code-tabs>
                     <div class="code-tabs" role="tablist">
@@ -849,7 +903,7 @@ class AnimationStateMachine&lt;T&gt; {
                 pure functions over <code>t ∈ [0, 1]</code>.
             </p>
 
-            <details>
+            <details data-demo-id="iso_easingDemo" data-deps="iso_im_colors,iso_clearCanvas">
                 <summary>📝 Click to see: four easing functions, no library</summary>
                 <div class="code-container" data-code-tabs>
                     <div class="code-tabs" role="tablist">
@@ -934,6 +988,76 @@ const easeInOutCubic: EaseFn = (t) =&gt; t &lt; 0.5
                     <li>Facing arrow above the unit's head shows the picked direction</li>
                 </ul>
             </div>
+
+            <details data-demo-id="iso_miniProject" data-deps="iso_im_colors,iso_clearCanvas,iso_cartToIso,iso_drawIsoTile,iso_terrainColor,iso_buildRiverMap,iso_drawGroundLayer,iso_isoToCart,iso_pickTileFromMouse,iso_drawTree,iso_drawUnit,iso_facingFromVelocity,iso_isWalkable,iso_clamp">
+                <summary>📝 Click to see: the full mini-project glue code</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// State: map, decorations on grass tiles, a camera, and a moving unit.
+const map = buildRiverMap(12, 10);
+const decos = [/* tree positions */].filter(d =&gt; map.tiles[d.cy][d.cx] === 'grass');
+const camera = { originX: canvas.width / 2, originY: 50, zoom: 1 };
+const unit = { cx: 1, cy: 1, targetX: 1, targetY: 1, speed: 3, facing: null };
+let drag = null;
+
+// Smooth step: move the unit's fractional coords toward target along a unit vector.
+function step(dt) {
+    const dx = unit.targetX - unit.cx, dy = unit.targetY - unit.cy;
+    const d = Math.sqrt(dx * dx + dy * dy);
+    if (d &lt; 0.01) { unit.facing = null; return; }
+    const s = unit.speed * dt;
+    let vx, vy;
+    if (s &gt;= d) { vx = dx; vy = dy; unit.cx = unit.targetX; unit.cy = unit.targetY; }
+    else        { vx = (dx / d) * s; vy = (dy / d) * s; unit.cx += vx; unit.cy += vy; }
+    unit.facing = facingFromVelocity(vx, vy);
+}
+
+// Render: ground pass, then decorations + unit mixed by (cx + cy) for depth sort.
+function render() {
+    drawGroundLayer(ctx, map, effW(), effH(), camera.originX, camera.originY);
+    const list = decos.map(d =&gt; ({ kind: 'tree', cx: d.cx, cy: d.cy }));
+    list.push({ kind: 'unit', cx: unit.cx, cy: unit.cy });
+    list.sort((a, b) =&gt; (a.cy + a.cx) - (b.cy + b.cx));
+    for (const it of list) {
+        if (it.kind === 'tree') drawTree(ctx, it.cx, it.cy, effW(), effH(), camera.originX, camera.originY);
+        else                     drawUnit(ctx, it.cx, it.cy, effW(), effH(), camera.originX, camera.originY, IM_COLORS.player, unit.facing);
+    }
+}
+
+// Mouse-up that didn't drag &gt; 2 px counts as a click → set the unit's target tile.
+canvas.addEventListener('mouseup', (e) =&gt; {
+    if (drag &amp;&amp; !drag.moved) {
+        const m = getMouseLocal(e);
+        const t = pickTileFromMouse(m.x, m.y, camera.originX, camera.originY, effW(), effH(), map.width, map.height);
+        if (t) { unit.targetX = t.x; unit.targetY = t.y; }
+    }
+    drag = null;
+});</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">type Drawable = { kind: 'tree' | 'unit'; cx: number; cy: number };
+type Camera   = { originX: number; originY: number; zoom: number };
+type Unit     = { cx: number; cy: number; targetX: number; targetY: number; speed: number; facing: string | null };
+
+const map = buildRiverMap(12, 10);
+const decos: Array&lt;{ cx: number; cy: number }&gt; = [/* tree positions */]
+    .filter(d =&gt; map.tiles[d.cy][d.cx] === 'grass');
+const camera: Camera = { originX: canvas.width / 2, originY: 50, zoom: 1 };
+const unit: Unit = { cx: 1, cy: 1, targetX: 1, targetY: 1, speed: 3, facing: null };
+
+function step(dt: number): void {
+    const dx = unit.targetX - unit.cx, dy = unit.targetY - unit.cy;
+    const d = Math.sqrt(dx * dx + dy * dy);
+    if (d &lt; 0.01) { unit.facing = null; return; }
+    const s = unit.speed * dt;
+    let vx: number, vy: number;
+    if (s &gt;= d) { vx = dx; vy = dy; unit.cx = unit.targetX; unit.cy = unit.targetY; }
+    else        { vx = (dx / d) * s; vy = (dy / d) * s; unit.cx += vx; unit.cy += vy; }
+    unit.facing = facingFromVelocity(vx, vy);
+}</code></pre>
+                </div>
+            </details>
 
             <div class="diagram">
                 <canvas id="miniProject" width="800" height="500" tabindex="0"></canvas>
