@@ -56,7 +56,7 @@
                 <li><strong>Double-click on a unit type</strong> — selects all visible units of the same type.</li>
             </ul>
 
-            <details>
+            <details data-demo-id="iso_selectionDemo" data-deps="iso_ex_colors,iso_clearCanvas,iso_cartToIso,iso_drawIsoTile,iso_ex_terrainColor,iso_drawGround,iso_drawUnitGlyph,iso_getMouseLocal">
                 <summary>📝 Click to see: a Selection manager</summary>
                 <div class="code-container" data-code-tabs>
                     <div class="code-tabs" role="tablist">
@@ -170,7 +170,7 @@ class Selection {
                 </p>
             </div>
 
-            <details>
+            <details data-demo-id="iso_commandsDemo" data-deps="iso_ex_colors,iso_clearCanvas,iso_cartToIso,iso_isoToCart,iso_drawIsoTile,iso_pickTileFromMouse,iso_ex_terrainColor,iso_drawGround,iso_drawUnitGlyph,iso_walkToward,iso_getMouseLocal">
                 <summary>📝 Click to see: a tiny order queue</summary>
                 <div class="code-container" data-code-tabs>
                     <div class="code-tabs" role="tablist">
@@ -249,7 +249,7 @@ function tickUnit(unit: Unit, dt: number): void {
                 </p>
             </div>
 
-            <details>
+            <details data-demo-id="iso_pathfindingDemo" data-deps="iso_ex_colors,iso_clearCanvas,iso_cartToIso,iso_isoToCart,iso_drawIsoTile,iso_pickTileFromMouse,iso_ex_terrainColor,iso_ex_isWalkable,iso_aStarPath,iso_walkToward,iso_drawUnitGlyph,iso_getMouseLocal">
                 <summary>📝 Click to see: a minimal A* on a tile grid</summary>
                 <div class="code-container" data-code-tabs>
                     <div class="code-tabs" role="tablist">
@@ -366,7 +366,7 @@ function aStar(
                 <li>The cursor cell becomes the building's <em>anchor</em> (top-left of the footprint).</li>
             </ul>
 
-            <details>
+            <details data-demo-id="iso_buildingDemo" data-deps="iso_ex_colors,iso_clearCanvas,iso_cartToIso,iso_isoToCart,iso_drawIsoTile,iso_pickTileFromMouse,iso_ex_terrainColor,iso_buildSkirmishMap,iso_ex_isWalkable,iso_drawGround,iso_drawBuilding,iso_getMouseLocal">
                 <summary>📝 Click to see: footprint validity check</summary>
                 <div class="code-container" data-code-tabs>
                     <div class="code-tabs" role="tablist">
@@ -436,7 +436,7 @@ function canPlaceBuilding(
                 what makes RTS "macro" feel so satisfying.
             </p>
 
-            <details>
+            <details data-demo-id="iso_gatheringDemo" data-deps="iso_ex_colors,iso_clearCanvas,iso_cartToIso,iso_drawIsoTile,iso_ex_terrainColor,iso_drawGround,iso_drawUnitGlyph,iso_drawBuilding,iso_walkToward">
                 <summary>📝 Click to see: worker state machine</summary>
                 <div class="code-container" data-code-tabs>
                     <div class="code-tabs" role="tablist">
@@ -536,7 +536,7 @@ function tickWorker(w: Worker, dt: number, world: { resources: number }): void {
                 near the building.
             </p>
 
-            <details>
+            <details data-demo-id="iso_productionDemo" data-deps="iso_ex_colors,iso_clearCanvas,iso_cartToIso,iso_isoToCart,iso_drawIsoTile,iso_pickTileFromMouse,iso_ex_terrainColor,iso_drawGround,iso_drawBuilding,iso_drawUnitGlyph,iso_walkToward,iso_getMouseLocal">
                 <summary>📝 Click to see: production queue tick</summary>
                 <div class="code-container" data-code-tabs>
                     <div class="code-tabs" role="tablist">
@@ -615,7 +615,7 @@ function tickProductionBuilding(b: ProductionBuilding, dt: number, world: World)
                 Each frame, find an enemy in range; if cooldown is zero, fire and reset cooldown.
             </p>
 
-            <details>
+            <details data-demo-id="iso_combatDemo" data-deps="iso_ex_colors,iso_clearCanvas,iso_cartToIso,iso_drawIsoTile,iso_ex_terrainColor,iso_drawGround,iso_drawUnitGlyph,iso_lerp">
                 <summary>📝 Click to see: combat tick</summary>
                 <div class="code-container" data-code-tabs>
                     <div class="code-tabs" role="tablist">
@@ -702,6 +702,144 @@ function tickCombat(unit: CombatUnit, dt: number, enemies: CombatUnit[]): void {
                     <li>Combat triggers when a player unit is in range of an enemy</li>
                 </ul>
             </div>
+
+            <details data-demo-id="iso_skirmishDemo" data-deps="iso_ex_colors,iso_clearCanvas,iso_cartToIso,iso_isoToCart,iso_drawIsoTile,iso_pickTileFromMouse,iso_ex_terrainColor,iso_buildSkirmishMap,iso_ex_isWalkable,iso_drawGround,iso_drawUnitGlyph,iso_drawBuilding,iso_aStarPath,iso_walkToward,iso_getMouseLocal">
+                <summary>📝 Click to see: the skirmish loop &mdash; selection, A* commands, combat tick, AI</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// State: per-team buildings, units with HP + orders + A* paths.
+const world = {
+    nextId: 1,
+    units: [],
+    buildings: [
+        { team: 'player', anchorX: 0,  anchorY: 0, w: 2, h: 2, kind: 'town',     queue: [], progress: 0, rally: { cx: 3,  cy: 2 } },
+        { team: 'enemy',  anchorX: 12, anchorY: 0, w: 2, h: 2, kind: 'barracks', queue: [], progress: 0, rally: { cx: 12, cy: 7 } }
+    ],
+    resources: 0
+};
+
+// One tick combines auto-worker behavior, combat search, and A*-path-following.
+function tickUnit(u, dt) {
+    if (u.hp &lt;= 0) return;
+    u.attackCooldown = Math.max(0, u.attackCooldown - dt);
+
+    // Workers auto-cycle the gather state machine.
+    if (u.type === 'worker' &amp;&amp; u.team === 'player' &amp;&amp; u.orders.length === 0) {
+        switch (u.workerState) {
+            case 'walking_to_resource':
+                if (walkToward(u, u.resource, dt)) { u.workerState = 'gathering'; u.gatherTimer = 1.5; }
+                break;
+            case 'gathering':
+                u.gatherTimer -= dt;
+                if (u.gatherTimer &lt;= 0) { u.carrying = 10; u.workerState = 'walking_to_dropoff'; }
+                break;
+            case 'walking_to_dropoff':
+                if (walkToward(u, u.dropoff, dt)) {
+                    world.resources += u.carrying;
+                    u.carrying = 0;
+                    u.workerState = 'walking_to_resource';
+                }
+                break;
+        }
+        return;
+    }
+
+    // Combat: nearest enemy in range → swing.
+    if (u.attackDamage &gt; 0) {
+        let target = null, bestD = Infinity;
+        for (const other of world.units) {
+            if (other.team === u.team || other.hp &lt;= 0) continue;
+            const d = Math.hypot(other.cx - u.cx, other.cy - u.cy);
+            if (d &lt;= u.attackRange &amp;&amp; d &lt; bestD) { bestD = d; target = other; }
+        }
+        if (target &amp;&amp; u.attackCooldown === 0) {
+            target.hp -= u.attackDamage;
+            u.attackCooldown = u.attackCooldownMax;
+            return;
+        }
+    }
+
+    // Follow current A* path; on arrival, plan the next queued order.
+    if (u.currentPath &amp;&amp; u.pathIndex &lt; u.currentPath.length) {
+        const wp = u.currentPath[u.pathIndex];
+        if (walkToward(u, { cx: wp.x, cy: wp.y }, dt)) u.pathIndex++;
+        if (u.pathIndex &gt;= u.currentPath.length) {
+            u.currentPath = null;
+            u.orders.shift();
+            if (u.orders[0]) startPath(u, u.orders[0]);
+        }
+        return;
+    }
+    if (u.orders[0] &amp;&amp; !u.currentPath) startPath(u, u.orders[0]);
+}
+
+function startPath(u, order) {
+    const start = { x: Math.round(u.cx), y: Math.round(u.cy) };
+    const goal  = { x: order.cx, y: order.cy };
+    u.currentPath = aStarPath(map, start, goal);
+    u.pathIndex = 0;
+}
+
+// Right-click on the canvas issues a move order to every selected player unit.
+canvas.addEventListener('contextmenu', (e) =&gt; {
+    e.preventDefault();
+    if (selected.size === 0) return;
+    const m = getMouseLocal(canvas, e);
+    const t = pickTileFromMouse(m.x, m.y, ox, oy, tW, tH, map.width, map.height);
+    if (!t) return;
+    for (const id of selected) {
+        const u = world.units.find(x =&gt; x.id === id);
+        if (!u || u.hp &lt;= 0) continue;
+        u.currentPath = null;
+        u.pathIndex = 0;
+        if (e.shiftKey) u.orders.push({ type: 'move', cx: t.x, cy: t.y });
+        else             u.orders = [{ type: 'move', cx: t.x, cy: t.y }];
+    }
+});</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">type Tile  = { x: number; y: number };
+type Order = { type: 'move' | 'attack-move'; cx: number; cy: number };
+type Unit  = {
+    id: number; team: 'player' | 'enemy'; type: 'worker' | 'soldier' | 'archer';
+    cx: number; cy: number; speed: number;
+    orders: Order[];
+    currentPath: Tile[] | null; pathIndex: number;
+    hp: number; maxHp: number;
+    attackDamage: number; attackRange: number; attackCooldown: number; attackCooldownMax: number;
+    workerState: string | null; gatherTimer: number; carrying: number;
+    resource: { cx: number; cy: number } | null;
+    dropoff:  { cx: number; cy: number } | null;
+};
+
+function tickUnit(u: Unit, dt: number): void {
+    if (u.hp &lt;= 0) return;
+    u.attackCooldown = Math.max(0, u.attackCooldown - dt);
+
+    if (u.type === 'worker' &amp;&amp; u.team === 'player' &amp;&amp; u.orders.length === 0) {
+        switch (u.workerState) {
+            case 'walking_to_resource':
+                if (walkToward(u, u.resource!, dt)) { u.workerState = 'gathering'; u.gatherTimer = 1.5; }
+                break;
+            case 'gathering':
+                u.gatherTimer -= dt;
+                if (u.gatherTimer &lt;= 0) { u.carrying = 10; u.workerState = 'walking_to_dropoff'; }
+                break;
+            case 'walking_to_dropoff':
+                if (walkToward(u, u.dropoff!, dt)) {
+                    world.resources += u.carrying;
+                    u.carrying = 0;
+                    u.workerState = 'walking_to_resource';
+                }
+                break;
+        }
+        return;
+    }
+    // ... combat + path-following identical to JS pane above ...
+}</code></pre>
+                </div>
+            </details>
 
             <div class="diagram">
                 <canvas id="skirmishDemo" width="800" height="500" tabindex="0"></canvas>
