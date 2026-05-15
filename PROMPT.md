@@ -4,3 +4,11 @@ Create a game dev math guide based on the project guidelines.
 An example would be the example.html in the folder. Take inspiration from it but we want to create something better than it. The example file is also buggy in some places and does not follow the best conventions and project guidelines. Keep this in mind before taking inspiration.
 
 In case you are not sure of anything, ask.
+
+# 2026-05-15 — Suggested-task triage: broken TS Copy-Code exports
+
+The Claude app suggested a task for this repo. Is this still a viable issue?
+(Suggested task: the isometric-strategy Copy-Code TS export variants in
+`bundles-expert.js` and `bundles-advanced.js` reuse each JS body via a
+`.split('\n').slice(K, -2).join('\n')` trick that drops the demo's final
+bootstrap line; also verify the leading `K` per demo and fix any mismatch.)

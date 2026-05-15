@@ -627,7 +627,7 @@ DEMO_CODE_TS.iso_selectionDemo = `(function selectionDemo(): void {
     const canvas = document.getElementById('canvas') as HTMLCanvasElement;
     const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
     const info = document.getElementById('info') as HTMLDivElement;
-${DEMO_CODE.iso_selectionDemo.split('\n').slice(4, -2).join('\n')}
+${DEMO_CODE.iso_selectionDemo.split('\n').slice(4, -1).join('\n')}
 })();`;
 
 // =============================================================================
@@ -736,7 +736,7 @@ DEMO_CODE_TS.iso_commandsDemo = `(function commandsDemo(): void {
     const canvas = document.getElementById('canvas') as HTMLCanvasElement;
     const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
     const info = document.getElementById('info') as HTMLDivElement;
-${DEMO_CODE.iso_commandsDemo.split('\n').slice(4, -2).join('\n')}
+${DEMO_CODE.iso_commandsDemo.split('\n').slice(4, -1).join('\n')}
 })();`;
 
 // =============================================================================
@@ -854,7 +854,7 @@ DEMO_CODE_TS.iso_pathfindingDemo = `(function pathfindingDemo(): void {
     const canvas = document.getElementById('canvas') as HTMLCanvasElement;
     const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
     const info = document.getElementById('info') as HTMLDivElement;
-${DEMO_CODE.iso_pathfindingDemo.split('\n').slice(4, -2).join('\n')}
+${DEMO_CODE.iso_pathfindingDemo.split('\n').slice(4, -1).join('\n')}
 })();`;
 
 // =============================================================================
@@ -956,7 +956,7 @@ DEMO_CODE_TS.iso_buildingDemo = `(function buildingDemo(): void {
     const canvas = document.getElementById('canvas') as HTMLCanvasElement;
     const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
     const info = document.getElementById('info') as HTMLDivElement;
-${DEMO_CODE.iso_buildingDemo.split('\n').slice(4, -2).join('\n')}
+${DEMO_CODE.iso_buildingDemo.split('\n').slice(4, -1).join('\n')}
 })();`;
 
 // =============================================================================
@@ -1052,7 +1052,7 @@ DEMO_CODE_TS.iso_gatheringDemo = `(function gatheringDemo(): void {
     const canvas = document.getElementById('canvas') as HTMLCanvasElement;
     const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
     const info = document.getElementById('info') as HTMLDivElement;
-${DEMO_CODE.iso_gatheringDemo.split('\n').slice(4, -2).join('\n')}
+${DEMO_CODE.iso_gatheringDemo.split('\n').slice(4, -1).join('\n')}
 })();`;
 
 // =============================================================================
@@ -1182,7 +1182,7 @@ DEMO_CODE_TS.iso_productionDemo = `(function productionDemo(): void {
     const canvas = document.getElementById('canvas') as HTMLCanvasElement;
     const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
     const info = document.getElementById('info') as HTMLDivElement;
-${DEMO_CODE.iso_productionDemo.split('\n').slice(4, -2).join('\n')}
+${DEMO_CODE.iso_productionDemo.split('\n').slice(4, -1).join('\n')}
 })();`;
 
 // =============================================================================
@@ -1315,7 +1315,7 @@ DEMO_CODE_TS.iso_combatDemo = `(function combatDemo(): void {
     const canvas = document.getElementById('canvas') as HTMLCanvasElement;
     const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
     const info = document.getElementById('info') as HTMLDivElement;
-${DEMO_CODE.iso_combatDemo.split('\n').slice(4, -2).join('\n')}
+${DEMO_CODE.iso_combatDemo.split('\n').slice(4, -1).join('\n')}
 })();`;
 
 // =============================================================================
@@ -1640,7 +1640,7 @@ DEMO_CODE_TS.iso_skirmishDemo = `(function skirmishDemo(): void {
     canvas.focus();
     const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
     const info = document.getElementById('info') as HTMLDivElement;
-${DEMO_CODE.iso_skirmishDemo.split('\n').slice(6, -2).join('\n')}
+${DEMO_CODE.iso_skirmishDemo.split('\n').slice(6, -1).join('\n')}
 })();`;
 
 // =============================================================================

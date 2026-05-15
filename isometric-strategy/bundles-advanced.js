@@ -709,7 +709,7 @@ DEMO_CODE_TS.iso_fogDemo = `(function fogDemo(): void {
     const canvas = document.getElementById('canvas') as HTMLCanvasElement;
     const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
     const info = document.getElementById('info') as HTMLDivElement;
-${DEMO_CODE.iso_fogDemo.split('\n').slice(4, -2).join('\n')}
+${DEMO_CODE.iso_fogDemo.split('\n').slice(4, -1).join('\n')}
 })();`;
 
 // =============================================================================
@@ -852,7 +852,7 @@ DEMO_CODE_TS.iso_flowDemo = `(function flowDemo(): void {
     const canvas = document.getElementById('canvas') as HTMLCanvasElement;
     const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
     const info = document.getElementById('info') as HTMLDivElement;
-${DEMO_CODE.iso_flowDemo.split('\n').slice(4, -2).join('\n')}
+${DEMO_CODE.iso_flowDemo.split('\n').slice(4, -1).join('\n')}
 })();`;
 
 // =============================================================================
@@ -963,7 +963,7 @@ DEMO_CODE_TS.iso_multiTileDemo = `(function multiTileDemo(): void {
     const canvas = document.getElementById('canvas') as HTMLCanvasElement;
     const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
     const info = document.getElementById('info') as HTMLDivElement;
-${DEMO_CODE.iso_multiTileDemo.split('\n').slice(4, -2).join('\n')}
+${DEMO_CODE.iso_multiTileDemo.split('\n').slice(4, -1).join('\n')}
 })();`;
 
 // =============================================================================
@@ -1116,7 +1116,7 @@ DEMO_CODE_TS.iso_spatialHashDemo = `(function spatialHashDemo(): void {
     const canvas = document.getElementById('canvas') as HTMLCanvasElement;
     const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
     const info = document.getElementById('info') as HTMLDivElement;
-${DEMO_CODE.iso_spatialHashDemo.split('\n').slice(4, -2).join('\n')}
+${DEMO_CODE.iso_spatialHashDemo.split('\n').slice(4, -1).join('\n')}
 })();`;
 
 // =============================================================================
@@ -1240,7 +1240,7 @@ DEMO_CODE_TS.iso_saveLoadDemo = `(function saveLoadDemo(): void {
     const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
     const info = document.getElementById('info') as HTMLDivElement;
     const out = document.getElementById('saveJsonOut') as HTMLPreElement;
-${DEMO_CODE.iso_saveLoadDemo.split('\n').slice(8, -2).join('\n')}
+${DEMO_CODE.iso_saveLoadDemo.split('\n').slice(9, -1).join('\n')}
 })();`;
 
 // =============================================================================
@@ -1369,7 +1369,7 @@ DEMO_CODE_TS.iso_mapEditorDemo = `(function mapEditorDemo(): void {
     const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
     const info = document.getElementById('info') as HTMLDivElement;
     const out = document.getElementById('mapEditorOut') as HTMLPreElement;
-${DEMO_CODE.iso_mapEditorDemo.split('\n').slice(8, -2).join('\n')}
+${DEMO_CODE.iso_mapEditorDemo.split('\n').slice(8, -1).join('\n')}
 })();`;
 
 // =============================================================================
@@ -1572,7 +1572,7 @@ DEMO_CODE_TS.iso_aiDemo = `(function aiDemo(): void {
     const canvas = document.getElementById('canvas') as HTMLCanvasElement;
     const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
     const info = document.getElementById('info') as HTMLDivElement;
-${DEMO_CODE.iso_aiDemo.split('\n').slice(4, -2).join('\n')}
+${DEMO_CODE.iso_aiDemo.split('\n').slice(4, -1).join('\n')}
 })();`;
 
 // =============================================================================
@@ -1681,7 +1681,7 @@ DEMO_CODE_TS.iso_stressDemo = `(function stressDemo(): void {
     const canvas = document.getElementById('canvas') as HTMLCanvasElement;
     const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
     const info = document.getElementById('info') as HTMLDivElement;
-${DEMO_CODE.iso_stressDemo.split('\n').slice(4, -2).join('\n')}
+${DEMO_CODE.iso_stressDemo.split('\n').slice(4, -1).join('\n')}
 })();`;
 
 // =============================================================================
