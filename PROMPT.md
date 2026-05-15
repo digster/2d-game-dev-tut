@@ -12,3 +12,12 @@ The Claude app suggested a task for this repo. Is this still a viable issue?
 `bundles-expert.js` and `bundles-advanced.js` reuse each JS body via a
 `.split('\n').slice(K, -2).join('\n')` trick that drops the demo's final
 bootstrap line; also verify the leading `K` per demo and fix any mismatch.)
+
+# 2026-05-15 — Set up a separate learning track for learning shaders
+
+Stand up a new, separate "shaders" learning track alongside the existing
+isometric-strategy track. Decisions made with the user: real WebGL + GLSL
+(not canvas-2D emulation); first pass scaffolds the whole track but only
+ships the Beginner tier (other four tiers are locked "Coming soon" roadmap
+cards, built iteratively later); content blends shader fundamentals with
+concrete 2D-game effects, fundamentals → game effects across the tiers.

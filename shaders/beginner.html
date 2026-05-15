@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beginner — Shaders Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <!-- Prism.js Syntax Highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+    <!-- GLSL highlighting for the standalone shader-anatomy snippet.
+         Prism's `glsl` extends `c`, which extends `clike`. Core bundles only
+         `clike`, so `c` must load before `glsl`. A 404 on either only yields
+         unhighlighted text, never a runtime error. -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-glsl.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>🎨 Beginner — Shader Foundations</h1>
+        <p class="subtitle">From <code>gl_FragColor</code> to your first animated game effect — every pixel, in parallel, on the GPU</p>
+
+        <!-- Navigation -->
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="beginner.html" class="nav-button active">Beginner</a>
+            <a href="intermediate.html" class="nav-button">Intermediate →</a>
+        </div>
+
+        <!-- Table of Contents -->
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#intro">What Is a Shader?</a></li>
+                <li><a href="#first">Your First Fragment Shader</a></li>
+                <li><a href="#uv">UV Coordinates: Where Am I?</a></li>
+                <li><a href="#shaping">Shaping Functions</a></li>
+                <li><a href="#color">Color &amp; Gradients</a></li>
+                <li><a href="#time">Animation with u_time</a></li>
+                <li><a href="#mouse">Interactivity with u_mouse</a></li>
+                <li><a href="#water">Mini-Project: Animated Water Tint</a></li>
+            </ul>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- INTRO -->
+        <!-- ============================================ -->
+        <div id="intro" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🧠 What Is a Shader?</h2>
+
+            <p>
+                A <strong>shader</strong> is a tiny program that runs on your <strong>GPU</strong> instead of
+                your CPU. The kind we'll write all tier — a <strong>fragment shader</strong> — has one job:
+                given a pixel, decide its color. The twist is that it runs for <em>every pixel</em>
+                <strong>at the same time</strong>, in parallel, thousands at once.
+            </p>
+
+            <div class="example-box">
+                <h4>🕹️ What shaders do in games you've played</h4>
+                <ul>
+                    <li><strong>Water &amp; lava</strong> — animated surfaces in Zelda, Terraria, Hollow Knight</li>
+                    <li><strong>Hit flashes</strong> — the white blink when an enemy takes damage</li>
+                    <li><strong>Screen transitions</strong> — dissolves, pixelate-outs, circular wipes</li>
+                    <li><strong>CRT / scanline filters</strong> — the retro look in Shovel Knight, Celeste</li>
+                    <li><strong>Lighting &amp; fog</strong> — 2D dynamic lights and darkness</li>
+                </ul>
+            </div>
+
+            <h3>CPU loop vs GPU parallel</h3>
+            <p>
+                On the CPU you draw a scene with a loop: "draw shape 1, then shape 2, …". A shader flips that
+                around — there's no loop over objects; instead the same little color program is evaluated for
+                every pixel of the screen, every frame. Toggle the two mental models:
+            </p>
+            <div class="diagram">
+                <canvas id="cpuVsGpu" width="800" height="380"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnPipelineCPU">CPU: one shape at a time</button>
+                <button id="btnPipelineGPU">GPU: all pixels at once</button>
+            </div>
+            <div id="cpuVsGpuInfo" class="info-display">Click a button to switch the mental model</div>
+
+            <div class="key-point">
+                <strong>💡 Key insight:</strong> We render shaders onto a <strong>full-screen quad</strong> —
+                two triangles covering the whole canvas. The vertex shader just stretches that quad edge to
+                edge; <em>all</em> the art is the fragment shader coloring each pixel. That's the entire
+                mental model for 2D shader effects.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- FIRST SHADER -->
+        <!-- ============================================ -->
+        <div id="first" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🟥 Your First Fragment Shader</h2>
+
+            <p>
+                Here is a complete, valid GLSL fragment shader. It colors every pixel the same solid red:
+            </p>
+
+            <pre><code class="language-glsl">precision mediump float;     // required: float precision for this shader
+
+void main() {
+    // gl_FragColor is the OUTPUT: this pixel's color.
+    // Channels are 0.0–1.0, NOT 0–255. (r, g, b, a)
+    gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
+}</code></pre>
+
+            <div class="concept-box">
+                <h4>Read it line by line</h4>
+                <ul>
+                    <li><code>precision mediump float;</code> — GLSL ES requires you to state float precision. <code>mediump</code> is the safe default.</li>
+                    <li><code>void main()</code> — the entry point, run once per pixel.</li>
+                    <li><code>gl_FragColor</code> — a built-in output variable. Whatever you assign becomes the pixel's color.</li>
+                    <li><code>vec4(r, g, b, a)</code> — a 4-component vector. Colors are normalized: <code>1.0</code> = full, <code>0.0</code> = none.</li>
+                </ul>
+            </div>
+
+            <p>
+                You never set up WebGL by hand in this tier — a small helper called <code>makeShaderToy</code>
+                builds the quad, compiles your shader, wires the standard uniforms, and runs the render loop.
+                You just supply <code>main()</code>. (The Export button ships the helper inline so the file
+                runs anywhere.)
+            </p>
+
+            <details data-demo-id="sh_firstGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy">
+                <summary>📝 Click to see: the solid-color shader demo</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// We build the shader source as a string and hand it to makeShaderToy.
+function solid(r, g, b) {
+    return 'precision mediump float;\n' +
+           'void main() {\n' +
+           '  gl_FragColor = vec4(' + r + ', ' + g + ', ' + b + ', 1.0);\n' +
+           '}';
+}
+
+const toy = makeShaderToy(canvas, solid('0.90', '0.25', '0.22'), { info: info });
+
+document.getElementById('btnColTeal')?.addEventListener('click', () =&gt; {
+    toy.setFrag(solid('0.20', '0.78', '0.70'));   // swap the whole shader
+});</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function solid(r: string, g: string, b: string): string {
+    return 'precision mediump float;\n' +
+           'void main() {\n' +
+           '  gl_FragColor = vec4(' + r + ', ' + g + ', ' + b + ', 1.0);\n' +
+           '}';
+}
+
+const toy = makeShaderToy(canvas, solid('0.90', '0.25', '0.22'), { info: info });
+
+document.getElementById('btnColTeal')?.addEventListener('click', (): void =&gt; {
+    toy.setFrag(solid('0.20', '0.78', '0.70'));
+});</code></pre>
+                </div>
+            </details>
+
+            <div class="diagram">
+                <canvas id="firstGL" width="800" height="450"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnColRed">Red</button>
+                <button id="btnColTeal">Teal</button>
+                <button id="btnColBlue">Theme Blue</button>
+            </div>
+            <div id="firstGLInfo" class="info-display">Every pixel runs main() in parallel. Click to swap the shader.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- UV -->
+        <!-- ============================================ -->
+        <div id="uv" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🗺️ UV Coordinates: Where Am I?</h2>
+
+            <p>
+                A solid color is boring because the shader doesn't know <em>which</em> pixel it is. The
+                built-in <code>gl_FragCoord.xy</code> gives the pixel's screen position in pixels. Divide it by
+                the canvas size (passed in via the <code>u_resolution</code> uniform) and you get
+                <strong>uv</strong> — a normalized 0→1 coordinate. That's the foundation of <em>everything</em>.
+            </p>
+
+            <div class="concept-box">
+                <h4>The one line you'll write forever</h4>
+                <div class="formula">
+                    vec2 uv = gl_FragCoord.xy / u_resolution;
+                </div>
+                <p>
+                    <code>uv.x</code> goes 0 (left) → 1 (right). <code>uv.y</code> goes 0 (<strong>bottom</strong>)
+                    → 1 (top) — WebGL's origin is bottom-left, not top-left like the 2D canvas. Mapping
+                    <code>uv</code> straight to color (<code>vec4(uv, 0.0, 1.0)</code>) gives the classic
+                    red-green gradient: red grows rightward, green grows upward.
+                </p>
+            </div>
+
+            <div class="key-point">
+                <strong>💡 Aspect ratio:</strong> uv is 0–1 on both axes even when the canvas is wider than it
+                is tall — so circles come out as ellipses. The fix: multiply <code>uv.x</code> by
+                <code>u_resolution.x / u_resolution.y</code>. The "Aspect-corrected" button shows a truly round
+                circle.
+            </div>
+
+            <details data-demo-id="sh_uvGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy">
+                <summary>📝 Click to see: the uv visualizer</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">const RAW =
+    'precision mediump float;\n' +
+    'uniform vec2 u_resolution;\n' +
+    'void main() {\n' +
+    '  vec2 uv = gl_FragCoord.xy / u_resolution;\n' +
+    '  gl_FragColor = vec4(uv, 0.0, 1.0);\n' +   // red = x, green = y
+    '}';
+
+const toy = makeShaderToy(canvas, RAW, { info: info });</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const RAW: string =
+    'precision mediump float;\n' +
+    'uniform vec2 u_resolution;\n' +
+    'void main() {\n' +
+    '  vec2 uv = gl_FragCoord.xy / u_resolution;\n' +
+    '  gl_FragColor = vec4(uv, 0.0, 1.0);\n' +
+    '}';
+
+const toy = makeShaderToy(canvas, RAW, { info: info });</code></pre>
+                </div>
+            </details>
+
+            <div class="diagram">
+                <canvas id="uvGL" width="800" height="450"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnUvRaw">Raw uv</button>
+                <button id="btnUvCentered">Centered (-1..1)</button>
+                <button id="btnUvAspect">Aspect-corrected</button>
+            </div>
+            <div id="uvGLInfo" class="info-display">uv = gl_FragCoord.xy / u_resolution → red = x, green = y.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- SHAPING -->
+        <!-- ============================================ -->
+        <div id="shaping" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>📐 Shaping Functions</h2>
+
+            <p>
+                Shapes in shaders aren't drawn — they're <em>computed</em>. You turn <code>uv</code> into a
+                number per pixel (a "mask": 1 inside, 0 outside) using a handful of built-in functions:
+            </p>
+
+            <div class="concept-box">
+                <ul>
+                    <li><code>length(v)</code> / <code>distance(a, b)</code> — a <strong>distance field</strong>: how far this pixel is from a point.</li>
+                    <li><code>step(edge, x)</code> — a hard 0/1 switch at <code>edge</code>.</li>
+                    <li><code>smoothstep(a, b, x)</code> — like <code>step</code> but with a soft, anti-aliased ramp between <code>a</code> and <code>b</code>.</li>
+                    <li><code>fract(x)</code> — the fractional part; instantly tiles/repeats space.</li>
+                    <li><code>clamp(x, lo, hi)</code> — keep a value in range.</li>
+                </ul>
+            </div>
+
+            <p>
+                A soft circle is just <code>1.0 - smoothstep(r, r + softness, distance(uv, center))</code>.
+                Use the Softer/Sharper buttons — they feed a number into the <code>u_param</code> uniform that
+                widens or narrows the <code>smoothstep</code> band live, with no recompile.
+            </p>
+
+            <details data-demo-id="sh_shapingGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy">
+                <summary>📝 Click to see: distance-field circle &amp; stripes</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">const CIRCLE =
+    'precision mediump float;\n' +
+    'uniform vec2 u_resolution;\n' +
+    'uniform float u_param;\n' +              // edge softness, set from JS
+    'void main() {\n' +
+    '  vec2 uv = gl_FragCoord.xy / u_resolution;\n' +
+    '  uv.x *= u_resolution.x / u_resolution.y;\n' +
+    '  float c = u_resolution.x / u_resolution.y * 0.5;\n' +
+    '  float d = distance(uv, vec2(c, 0.5));\n' +
+    '  float m = 1.0 - smoothstep(0.28, 0.28 + u_param, d);\n' +
+    '  gl_FragColor = vec4(vec3(m) * vec3(0.31, 0.76, 0.97), 1.0);\n' +
+    '}';
+
+const toy = makeShaderToy(canvas, CIRCLE, { info: info, param: 0.03 });
+// Softer button → toy.setParam(biggerNumber);</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const CIRCLE: string =
+    'precision mediump float;\n' +
+    'uniform vec2 u_resolution;\n' +
+    'uniform float u_param;\n' +
+    'void main() {\n' +
+    '  vec2 uv = gl_FragCoord.xy / u_resolution;\n' +
+    '  uv.x *= u_resolution.x / u_resolution.y;\n' +
+    '  float c = u_resolution.x / u_resolution.y * 0.5;\n' +
+    '  float d = distance(uv, vec2(c, 0.5));\n' +
+    '  float m = 1.0 - smoothstep(0.28, 0.28 + u_param, d);\n' +
+    '  gl_FragColor = vec4(vec3(m) * vec3(0.31, 0.76, 0.97), 1.0);\n' +
+    '}';
+
+const toy = makeShaderToy(canvas, CIRCLE, { info: info, param: 0.03 });</code></pre>
+                </div>
+            </details>
+
+            <div class="diagram">
+                <canvas id="shapingGL" width="800" height="450"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnShapeCircle">Soft circle</button>
+                <button id="btnShapeStripes">Stripes</button>
+                <button id="btnShapeSofter">Softer edge</button>
+                <button id="btnShapeSharper">Sharper edge</button>
+            </div>
+            <div id="shapingGLInfo" class="info-display">smoothstep on a distance field = an anti-aliased shape mask.</div>
+
+            <div class="challenge-box">
+                <h4>🎯 Try this</h4>
+                <p>Spam "Softer edge" until the circle is a fuzzy glow, then "Sharper edge" until it's a crisp
+                disc. You just controlled anti-aliasing with one number — that's a glow/light sprite and a
+                hard mask from the <em>same</em> shader.</p>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- COLOR -->
+        <!-- ============================================ -->
+        <div id="color" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🌈 Color &amp; Gradients</h2>
+
+            <p>
+                Colors are just <code>vec3</code>s, and the single most useful color function is
+                <code>mix(a, b, t)</code> — a per-pixel linear interpolation between two colors as
+                <code>t</code> goes 0→1. (If you did the Fundamentals <a href="../intermediate.html#lerp">Lerp</a>
+                topic: <code>mix</code> <em>is</em> lerp, running on the GPU.)
+            </p>
+
+            <div class="concept-box">
+                <h4>Three gradients, one idea</h4>
+                <ul>
+                    <li><strong>Linear:</strong> <code>t = uv.x</code> → left-to-right blend.</li>
+                    <li><strong>Radial:</strong> <code>t = distance(uv, center)</code> → vignette / glow.</li>
+                    <li><strong>Banded:</strong> <code>t = floor(t * 6.0) / 6.0</code> → posterized, retro palette look.</li>
+                </ul>
+                <p>Color math is taught right here in this track — there's no separate Fundamentals page for it yet.</p>
+            </div>
+
+            <details data-demo-id="sh_colorGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy">
+                <summary>📝 Click to see: linear / radial / banded gradients</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">const LINEAR =
+    'precision mediump float;\n' +
+    'uniform vec2 u_resolution;\n' +
+    'vec3 A = vec3(0.05, 0.16, 0.40);\n' +    // deep blue
+    'vec3 B = vec3(1.00, 0.65, 0.30);\n' +    // warm amber
+    'void main() {\n' +
+    '  float t = gl_FragCoord.x / u_resolution.x;\n' +
+    '  gl_FragColor = vec4(mix(A, B, t), 1.0);\n' +
+    '}';
+
+const toy = makeShaderToy(canvas, LINEAR, { info: info });</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const LINEAR: string =
+    'precision mediump float;\n' +
+    'uniform vec2 u_resolution;\n' +
+    'vec3 A = vec3(0.05, 0.16, 0.40);\n' +
+    'vec3 B = vec3(1.00, 0.65, 0.30);\n' +
+    'void main() {\n' +
+    '  float t = gl_FragCoord.x / u_resolution.x;\n' +
+    '  gl_FragColor = vec4(mix(A, B, t), 1.0);\n' +
+    '}';
+
+const toy = makeShaderToy(canvas, LINEAR, { info: info });</code></pre>
+                </div>
+            </details>
+
+            <div class="diagram">
+                <canvas id="colorGL" width="800" height="450"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnGradLinear">Linear</button>
+                <button id="btnGradRadial">Radial</button>
+                <button id="btnGradBanded">Banded</button>
+            </div>
+            <div id="colorGLInfo" class="info-display">mix(a, b, t) is a per-pixel lerp between two colors.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- TIME -->
+        <!-- ============================================ -->
+        <div id="time" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>⏱️ Animation with u_time</h2>
+
+            <p>
+                Nothing here is "animated" by storing state — the shader is recomputed from scratch every
+                frame. To move things you feed in <strong>time</strong> as a uniform (<code>u_time</code>,
+                in seconds) and run it through <code>sin</code>/<code>cos</code>. Because it's real seconds,
+                the motion is <strong>frame-rate independent</strong> — same speed at 30 or 144 fps.
+            </p>
+
+            <div class="key-point">
+                <strong>💡 The animation trick:</strong> <code>0.5 + 0.5 * sin(u_time)</code> is the workhorse —
+                it oscillates smoothly between 0 and 1. Drop it into a radius, a color <code>mix</code> factor,
+                or a position and it pulses, fades, or bobs.
+            </div>
+
+            <details data-demo-id="sh_timeGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy">
+                <summary>📝 Click to see: the pulsing / wave shader</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">const FRAG =
+    'precision mediump float;\n' +
+    'uniform vec2 u_resolution;\n' +
+    'uniform float u_time;\n' +
+    'void main() {\n' +
+    '  vec2 uv = gl_FragCoord.xy / u_resolution;\n' +
+    '  uv.x *= u_resolution.x / u_resolution.y;\n' +
+    '  float c = u_resolution.x / u_resolution.y * 0.5;\n' +
+    '  float r = 0.22 + 0.06 * sin(u_time * 3.0);\n' +   // breathing radius
+    '  float d = distance(uv, vec2(c, 0.5));\n' +
+    '  float circle = 1.0 - smoothstep(r, r + 0.02, d);\n' +
+    '  float wave = 0.5 + 0.5 * sin(uv.x * 12.0 - u_time * 2.0);\n' +
+    '  vec3 bg = mix(vec3(0.05,0.07,0.15), vec3(0.10,0.20,0.35), wave);\n' +
+    '  gl_FragColor = vec4(mix(bg, vec3(1.0,0.65,0.30), circle), 1.0);\n' +
+    '}';
+
+const toy = makeShaderToy(canvas, FRAG, { info: info });
+// Pause/speed are host-side: toy.setPaused(true); toy.setTimeScale(2.5);</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const FRAG: string =
+    'precision mediump float;\n' +
+    'uniform vec2 u_resolution;\n' +
+    'uniform float u_time;\n' +
+    'void main() {\n' +
+    '  vec2 uv = gl_FragCoord.xy / u_resolution;\n' +
+    '  uv.x *= u_resolution.x / u_resolution.y;\n' +
+    '  float c = u_resolution.x / u_resolution.y * 0.5;\n' +
+    '  float r = 0.22 + 0.06 * sin(u_time * 3.0);\n' +
+    '  float d = distance(uv, vec2(c, 0.5));\n' +
+    '  float circle = 1.0 - smoothstep(r, r + 0.02, d);\n' +
+    '  float wave = 0.5 + 0.5 * sin(uv.x * 12.0 - u_time * 2.0);\n' +
+    '  vec3 bg = mix(vec3(0.05,0.07,0.15), vec3(0.10,0.20,0.35), wave);\n' +
+    '  gl_FragColor = vec4(mix(bg, vec3(1.0,0.65,0.30), circle), 1.0);\n' +
+    '}';
+
+const toy = makeShaderToy(canvas, FRAG, { info: info });</code></pre>
+                </div>
+            </details>
+
+            <div class="diagram">
+                <canvas id="timeGL" width="800" height="450"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnTimePause">Pause / Resume</button>
+                <button id="btnTimeSlow">Slow (0.3×)</button>
+                <button id="btnTimeFast">Fast (2.5×)</button>
+            </div>
+            <div id="timeGLInfo" class="info-display">A pulsing circle + a colour wave, both driven by u_time.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- MOUSE -->
+        <!-- ============================================ -->
+        <div id="mouse" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🖱️ Interactivity with u_mouse</h2>
+
+            <p>
+                The last standard uniform is <code>u_mouse</code> — the cursor position in pixels. Combine it
+                with a distance field and you get a flashlight, a ripple origin, a reveal mask… the basis of
+                lots of 2D game UI and effects.
+            </p>
+
+            <div class="concept-box">
+                <h4>⚠️ The #1 beginner bug: mouse Y is flipped</h4>
+                <p>
+                    The 2D canvas measures Y from the <strong>top</strong>; <code>gl_FragCoord</code> measures
+                    it from the <strong>bottom</strong>. If your spotlight chases the mouse upside-down, that's
+                    why. This track's helper fixes it once — it passes
+                    <code>u_mouse = (mouseX, canvasHeight - mouseY)</code> so <code>u_mouse</code> lives in the
+                    same space as <code>gl_FragCoord</code>. You never have to think about it again.
+                </p>
+            </div>
+
+            <details data-demo-id="sh_mouseGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy">
+                <summary>📝 Click to see: cursor spotlight &amp; ripple</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">const SPOT =
+    'precision mediump float;\n' +
+    'uniform vec2 u_resolution;\n' +
+    'uniform vec2 u_mouse;\n' +
+    'void main() {\n' +
+    '  float d = distance(gl_FragCoord.xy, u_mouse) / u_resolution.y;\n' +
+    '  float light = 1.0 - smoothstep(0.0, 0.45, d);\n' +
+    '  vec3 col = mix(vec3(0.04,0.05,0.10), vec3(0.31,0.76,0.97), light);\n' +
+    '  gl_FragColor = vec4(col, 1.0);\n' +
+    '}';
+
+const toy = makeShaderToy(canvas, SPOT, { info: info });</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const SPOT: string =
+    'precision mediump float;\n' +
+    'uniform vec2 u_resolution;\n' +
+    'uniform vec2 u_mouse;\n' +
+    'void main() {\n' +
+    '  float d = distance(gl_FragCoord.xy, u_mouse) / u_resolution.y;\n' +
+    '  float light = 1.0 - smoothstep(0.0, 0.45, d);\n' +
+    '  vec3 col = mix(vec3(0.04,0.05,0.10), vec3(0.31,0.76,0.97), light);\n' +
+    '  gl_FragColor = vec4(col, 1.0);\n' +
+    '}';
+
+const toy = makeShaderToy(canvas, SPOT, { info: info });</code></pre>
+                </div>
+            </details>
+
+            <div class="diagram">
+                <canvas id="mouseGL" width="800" height="450"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnMouseSpot">Spotlight</button>
+                <button id="btnMouseRipple">Ripple</button>
+            </div>
+            <div id="mouseGLInfo" class="info-display">Move the mouse over the canvas — u_mouse is in pixels (Y-flipped).</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- WATER MINI-PROJECT -->
+        <!-- ============================================ -->
+        <div id="water" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🌊 Mini-Project: Animated Water Tint</h2>
+
+            <p>
+                Everything composes. This capstone is a full-screen water effect — the kind of layer a 2D
+                game drops <em>behind</em> a tilemap (an ocean background) or <em>over</em> the scene
+                (underwater tint). It uses only what this tier taught:
+            </p>
+            <ul>
+                <li><code>uv</code> from <code>gl_FragCoord / u_resolution</code></li>
+                <li><code>sin</code> waves driven by <code>u_time</code></li>
+                <li>a <code>distance</code>-based ripple around <code>u_mouse</code></li>
+                <li><code>mix</code> for a depth tint, <code>smoothstep</code> for fake caustics</li>
+                <li>an optional <code>sin(gl_FragCoord.y)</code> scanline — a real CRT post-FX trick</li>
+            </ul>
+
+            <details data-demo-id="sh_waterGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy">
+                <summary>📝 Click to see: the full water shader (state-built)</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// buildFrag() assembles the shader from a small state object so the
+// buttons can swap amplitude / tint / scanline without WebGL plumbing.
+function buildFrag(s) {
+    const shallow = s.murky ? 'vec3(0.18,0.38,0.30)' : 'vec3(0.35,0.78,0.92)';
+    const deep    = s.murky ? 'vec3(0.02,0.10,0.09)' : 'vec3(0.03,0.18,0.38)';
+    const scan = s.scanline
+        ? '  col *= 0.86 + 0.14 * sin(gl_FragCoord.y * 3.14159);\n' : '';
+    return 'precision mediump float;\n' +
+        'uniform vec2 u_resolution;\n' +
+        'uniform vec2 u_mouse;\n' +
+        'uniform float u_time;\n' +
+        'void main() {\n' +
+        '  vec2 uv = gl_FragCoord.xy / u_resolution;\n' +
+        '  vec2 m = u_mouse / u_resolution;\n' +
+        '  float md = distance(uv, m);\n' +
+        '  float ripple = sin(md*38.0 - u_time*4.0) * exp(-md*6.0) * 0.025;\n' +
+        '  float wave = sin(uv.x*11.0 + u_time*1.4) * ' + s.amp + '\n' +
+        '             + sin(uv.y*17.0 - u_time*2.0) * ' + s.amp + ' * 0.6 + ripple;\n' +
+        '  float depth = clamp(uv.y + wave, 0.0, 1.0);\n' +
+        '  vec3 col = mix(' + deep + ', ' + shallow + ', depth);\n' +
+        '  float caustic = smoothstep(0.55, 1.0,\n' +
+        '      sin(uv.x*26.0 + u_time*2.0 + wave*22.0) * sin(uv.y*20.0 - u_time*1.6));\n' +
+        '  col += caustic * 0.10;\n' + scan +
+        '  gl_FragColor = vec4(col, 1.0);\n' +
+        '}';
+}
+
+const toy = makeShaderToy(canvas, buildFrag(state), { info: info });</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface WaterState { amp: string; scanline: boolean; murky: boolean; }
+
+function buildFrag(s: WaterState): string {
+    const shallow = s.murky ? 'vec3(0.18,0.38,0.30)' : 'vec3(0.35,0.78,0.92)';
+    const deep    = s.murky ? 'vec3(0.02,0.10,0.09)' : 'vec3(0.03,0.18,0.38)';
+    const scan = s.scanline
+        ? '  col *= 0.86 + 0.14 * sin(gl_FragCoord.y * 3.14159);\n' : '';
+    return 'precision mediump float;\n' +
+        'uniform vec2 u_resolution;\n' +
+        'uniform vec2 u_mouse;\n' +
+        'uniform float u_time;\n' +
+        'void main() {\n' +
+        '  vec2 uv = gl_FragCoord.xy / u_resolution;\n' +
+        '  vec2 m = u_mouse / u_resolution;\n' +
+        '  float md = distance(uv, m);\n' +
+        '  float ripple = sin(md*38.0 - u_time*4.0) * exp(-md*6.0) * 0.025;\n' +
+        '  float wave = sin(uv.x*11.0 + u_time*1.4) * ' + s.amp + '\n' +
+        '             + sin(uv.y*17.0 - u_time*2.0) * ' + s.amp + ' * 0.6 + ripple;\n' +
+        '  float depth = clamp(uv.y + wave, 0.0, 1.0);\n' +
+        '  vec3 col = mix(' + deep + ', ' + shallow + ', depth);\n' +
+        '  float caustic = smoothstep(0.55, 1.0,\n' +
+        '      sin(uv.x*26.0 + u_time*2.0 + wave*22.0) * sin(uv.y*20.0 - u_time*1.6));\n' +
+        '  col += caustic * 0.10;\n' + scan +
+        '  gl_FragColor = vec4(col, 1.0);\n' +
+        '}';
+}
+
+const toy = makeShaderToy(canvas, buildFrag(state), { info: info });</code></pre>
+                </div>
+            </details>
+
+            <div class="diagram">
+                <canvas id="waterGL" width="800" height="450"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnWaterCalm">Calm</button>
+                <button id="btnWaterChoppy">Choppy</button>
+                <button id="btnWaterScanline">Toggle scanline</button>
+                <button id="btnWaterMurky">Toggle murky</button>
+            </div>
+            <div id="waterGLInfo" class="info-display">Move the mouse to push ripples. Compose everything you learned.</div>
+
+            <div class="example-box">
+                <h4>🎮 What you just built</h4>
+                <p>
+                    A reusable, interactive full-screen water/post-FX shader in a few dozen lines of GLSL —
+                    no textures, no assets, runs free on the GPU. Hit 📋 Export on any demo above to get a
+                    standalone <code>.html</code> you can open anywhere.
+                </p>
+            </div>
+
+            <div class="key-point">
+                <strong>💡 What's next:</strong> the <a href="intermediate.html">Intermediate tier</a> adds
+                noise, fbm, and domain-warp distortion (fire, smoke, heat-haze). Then Expert moves to
+                textures &amp; sprite shaders (dissolve, palette-swap, hit-flash).
+            </div>
+        </div>
+
+        <!-- Next Steps -->
+        <div class="section" style="text-align: center;">
+            <h2>✅ Beginner Tier Complete</h2>
+            <p style="font-size: 1.1em; margin: 24px 0;">
+                You can write a fragment shader, place pixels with uv, carve shapes with shaping functions,
+                blend colors, and animate with time and the mouse. That's the entire foundation of 2D shader FX.
+            </p>
+            <a href="intermediate.html" class="nav-button" style="font-size: 1.2em; padding: 20px 40px;">
+                Continue to Intermediate →
+            </a>
+            <p style="margin-top: 20px;"><em>Intermediate isn't written yet — coming in the next phase. Track progress on the <a href="index.html">track index</a>.</em></p>
+        </div>
+    </div>
+
+    <!-- Scroll to Top Button -->
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <!-- Shared utilities (Vector2D etc.). Loaded for consistency with other pages. -->
+    <script src="../shared/utils.js"></script>
+
+    <!-- Code-tab toggle (JavaScript / TypeScript). Same script every tier uses. -->
+    <script src="../shared/code-tabs.js"></script>
+
+    <!-- Page-specific interactive WebGL demos. -->
+    <script src="beginner-demos.js"></script>
+
+    <!-- Shaders-specific bundles for the 📋 Export button. -->
+    <script src="bundles-beginner.js"></script>
+    <!-- Shared export-demo injector: finds <details data-demo-id> and attaches
+         a 📋 Export button that copies a runnable standalone HTML. -->
+    <script src="../shared/export-demo.js"></script>
+
+    <script>
+        // Scroll-to-top behavior. Mirrors every other page in the project.
+        const scrollToTopBtn = document.getElementById('scrollToTop');
+        scrollToTopBtn.addEventListener('click', () => {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+        window.addEventListener('scroll', () => {
+            scrollToTopBtn.style.opacity = window.pageYOffset > 300 ? '1' : '0';
+        });
+        scrollToTopBtn.style.opacity = '0';
+        scrollToTopBtn.style.transition = 'opacity 0.3s';
+    </script>
+</body>
+</html>
