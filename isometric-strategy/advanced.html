@@ -66,7 +66,7 @@
                 </p>
             </div>
 
-            <details>
+            <details data-demo-id="iso_fogDemo" data-deps="iso_av_colors,iso_clearCanvas,iso_cartToIso,iso_isoToCart,iso_drawIsoTile,iso_pickTileFromMouse,iso_av_terrainColor,iso_av_isWalkable,iso_av_buildRiverMap,iso_av_drawGround,iso_av_drawIsoUnit,iso_av_getMouseLocal">
                 <summary>📝 Click to see: a minimal FoW updater</summary>
                 <div class="code-container" data-code-tabs>
                     <div class="code-tabs" role="tablist">
@@ -161,7 +161,7 @@ function updateFog(fog: FogGrid, units: Unit[], map: TileMap): void {
                 </p>
             </div>
 
-            <details>
+            <details data-demo-id="iso_flowDemo" data-deps="iso_av_colors,iso_clearCanvas,iso_cartToIso,iso_isoToCart,iso_drawIsoTile,iso_pickTileFromMouse,iso_av_terrainColor,iso_av_isWalkable,iso_av_buildRiverMap,iso_av_drawGround,iso_av_drawIsoUnit,iso_av_getMouseLocal,iso_av_computeFlowField">
                 <summary>📝 Click to see: computing a flow field</summary>
                 <div class="code-container" data-code-tabs>
                     <div class="code-tabs" role="tablist">
@@ -282,7 +282,7 @@ function computeFlowField(
                 <em>that</em> grid instead of just the map.
             </p>
 
-            <details>
+            <details data-demo-id="iso_multiTileDemo" data-deps="iso_av_colors,iso_clearCanvas,iso_cartToIso,iso_isoToCart,iso_drawIsoTile,iso_pickTileFromMouse,iso_av_terrainColor,iso_av_isWalkable,iso_av_buildOpenMap,iso_av_drawGround,iso_av_drawIsoBuilding,iso_av_drawIsoUnit,iso_av_getMouseLocal,iso_av_minHeap,iso_av_aStarHeap">
                 <summary>📝 Click to see: building a blocked-grid</summary>
                 <div class="code-container" data-code-tabs>
                     <div class="code-tabs" role="tablist">
@@ -364,7 +364,7 @@ function rebuildBlockedGrid(map: TileMap, buildings: Building[]): Uint8Array {
                 </p>
             </div>
 
-            <details>
+            <details data-demo-id="iso_spatialHashDemo" data-deps="iso_av_colors,iso_clearCanvas,iso_cartToIso,iso_drawIsoTile,iso_isoToCart,iso_pickTileFromMouse,iso_av_terrainColor,iso_av_buildOpenMap,iso_av_drawGround,iso_av_getMouseLocal">
                 <summary>📝 Click to see: a tiny spatial hash</summary>
                 <div class="code-container" data-code-tabs>
                     <div class="code-tabs" role="tablist">
@@ -481,7 +481,7 @@ function rebuildBlockedGrid(map: TileMap, buildings: Building[]): Uint8Array {
                 </p>
             </div>
 
-            <details>
+            <details data-demo-id="iso_saveLoadDemo" data-deps="iso_av_colors,iso_clearCanvas,iso_cartToIso,iso_isoToCart,iso_drawIsoTile,iso_pickTileFromMouse,iso_av_terrainColor,iso_av_buildOpenMap,iso_av_drawGround,iso_av_drawIsoUnit,iso_av_getMouseLocal">
                 <summary>📝 Click to see: a small save/load API</summary>
                 <div class="code-container" data-code-tabs>
                     <div class="code-tabs" role="tablist">
@@ -579,6 +579,87 @@ function load(json: string): SaveFile {
                 from "edit a hard-coded array in the source" to "open the editor, click around, export."
             </p>
 
+            <details data-demo-id="iso_mapEditorDemo" data-deps="iso_av_colors,iso_clearCanvas,iso_cartToIso,iso_isoToCart,iso_drawIsoTile,iso_pickTileFromMouse,iso_av_terrainColor,iso_av_buildOpenMap,iso_av_drawGround,iso_av_drawIsoBuilding,iso_av_getMouseLocal">
+                <summary>📝 Click to see: the brush + paint + export pipeline</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Mode-driven painter: terrain brushes set a tile, "house" places a 2×2 building.
+// "erase" removes a building anchored at the click, else paves the tile back to grass.
+let brush = 'grass';                    // current brush key
+let painting = false;
+const buildings = [];                   // {anchorX, anchorY, w, h, kind}
+
+function paintAt(mx, my) {
+    const t = pickTileFromMouse(mx, my, ox, oy, tW, tH, map.width, map.height);
+    if (!t) return;
+    if (brush === 'house') {
+        // 2×2 footprint must fit, all tiles walkable, no overlap with an existing building.
+        if (t.x + 1 &gt;= map.width || t.y + 1 &gt;= map.height) return;
+        for (let dy = 0; dy &lt; 2; dy++) for (let dx = 0; dx &lt; 2; dx++) {
+            const tt = map.tiles[t.y + dy][t.x + dx];
+            if (tt !== 'grass' &amp;&amp; tt !== 'sand') return;
+        }
+        for (const b of buildings) {
+            if (t.x &lt; b.anchorX + b.w &amp;&amp; t.x + 2 &gt; b.anchorX &amp;&amp;
+                t.y &lt; b.anchorY + b.h &amp;&amp; t.y + 2 &gt; b.anchorY) return;
+        }
+        buildings.push({ anchorX: t.x, anchorY: t.y, w: 2, h: 2, kind: 'house' });
+        return;
+    }
+    if (brush === 'erase') {
+        const idx = buildings.findIndex(b =&gt; b.anchorX === t.x &amp;&amp; b.anchorY === t.y);
+        if (idx &gt;= 0) buildings.splice(idx, 1);
+        else map.tiles[t.y][t.x] = 'grass';
+        return;
+    }
+    map.tiles[t.y][t.x] = brush;
+}
+
+// Export the entire scene as a self-describing JSON blob.
+document.getElementById('btnEdExport').addEventListener('click', () =&gt; {
+    const data = { version: 1, map, buildings };
+    const json = JSON.stringify(data);
+    out.innerHTML = \`&lt;code&gt;\${json.replace(/&amp;/g, '&amp;amp;').replace(/&lt;/g, '&amp;lt;')}&lt;/code&gt;\`;
+    info.innerHTML = \`Exported \${json.length} bytes of JSON.\`;
+});</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">type Brush    = 'grass' | 'water' | 'sand' | 'stone' | 'house' | 'erase';
+type Building = { anchorX: number; anchorY: number; w: number; h: number; kind: string };
+type SaveBlob = { version: 1; map: IsoMap; buildings: Building[] };
+
+let brush: Brush = 'grass';
+let painting: boolean = false;
+const buildings: Building[] = [];
+
+function paintAt(mx: number, my: number): void {
+    const t = pickTileFromMouse(mx, my, ox, oy, tW, tH, map.width, map.height);
+    if (!t) return;
+    if (brush === 'house') {
+        if (t.x + 1 &gt;= map.width || t.y + 1 &gt;= map.height) return;
+        for (let dy = 0; dy &lt; 2; dy++) for (let dx = 0; dx &lt; 2; dx++) {
+            const tt = map.tiles[t.y + dy][t.x + dx];
+            if (tt !== 'grass' &amp;&amp; tt !== 'sand') return;
+        }
+        for (const b of buildings) {
+            if (t.x &lt; b.anchorX + b.w &amp;&amp; t.x + 2 &gt; b.anchorX &amp;&amp;
+                t.y &lt; b.anchorY + b.h &amp;&amp; t.y + 2 &gt; b.anchorY) return;
+        }
+        buildings.push({ anchorX: t.x, anchorY: t.y, w: 2, h: 2, kind: 'house' });
+        return;
+    }
+    if (brush === 'erase') {
+        const idx = buildings.findIndex(b =&gt; b.anchorX === t.x &amp;&amp; b.anchorY === t.y);
+        if (idx &gt;= 0) buildings.splice(idx, 1);
+        else map.tiles[t.y][t.x] = 'grass';
+        return;
+    }
+    map.tiles[t.y][t.x] = brush;
+}</code></pre>
+                </div>
+            </details>
+
             <div class="diagram">
                 <canvas id="mapEditorDemo" width="800" height="460"></canvas>
             </div>
@@ -617,7 +698,7 @@ function load(json: string): SaveFile {
                 <li><strong>Attack</strong> — once a unit count threshold is hit, send soldiers at the player.</li>
             </ul>
 
-            <details>
+            <details data-demo-id="iso_aiDemo" data-deps="iso_av_colors,iso_clearCanvas,iso_cartToIso,iso_isoToCart,iso_drawIsoTile,iso_pickTileFromMouse,iso_av_terrainColor,iso_av_isWalkable,iso_av_buildRiverMap,iso_av_drawGround,iso_av_drawIsoBuilding,iso_av_drawIsoUnit,iso_av_getMouseLocal">
                 <summary>📝 Click to see: AI state-machine tick</summary>
                 <div class="code-container" data-code-tabs>
                     <div class="code-tabs" role="tablist">
@@ -728,7 +809,7 @@ function tickAI(ai: AI, world: World, dt: number): void {
                     units follow it.</li>
             </ul>
 
-            <details>
+            <details data-demo-id="iso_stressDemo" data-deps="iso_av_colors,iso_clearCanvas,iso_cartToIso,iso_isoToCart,iso_drawIsoTile,iso_pickTileFromMouse,iso_av_terrainColor,iso_av_isWalkable,iso_av_buildRiverMap,iso_av_drawGround,iso_av_drawIsoUnit,iso_av_getMouseLocal,iso_av_computeFlowField">
                 <summary>📝 Click to see: a minimal MinHeap</summary>
                 <div class="code-container" data-code-tabs>
                     <div class="code-tabs" role="tablist">
