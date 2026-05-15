@@ -1683,3 +1683,16 @@ DEMO_CODE_TS.iso_stressDemo = `(function stressDemo(): void {
     const info = document.getElementById('info') as HTMLDivElement;
 ${DEMO_CODE.iso_stressDemo.split('\n').slice(4, -2).join('\n')}
 })();`;
+
+// =============================================================================
+// TRANSITIVE-DEP DECLARATIONS (retrofit — consumed by shared/export-demo.js
+// resolveDepClosure). Additive safety net: advanced.html data-deps already
+// list the full closure, so resolution is idempotent.
+// =============================================================================
+window.DEPENDENCY_REQUIRES = window.DEPENDENCY_REQUIRES || {};
+DEPENDENCY_REQUIRES.iso_pickTileFromMouse = ['iso_isoToCart'];
+DEPENDENCY_REQUIRES.iso_av_terrainColor   = ['iso_av_colors'];
+DEPENDENCY_REQUIRES.iso_av_drawGround     = ['iso_cartToIso', 'iso_drawIsoTile', 'iso_av_terrainColor', 'iso_av_colors'];
+DEPENDENCY_REQUIRES.iso_av_drawIsoUnit    = ['iso_cartToIso', 'iso_av_colors'];
+DEPENDENCY_REQUIRES.iso_av_drawIsoBuilding = ['iso_cartToIso', 'iso_av_colors'];
+DEPENDENCY_REQUIRES.iso_av_aStarHeap      = ['iso_av_minHeap'];

@@ -2398,3 +2398,15 @@ DEMO_CODE_TS.iso_miniProject = `type Drawable2 = { kind: 'tree' | 'unit'; cx: nu
 
     requestAnimationFrame(frame);
 })();`;
+
+// =============================================================================
+// TRANSITIVE-DEP DECLARATIONS (retrofit — consumed by shared/export-demo.js
+// resolveDepClosure). Additive safety net: intermediate.html data-deps already
+// list the full closure, so resolution is idempotent.
+// =============================================================================
+window.DEPENDENCY_REQUIRES = window.DEPENDENCY_REQUIRES || {};
+DEPENDENCY_REQUIRES.iso_pickTileFromMouse = ['iso_isoToCart'];
+DEPENDENCY_REQUIRES.iso_terrainColor      = ['iso_im_colors'];
+DEPENDENCY_REQUIRES.iso_drawGroundLayer   = ['iso_cartToIso', 'iso_drawIsoTile', 'iso_terrainColor', 'iso_im_colors'];
+DEPENDENCY_REQUIRES.iso_drawTree          = ['iso_cartToIso', 'iso_im_colors'];
+DEPENDENCY_REQUIRES.iso_drawUnit          = ['iso_cartToIso', 'iso_im_colors'];

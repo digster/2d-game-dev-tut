@@ -8,6 +8,42 @@
 const SUCRASE_CDN = 'https://unpkg.com/sucrase@3.34.0/dist/browser/sucrase.min.js';
 
 /**
+ * Expand a list of dependency names into its full transitive closure.
+ *
+ * A dependency can declare what *other* dependencies its source body calls by
+ * adding an entry to the optional global `window.DEPENDENCY_REQUIRES`
+ * (e.g. `DEPENDENCY_REQUIRES.pickTileFromMouse = ['isoToCart']`). The resolver
+ * does a post-order depth-first walk so a dependency's requirements are always
+ * emitted *before* it (callee-before-caller — matters for `const` palettes that
+ * other top-level code reads), de-duplicates (a `class` reached twice would
+ * otherwise be a redeclaration error), and is cycle-safe (`seen` is marked on
+ * entry).
+ *
+ * Fully backward compatible: a dependency with no `DEPENDENCY_REQUIRES` entry
+ * is treated as a leaf, so a `deps` list that is already a complete closure
+ * (every requirement already precedes its dependant — as hand-written
+ * `data-deps` strings are) resolves to the identical ordered list. The registry
+ * is therefore a safety net + retroactive fix, not a behavioural change.
+ *
+ * @param {string[]} deps - Requested dependency names (original order preserved)
+ * @returns {string[]}     - Full closure, requirements first, de-duplicated
+ */
+function resolveDepClosure(deps) {
+    const REQ = (typeof DEPENDENCY_REQUIRES !== 'undefined') ? DEPENDENCY_REQUIRES : {};
+    const seen = new Set();
+    const ordered = [];
+    function visit(name) {
+        if (seen.has(name)) return;
+        seen.add(name);
+        const reqs = REQ[name] || [];
+        for (const r of reqs) visit(r);   // requirements before the dependant
+        ordered.push(name);
+    }
+    for (const d of deps) visit(d);
+    return ordered;
+}
+
+/**
  * Generates a complete, self-contained HTML file for a demo.
  * @param {string} demoId - The demo identifier (e.g., 'raycasting')
  * @param {string[]} deps  - Dependency names (e.g., ['vector2d', 'clearCanvas'])
@@ -39,7 +75,10 @@ function generateStandaloneHTML(demoId, deps, lang) {
     }
 
     const depTable = (effectiveLang === 'ts' && typeof DEPENDENCY_BUNDLES_TS !== 'undefined') ? DEPENDENCY_BUNDLES_TS : DEPENDENCY_BUNDLES;
-    const depCode = deps
+    // Expand to the full transitive closure so authors only need to list a
+    // demo's *direct* deps; helpers pull in their own requirements. No-op for
+    // already-complete lists (see resolveDepClosure docs) → backward compatible.
+    const depCode = resolveDepClosure(deps)
         .map(d => depTable[d] || DEPENDENCY_BUNDLES[d])    // per-dep fallback to JS
         .filter(Boolean)
         .join('\n\n');

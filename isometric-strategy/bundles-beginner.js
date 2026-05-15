@@ -727,3 +727,11 @@ type MouseLocal = { x: number; y: number };
 
     render();
 })();`;
+
+// =============================================================================
+// TRANSITIVE-DEP DECLARATIONS (retrofit — consumed by shared/export-demo.js
+// resolveDepClosure). Additive safety net: the data-deps strings in
+// beginner.html already list the full closure, so this is idempotent.
+// =============================================================================
+window.DEPENDENCY_REQUIRES = window.DEPENDENCY_REQUIRES || {};
+DEPENDENCY_REQUIRES.iso_pickTileFromMouse = ['iso_isoToCart'];

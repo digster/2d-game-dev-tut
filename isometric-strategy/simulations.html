@@ -86,7 +86,7 @@
                 materialize cell by cell.
             </p>
 
-            <details>
+            <details data-demo-id="iso_ffViz" data-deps="iso_sim_colors,iso_clearCanvas,iso_cartToIso,iso_isoToCart,iso_drawIsoTile,iso_pickTileFromMouse">
                 <summary>📝 Click to see: step-wise BFS</summary>
                 <div class="code-container" data-code-tabs>
                     <div class="code-tabs" role="tablist">
@@ -159,7 +159,7 @@ function stepBFS(cost, queue, W, H, blocked) {
                 <li><strong>Safe zones</strong> — far from any enemy.</li>
             </ul>
 
-            <details>
+            <details data-demo-id="iso_influenceMaps" data-deps="iso_sim_colors,iso_clearCanvas,iso_cartToIso,iso_isoToCart,iso_drawIsoTile,iso_pickTileFromMouse">
                 <summary>📝 Click to see: Gaussian influence sum</summary>
                 <div class="code-container" data-code-tabs>
                     <div class="code-tabs" role="tablist">
@@ -240,7 +240,7 @@ function computeInfluence(units: InfluenceUnit[], W: number, H: number, sigma: n
                 </p>
             </div>
 
-            <details>
+            <details data-demo-id="iso_crowdsSim" data-deps="iso_sim_colors,iso_clearCanvas">
                 <summary>📝 Click to see: the two update functions side by side</summary>
                 <div class="code-container" data-code-tabs>
                     <div class="code-tabs" role="tablist">
@@ -386,6 +386,65 @@ function updateContinuum(agent: Agent, flowVec: FlowVec | null, density: number,
                 <span class="value" id="ecoTrainingVal">on</span>
             </div>
 
+            <details data-demo-id="iso_economySim" data-deps="iso_sim_colors,iso_clearCanvas">
+                <summary>📝 Click to see: the economy step + chart loop</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// The whole RTS economy is one feedback loop stepped every frame.
+const state = { wood: 50, workers: 3, soldiers: 0, soldierCost: 30,
+                soldierBuildTime: 2, training: true, buildProgress: 0 };
+
+function step(dt) {
+    // Workers passively generate wood (3/sec each).
+    state.wood += state.workers * 3 * dt;
+    // Spend wood on a soldier only when one is fully affordable + training is on.
+    if (state.training &amp;&amp; state.wood &gt;= state.soldierCost) {
+        state.buildProgress += dt;
+        if (state.buildProgress &gt;= state.soldierBuildTime) {
+            state.buildProgress = 0;
+            state.wood -= state.soldierCost;
+            state.soldiers++;
+        }
+    } else if (!state.training) {
+        state.buildProgress = 0;
+    }
+    // Keep a rolling 30-second sample window for the chart.
+    elapsed += dt;
+    samples.push({ t: elapsed, wood: state.wood, soldiers: state.soldiers });
+    while (samples.length &gt; 1 &amp;&amp; samples[0].t &lt; elapsed - HISTORY) samples.shift();
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">type EconomyState = {
+    wood: number; workers: number; soldiers: number;
+    soldierCost: number; soldierBuildTime: number;
+    training: boolean; buildProgress: number;
+};
+type Sample = { t: number; wood: number; soldiers: number };
+
+const state: EconomyState = { wood: 50, workers: 3, soldiers: 0,
+    soldierCost: 30, soldierBuildTime: 2, training: true, buildProgress: 0 };
+
+function step(dt: number): void {
+    state.wood += state.workers * 3 * dt;
+    if (state.training &amp;&amp; state.wood &gt;= state.soldierCost) {
+        state.buildProgress += dt;
+        if (state.buildProgress &gt;= state.soldierBuildTime) {
+            state.buildProgress = 0;
+            state.wood -= state.soldierCost;
+            state.soldiers++;
+        }
+    } else if (!state.training) {
+        state.buildProgress = 0;
+    }
+    elapsed += dt;
+    samples.push({ t: elapsed, wood: state.wood, soldiers: state.soldiers });
+    while (samples.length &gt; 1 &amp;&amp; samples[0].t &lt; elapsed - HISTORY) samples.shift();
+}</code></pre>
+                </div>
+            </details>
+
             <div class="diagram"><canvas id="economyCanvas" width="800" height="320"></canvas></div>
             <div id="economyInfo" class="info-display">Wood stock over the last 30 seconds.</div>
         </div>
@@ -413,7 +472,7 @@ function updateContinuum(agent: Agent, flowVec: FlowVec | null, density: number,
                 </ol>
             </div>
 
-            <details>
+            <details data-demo-id="iso_procgen" data-deps="iso_sim_colors,iso_clearCanvas,iso_cartToIso,iso_drawIsoTile">
                 <summary>📝 Click to see: value noise + biome assignment</summary>
                 <div class="code-container" data-code-tabs>
                     <div class="code-tabs" role="tablist">
@@ -517,6 +576,59 @@ function biomeFor(h: number): Biome {
                     set the multipliers; bars show the resulting DPS per matchup.
                 </p>
             </div>
+
+            <details data-demo-id="iso_damageModel" data-deps="iso_sim_colors,iso_clearCanvas">
+                <summary>📝 Click to see: the damage matrix + DPS bars</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// matrix[attackType][armorType] = damage multiplier. Effective DPS is just
+// baseDamage × multiplier × attacksPerSec — a designer-tunable lookup table.
+const attacks = ['pierce', 'blunt', 'magic'];
+const armors  = ['light',  'medium', 'heavy'];
+const matrix = [
+    [1.2, 1.0, 0.6],   // pierce vs light / medium / heavy
+    [0.8, 1.2, 0.7],   // blunt
+    [1.0, 0.9, 1.3]    // magic
+];
+const baseDamage = 10, attacksPerSec = 1.0;
+
+function render() {
+    clearCanvas(ctx, canvas.width, canvas.height);
+    let maxDPS = 1;
+    for (let ai = 0; ai &lt; attacks.length; ai++)
+        for (let di = 0; di &lt; armors.length; di++)
+            maxDPS = Math.max(maxDPS, baseDamage * matrix[ai][di] * attacksPerSec);
+    // ...draw one bar per (attack, armor) pair scaled to maxDPS...
+}
+
+// Each slider mutates matrix[ai][di] and re-renders — live balance tuning.
+slider.addEventListener('input', () =&gt; {
+    matrix[ai][di] = parseFloat(slider.value);
+    lbl.textContent = matrix[ai][di].toFixed(2) + '×';
+    render();
+});</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const attacks: readonly string[] = ['pierce', 'blunt', 'magic'];
+const armors:  readonly string[] = ['light',  'medium', 'heavy'];
+const matrix: number[][] = [
+    [1.2, 1.0, 0.6],
+    [0.8, 1.2, 0.7],
+    [1.0, 0.9, 1.3]
+];
+const baseDamage = 10, attacksPerSec = 1.0;
+
+function render(): void {
+    clearCanvas(ctx, canvas.width, canvas.height);
+    let maxDPS = 1;
+    for (let ai = 0; ai &lt; attacks.length; ai++)
+        for (let di = 0; di &lt; armors.length; di++)
+            maxDPS = Math.max(maxDPS, baseDamage * matrix[ai][di] * attacksPerSec);
+    // ...draw one bar per (attack, armor) pair scaled to maxDPS...
+}</code></pre>
+                </div>
+            </details>
 
             <div class="diagram"><canvas id="damageCanvas" width="800" height="420"></canvas></div>
             <div id="damageMatrix"></div>

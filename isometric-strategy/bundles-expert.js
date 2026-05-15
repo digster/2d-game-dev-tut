@@ -1642,3 +1642,16 @@ DEMO_CODE_TS.iso_skirmishDemo = `(function skirmishDemo(): void {
     const info = document.getElementById('info') as HTMLDivElement;
 ${DEMO_CODE.iso_skirmishDemo.split('\n').slice(6, -2).join('\n')}
 })();`;
+
+// =============================================================================
+// TRANSITIVE-DEP DECLARATIONS (retrofit — consumed by shared/export-demo.js
+// resolveDepClosure). Additive safety net: expert.html data-deps already list
+// the full closure, so resolution is idempotent.
+// =============================================================================
+window.DEPENDENCY_REQUIRES = window.DEPENDENCY_REQUIRES || {};
+DEPENDENCY_REQUIRES.iso_pickTileFromMouse = ['iso_isoToCart'];
+DEPENDENCY_REQUIRES.iso_ex_terrainColor   = ['iso_ex_colors'];
+DEPENDENCY_REQUIRES.iso_drawGround        = ['iso_cartToIso', 'iso_drawIsoTile', 'iso_ex_terrainColor', 'iso_ex_colors'];
+DEPENDENCY_REQUIRES.iso_drawUnitGlyph     = ['iso_cartToIso', 'iso_ex_colors'];
+DEPENDENCY_REQUIRES.iso_drawBuilding      = ['iso_cartToIso', 'iso_ex_colors'];
+DEPENDENCY_REQUIRES.iso_aStarPath         = ['iso_ex_isWalkable'];
