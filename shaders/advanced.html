@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced — Shaders Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+    <!-- glsl extends c extends clike; core bundles only clike, so c before glsl. -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-glsl.min.js"></script>
+
+    <!-- Page-local: the WebGL1/WebGL2 section toggle. Deliberately distinct
+         classes from the shared .code-tab system so shared/code-tabs.js never
+         sees these (kept local, like shaders/index.html's roadmap CSS). -->
+    <style>
+        .api-tabs {
+            display: flex;
+            gap: 6px;
+            margin: 18px 0 0;
+            border-bottom: 2px solid #2d3354;
+        }
+        .api-tab {
+            background: #1a1f3a;
+            color: #9e9e9e;
+            border: 1px solid #2d3354;
+            border-bottom: none;
+            padding: 9px 18px;
+            border-radius: 8px 8px 0 0;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+        .api-tab.active {
+            background: #252b4a;
+            color: #4fc3f7;
+            border-color: #4fc3f7;
+        }
+        .api-pane[hidden] { display: none; }
+        .api-pane {
+            border: 1px solid #2d3354;
+            border-top: none;
+            border-radius: 0 0 8px 8px;
+            padding: 16px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎬 Advanced — Multi-Pass &amp; Post-Processing</h1>
+        <p class="subtitle">Render to textures, ping-pong FBOs, bloom &amp; grading — each effect in WebGL1 <em>and</em> WebGL2, side by side</p>
+
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="expert.html" class="nav-button">← Expert</a>
+            <a href="advanced.html" class="nav-button active">Advanced</a>
+            <a href="simulations.html" class="nav-button">Simulations →</a>
+        </div>
+
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#rtt">Render-to-Texture (FBOs)</a></li>
+                <li><a href="#pingpong">Ping-Pong Buffers</a></li>
+                <li><a href="#blur">Separable Blur</a></li>
+                <li><a href="#bloom">Bloom</a></li>
+                <li><a href="#grade">Colour Grade + CRT</a></li>
+                <li><a href="#stack">Mini-Project: Post-Process Stack</a></li>
+            </ul>
+        </div>
+
+        <div class="key-point">
+            <strong>💡 New this tier — multiple passes, and two APIs.</strong> Every prior demo drew
+            once, to the screen. Post-processing draws the scene into a <strong>texture</strong>
+            (an FBO), then runs more shader passes over it. Each effect below ships
+            <strong>twice</strong> — a <strong>WebGL1 / GLSL ES 1.00</strong> and a
+            <strong>WebGL2 / GLSL ES 3.00</strong> implementation — toggle the tab to compare. The
+            <code>makeFXChain</code> runner hides the FBO plumbing; you write the passes.
+        </div>
+
+        <!-- ============================================ RTT -->
+        <div id="rtt" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🖼️ Render-to-Texture (FBOs)</h2>
+            <p>
+                A <strong>framebuffer object</strong> (FBO) is an off-screen render target backed by
+                a texture. Bind it, draw the scene → the result lands in a texture instead of the
+                screen. Then draw that texture to the screen. <em>The screen is just another
+                texture</em> — that realisation is the whole of post-processing.
+            </p>
+            <div class="concept-box">
+                <h4>The GL1 ↔ GL2 fragment header (the only real dialect diff)</h4>
+                <p>WebGL2 needs <code>#version 300 es</code> as the <strong>literal first line</strong>
+                (a leading space or comment is a hard compile error), and replaces
+                <code>gl_FragColor</code>/<code>texture2D</code> with a declared
+                <code>out</code> + <code>texture()</code>:</p>
+            </div>
+            <pre><code class="language-glsl">// WebGL1 — GLSL ES 1.00
+precision mediump float;
+uniform sampler2D u_prev;
+void main() {
+    gl_FragColor = texture2D(u_prev, gl_FragCoord.xy / vec2(800.0, 450.0));
+}</code></pre>
+            <pre><code class="language-glsl">#version 300 es
+precision mediump float;
+uniform sampler2D u_prev;
+out vec4 fragColor;
+void main() {
+    fragColor = texture(u_prev, gl_FragCoord.xy / vec2(800.0, 450.0));
+}</code></pre>
+
+            <div class="api-tabs" role="tablist">
+                <button class="api-tab active" data-api="gl1">WebGL1 · GLSL ES 1.00</button>
+                <button class="api-tab" data-api="gl2">WebGL2 · GLSL ES 3.00</button>
+            </div>
+            <div class="api-pane" data-api="gl1">
+                <details data-demo-id="sh_rttGL1" data-deps="sh_compileShader,sh_createProgram,sh_fxChainGL1,sh_kitGL1">
+                    <summary>📝 Click to see: render-to-texture (WebGL1)</summary>
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">// makeFXChain renders SCENE → an FBO, then runs the post passes
+// (here just one identity pass) FBO → screen.
+const IDENTITY = PHEAD_GL1 + `void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  gl_FragColor = texture2D(u_prev, uv);
+}`;
+const toy = makeFXChainGL1(canvas, SCENE_GL1, [IDENTITY], { info: info });</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">const IDENTITY: string = PHEAD_GL1 + `void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  gl_FragColor = texture2D(u_prev, uv);
+}`;
+const toy = makeFXChainGL1(canvas, SCENE_GL1, [IDENTITY], { info: info });</code></pre>
+                    </div>
+                </details>
+                <div class="diagram"><canvas id="rttGL1" width="800" height="450"></canvas></div>
+                <div class="controls"><button id="btnRttGL1Show">What happened?</button></div>
+                <div id="rttGL1Info" class="info-display">Scene → an FBO → that texture drawn to the screen.</div>
+            </div>
+            <div class="api-pane" data-api="gl2" hidden>
+                <details data-demo-id="sh_rttGL2" data-deps="sh_compileShader,sh_createProgram,sh_fxChainGL2,sh_kitGL2">
+                    <summary>📝 Click to see: render-to-texture (WebGL2)</summary>
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Same chain — GLSL ES 3.00 dialect (#version first, texture(), out).
+const IDENTITY = PHEAD_GL2 + `void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  fragColor = texture(u_prev, uv);
+}`;
+const toy = makeFXChainGL2(canvas, SCENE_GL2, [IDENTITY], { info: info });</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">const IDENTITY: string = PHEAD_GL2 + `void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  fragColor = texture(u_prev, uv);
+}`;
+const toy = makeFXChainGL2(canvas, SCENE_GL2, [IDENTITY], { info: info });</code></pre>
+                    </div>
+                </details>
+                <div class="diagram"><canvas id="rttGL2" width="800" height="450"></canvas></div>
+                <div class="controls"><button id="btnRttGL2Show">What happened?</button></div>
+                <div id="rttGL2Info" class="info-display">Scene → an FBO → that texture drawn to the screen.</div>
+            </div>
+        </div>
+
+        <!-- ============================================ PING-PONG -->
+        <div id="pingpong" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🏓 Ping-Pong Buffers</h2>
+            <p>
+                A pass can't read and write the same texture — that's a
+                <strong>framebuffer feedback loop</strong> (undefined). For iterative effects you
+                need <strong>two</strong> FBOs: read A → write B, then swap. Each extra ping-pong
+                pass here blurs a little more; watch the buffers do the work.
+            </p>
+            <div class="api-tabs" role="tablist">
+                <button class="api-tab active" data-api="gl1">WebGL1 · GLSL ES 1.00</button>
+                <button class="api-tab" data-api="gl2">WebGL2 · GLSL ES 3.00</button>
+            </div>
+            <div class="api-pane" data-api="gl1">
+                <details data-demo-id="sh_pingGL1" data-deps="sh_compileShader,sh_createProgram,sh_fxChainGL1,sh_kitGL1">
+                    <summary>📝 Click to see: N ping-pong passes (WebGL1)</summary>
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">// chainFor('ping', {iters}) → [BOX, BOX, …]. makeFXChain ping-pongs
+// two scratch FBOs between every pass automatically.
+const st = { iters: 4 };
+const toy = makeFXChainGL1(canvas, SCENE_GL1, chainFor1('ping', st), { info: info });
+// more iterations → blurrier; each is a separate buffer↔buffer pass.</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">const st = { iters: 4 };
+const toy = makeFXChainGL1(canvas, SCENE_GL1, chainFor1('ping', st), { info: info });</code></pre>
+                    </div>
+                </details>
+                <div class="diagram"><canvas id="pingGL1" width="800" height="450"></canvas></div>
+                <div class="controls">
+                    <button id="btnPingGL11">1 pass</button>
+                    <button id="btnPingGL14">4 passes</button>
+                    <button id="btnPingGL116">16 passes</button>
+                </div>
+                <div id="pingGL1Info" class="info-display">Two FBOs swapped each pass.</div>
+            </div>
+            <div class="api-pane" data-api="gl2" hidden>
+                <details data-demo-id="sh_pingGL2" data-deps="sh_compileShader,sh_createProgram,sh_fxChainGL2,sh_kitGL2">
+                    <summary>📝 Click to see: N ping-pong passes (WebGL2)</summary>
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">const st = { iters: 4 };
+const toy = makeFXChainGL2(canvas, SCENE_GL2, chainFor2('ping', st), { info: info });
+// identical control flow on a webgl2 context + GLSL ES 3.00 passes.</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">const st = { iters: 4 };
+const toy = makeFXChainGL2(canvas, SCENE_GL2, chainFor2('ping', st), { info: info });</code></pre>
+                    </div>
+                </details>
+                <div class="diagram"><canvas id="pingGL2" width="800" height="450"></canvas></div>
+                <div class="controls">
+                    <button id="btnPingGL21">1 pass</button>
+                    <button id="btnPingGL24">4 passes</button>
+                    <button id="btnPingGL216">16 passes</button>
+                </div>
+                <div id="pingGL2Info" class="info-display">Two FBOs swapped each pass.</div>
+            </div>
+        </div>
+
+        <!-- ============================================ BLUR -->
+        <div id="blur" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🌁 Separable Blur</h2>
+            <p>
+                A 2D Gaussian is the product of two 1D ones, so an N×N blur becomes a cheap
+                <strong>horizontal pass then a vertical pass</strong> (2N taps, not N²). This is the
+                workhorse behind soft shadows, depth-of-field, and the next section's bloom.
+            </p>
+            <div class="api-tabs" role="tablist">
+                <button class="api-tab active" data-api="gl1">WebGL1 · GLSL ES 1.00</button>
+                <button class="api-tab" data-api="gl2">WebGL2 · GLSL ES 3.00</button>
+            </div>
+            <div class="api-pane" data-api="gl1">
+                <details data-demo-id="sh_blurGL1" data-deps="sh_compileShader,sh_createProgram,sh_fxChainGL1,sh_kitGL1">
+                    <summary>📝 Click to see: separable Gaussian (WebGL1)</summary>
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">// 9-tap weights, unrolled (constant — the GLSL ES 1.00 loop rule):
+const BLUR_H = PHEAD_GL1 + `void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec2 d = vec2(u_param, 0.0) / u_resolution;
+  vec4 s = texture2D(u_prev, uv) * 0.227;
+  s += (texture2D(u_prev, uv+d) + texture2D(u_prev, uv-d)) * 0.194;
+  // … 2d,3d,4d taps … then a vertical twin BLUR_V.
+  gl_FragColor = s;
+}`;
+const toy = makeFXChainGL1(canvas, SCENE_GL1, [BLUR_H, BLUR_V], { info: info, param: 2.0 });</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">const toy = makeFXChainGL1(canvas, SCENE_GL1, [BLUR_H, BLUR_V], { info: info, param: 2.0 });
+// u_param = blur radius; setParam() changes it with no recompile.</code></pre>
+                    </div>
+                </details>
+                <div class="diagram"><canvas id="blurGL1" width="800" height="450"></canvas></div>
+                <div class="controls">
+                    <button id="btnBlurGL1Soft">Soft</button>
+                    <button id="btnBlurGL1Strong">Strong</button>
+                    <button id="btnBlurGL1Heavy">Heavy</button>
+                </div>
+                <div id="blurGL1Info" class="info-display">Separable Gaussian — H then V pass.</div>
+            </div>
+            <div class="api-pane" data-api="gl2" hidden>
+                <details data-demo-id="sh_blurGL2" data-deps="sh_compileShader,sh_createProgram,sh_fxChainGL2,sh_kitGL2">
+                    <summary>📝 Click to see: separable Gaussian (WebGL2)</summary>
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">const BLUR_H = PHEAD_GL2 + `void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec2 d = vec2(u_param, 0.0) / u_resolution;
+  vec4 s = texture(u_prev, uv) * 0.227;
+  s += (texture(u_prev, uv+d) + texture(u_prev, uv-d)) * 0.194;
+  fragColor = s;
+}`;
+const toy = makeFXChainGL2(canvas, SCENE_GL2, [BLUR_H, BLUR_V], { info: info, param: 2.0 });</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">const toy = makeFXChainGL2(canvas, SCENE_GL2, [BLUR_H, BLUR_V], { info: info, param: 2.0 });</code></pre>
+                    </div>
+                </details>
+                <div class="diagram"><canvas id="blurGL2" width="800" height="450"></canvas></div>
+                <div class="controls">
+                    <button id="btnBlurGL2Soft">Soft</button>
+                    <button id="btnBlurGL2Strong">Strong</button>
+                    <button id="btnBlurGL2Heavy">Heavy</button>
+                </div>
+                <div id="blurGL2Info" class="info-display">Separable Gaussian — H then V pass.</div>
+            </div>
+        </div>
+
+        <!-- ============================================ BLOOM -->
+        <div id="bloom" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>✨ Bloom</h2>
+            <p>
+                The glow around bright things: <strong>bright-pass</strong> (keep only the
+                brightest pixels) → <strong>blur</strong> them → <strong>add</strong> back onto the
+                original scene. Four passes — the canonical multi-pass effect; the composite reads
+                <em>both</em> the blurred bright-pass and the original scene texture.
+            </p>
+            <div class="key-point">
+                <strong>💡 8-bit caveat:</strong> these FBOs are <code>RGBA8</code>, not float — so
+                bright-pass is an approximation (no true HDR). Real engines use half-float targets;
+                the technique is identical.
+            </div>
+            <div class="api-tabs" role="tablist">
+                <button class="api-tab active" data-api="gl1">WebGL1 · GLSL ES 1.00</button>
+                <button class="api-tab" data-api="gl2">WebGL2 · GLSL ES 3.00</button>
+            </div>
+            <div class="api-pane" data-api="gl1">
+                <details data-demo-id="sh_bloomGL1" data-deps="sh_compileShader,sh_createProgram,sh_fxChainGL1,sh_kitGL1">
+                    <summary>📝 Click to see: bright → blur → composite (WebGL1)</summary>
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">// 4 passes: bright-pass, blur H, blur V, additive composite.
+const COMPOSITE = PHEAD_GL1 + `void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec3 base  = texture2D(u_scene, uv).rgb;   // original scene
+  vec3 bloom = texture2D(u_prev,  uv).rgb;   // blurred bright-pass
+  gl_FragColor = vec4(base + bloom * u_param, 1.0);
+}`;
+const toy = makeFXChainGL1(canvas, SCENE_GL1,
+    [BRIGHT, BBLUR_H, BBLUR_V, COMPOSITE], { info: info, param: 1.4 });</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">const toy = makeFXChainGL1(canvas, SCENE_GL1,
+    [BRIGHT, BBLUR_H, BBLUR_V, COMPOSITE], { info: info, param: 1.4 });
+// u_scene is always bound to the original scene FBO for the composite.</code></pre>
+                    </div>
+                </details>
+                <div class="diagram"><canvas id="bloomGL1" width="800" height="450"></canvas></div>
+                <div class="controls">
+                    <button id="btnBloomGL1Off">Off</button>
+                    <button id="btnBloomGL1Subtle">Subtle</button>
+                    <button id="btnBloomGL1Glow">Glow</button>
+                    <button id="btnBloomGL1Intense">Intense</button>
+                </div>
+                <div id="bloomGL1Info" class="info-display">Bright-pass → blur → additive composite.</div>
+            </div>
+            <div class="api-pane" data-api="gl2" hidden>
+                <details data-demo-id="sh_bloomGL2" data-deps="sh_compileShader,sh_createProgram,sh_fxChainGL2,sh_kitGL2">
+                    <summary>📝 Click to see: bright → blur → composite (WebGL2)</summary>
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">const COMPOSITE = PHEAD_GL2 + `void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec3 base  = texture(u_scene, uv).rgb;
+  vec3 bloom = texture(u_prev,  uv).rgb;
+  fragColor = vec4(base + bloom * u_param, 1.0);
+}`;
+const toy = makeFXChainGL2(canvas, SCENE_GL2,
+    [BRIGHT, BBLUR_H, BBLUR_V, COMPOSITE], { info: info, param: 1.4 });</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">const toy = makeFXChainGL2(canvas, SCENE_GL2,
+    [BRIGHT, BBLUR_H, BBLUR_V, COMPOSITE], { info: info, param: 1.4 });</code></pre>
+                    </div>
+                </details>
+                <div class="diagram"><canvas id="bloomGL2" width="800" height="450"></canvas></div>
+                <div class="controls">
+                    <button id="btnBloomGL2Off">Off</button>
+                    <button id="btnBloomGL2Subtle">Subtle</button>
+                    <button id="btnBloomGL2Glow">Glow</button>
+                    <button id="btnBloomGL2Intense">Intense</button>
+                </div>
+                <div id="bloomGL2Info" class="info-display">Bright-pass → blur → additive composite.</div>
+            </div>
+        </div>
+
+        <!-- ============================================ GRADE -->
+        <div id="grade" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🎞️ Colour Grade + CRT</h2>
+            <p>
+                The final full-screen pass gives a game its "look": exposure, contrast, saturation,
+                a tint — plus the retro screen FX (scanline, vignette, chromatic aberration). One
+                pass, a fistful of one-liners; presets just swap the constants.
+            </p>
+            <div class="api-tabs" role="tablist">
+                <button class="api-tab active" data-api="gl1">WebGL1 · GLSL ES 1.00</button>
+                <button class="api-tab" data-api="gl2">WebGL2 · GLSL ES 3.00</button>
+            </div>
+            <div class="api-pane" data-api="gl1">
+                <details data-demo-id="sh_gradeGL1" data-deps="sh_compileShader,sh_createProgram,sh_fxChainGL1,sh_kitGL1">
+                    <summary>📝 Click to see: the grade pass (WebGL1)</summary>
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Chromatic aberration = sample R/G/B at slightly offset UVs.
+//   c *= exposure; c = (c-0.5)*contrast + 0.5;
+//   c = mix(vec3(luma), c, saturation) * tint;
+//   c *= 0.85 + 0.15*sin(gl_FragCoord.y * scan);   // scanline
+//   c *= 1.0 - dot(q,q) * vignette;                 // vignette
+const toy = makeFXChainGL1(canvas, SCENE_GL1, chainFor1('grade', st), { info: info });</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">const toy = makeFXChainGL1(canvas, SCENE_GL1, chainFor1('grade', st), { info: info });
+// presets just swap the injected constants, then toy.rebuild().</code></pre>
+                    </div>
+                </details>
+                <div class="diagram"><canvas id="gradeGL1" width="800" height="450"></canvas></div>
+                <div class="controls">
+                    <button id="btnGradeGL1Neutral">Neutral</button>
+                    <button id="btnGradeGL1Warm">Warm</button>
+                    <button id="btnGradeGL1CRT">CRT</button>
+                    <button id="btnGradeGL1Noir">Noir</button>
+                </div>
+                <div id="gradeGL1Info" class="info-display">exposure/contrast/sat/tint + scanline/vignette/chroma.</div>
+            </div>
+            <div class="api-pane" data-api="gl2" hidden>
+                <details data-demo-id="sh_gradeGL2" data-deps="sh_compileShader,sh_createProgram,sh_fxChainGL2,sh_kitGL2">
+                    <summary>📝 Click to see: the grade pass (WebGL2)</summary>
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Identical maths; GLSL ES 3.00 dialect (texture(), out fragColor).
+const toy = makeFXChainGL2(canvas, SCENE_GL2, chainFor2('grade', st), { info: info });</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">const toy = makeFXChainGL2(canvas, SCENE_GL2, chainFor2('grade', st), { info: info });</code></pre>
+                    </div>
+                </details>
+                <div class="diagram"><canvas id="gradeGL2" width="800" height="450"></canvas></div>
+                <div class="controls">
+                    <button id="btnGradeGL2Neutral">Neutral</button>
+                    <button id="btnGradeGL2Warm">Warm</button>
+                    <button id="btnGradeGL2CRT">CRT</button>
+                    <button id="btnGradeGL2Noir">Noir</button>
+                </div>
+                <div id="gradeGL2Info" class="info-display">exposure/contrast/sat/tint + scanline/vignette/chroma.</div>
+            </div>
+        </div>
+
+        <!-- ============================================ STACK -->
+        <div id="stack" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🎛️ Mini-Project: Post-Process Stack</h2>
+            <p>
+                Compose the tier into a real engine post chain over the live scene:
+                <strong>scene → [bloom] → colour-grade/CRT</strong>. Toggle the bloom stage and
+                swap grade presets — the chain rebuilds, the FBO plumbing never changes.
+            </p>
+            <div class="api-tabs" role="tablist">
+                <button class="api-tab active" data-api="gl1">WebGL1 · GLSL ES 1.00</button>
+                <button class="api-tab" data-api="gl2">WebGL2 · GLSL ES 3.00</button>
+            </div>
+            <div class="api-pane" data-api="gl1">
+                <details data-demo-id="sh_stackGL1" data-deps="sh_compileShader,sh_createProgram,sh_fxChainGL1,sh_kitGL1">
+                    <summary>📝 Click to see: the composed stack (WebGL1)</summary>
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">function build(st) {
+  const post = [];
+  if (st.bloom) post.push(BRIGHT, BBLUR_H, BBLUR_V, COMPOSITE);
+  post.push(GRADE(PRESETS[st.preset]));
+  return post;
+}
+const toy = makeFXChainGL1(canvas, SCENE_GL1, build(st), { info: info, param: 1.4 });
+// a button: st.bloom = !st.bloom; toy.rebuild(SCENE_GL1, build(st));</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">const toy = makeFXChainGL1(canvas, SCENE_GL1, build(st), { info: info, param: 1.4 });</code></pre>
+                    </div>
+                </details>
+                <div class="diagram"><canvas id="stackGL1" width="800" height="450"></canvas></div>
+                <div class="controls">
+                    <button id="btnStackGL1Bloom">Toggle bloom</button>
+                    <button id="btnStackGL1Warm">Warm</button>
+                    <button id="btnStackGL1CRT">CRT</button>
+                    <button id="btnStackGL1Noir">Noir</button>
+                </div>
+                <div id="stackGL1Info" class="info-display">scene → [bloom] → grade, composed.</div>
+            </div>
+            <div class="api-pane" data-api="gl2" hidden>
+                <details data-demo-id="sh_stackGL2" data-deps="sh_compileShader,sh_createProgram,sh_fxChainGL2,sh_kitGL2">
+                    <summary>📝 Click to see: the composed stack (WebGL2)</summary>
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">const toy = makeFXChainGL2(canvas, SCENE_GL2, build(st), { info: info, param: 1.4 });
+// Same composition, GLSL ES 3.00 passes.</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">const toy = makeFXChainGL2(canvas, SCENE_GL2, build(st), { info: info, param: 1.4 });</code></pre>
+                    </div>
+                </details>
+                <div class="diagram"><canvas id="stackGL2" width="800" height="450"></canvas></div>
+                <div class="controls">
+                    <button id="btnStackGL2Bloom">Toggle bloom</button>
+                    <button id="btnStackGL2Warm">Warm</button>
+                    <button id="btnStackGL2CRT">CRT</button>
+                    <button id="btnStackGL2Noir">Noir</button>
+                </div>
+                <div id="stackGL2Info" class="info-display">scene → [bloom] → grade, composed.</div>
+            </div>
+
+            <div class="example-box">
+                <h4>🎮 What you just built</h4>
+                <p>
+                    A real-engine post-processing pipeline — render-to-texture, ping-pong, bloom,
+                    colour grading, CRT — in both WebGL1 and WebGL2, asset-free. Hit 📋 Export on any
+                    demo for a standalone runnable file.
+                </p>
+            </div>
+            <div class="key-point">
+                <strong>💡 What's next:</strong> the <a href="simulations.html">Simulations tier</a>
+                pushes the GPU into compute-style work — reaction-diffusion, GPU particles, fluid —
+                where WebGL2's float textures finally earn their keep.
+            </div>
+        </div>
+
+        <div class="section" style="text-align: center;">
+            <h2>✅ Advanced Tier Complete</h2>
+            <p style="font-size: 1.1em; margin: 24px 0;">
+                You can render to textures, ping-pong FBOs, blur, bloom, and colour-grade — the
+                post-processing stack every modern game ships — and you've seen it in both WebGL1
+                and WebGL2.
+            </p>
+            <a href="simulations.html" class="nav-button" style="font-size: 1.2em; padding: 20px 40px;">
+                Continue to Simulations →
+            </a>
+            <p style="margin-top: 20px;"><em>Simulations isn't written yet — coming in the next phase. Track progress on the <a href="index.html">track index</a>.</em></p>
+        </div>
+    </div>
+
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <script src="../shared/utils.js"></script>
+    <script src="../shared/code-tabs.js"></script>
+    <script src="advanced-demos.js"></script>
+    <script src="bundles-advanced.js"></script>
+    <script src="../shared/export-demo.js"></script>
+
+    <script>
+        // Scroll-to-top (mirrors every other page).
+        const scrollToTopBtn = document.getElementById('scrollToTop');
+        scrollToTopBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+        window.addEventListener('scroll', () => {
+            scrollToTopBtn.style.opacity = window.pageYOffset > 300 ? '1' : '0';
+        });
+        scrollToTopBtn.style.opacity = '0';
+        scrollToTopBtn.style.transition = 'opacity 0.3s';
+
+        // Page-local WebGL1/WebGL2 section toggle. Distinct .api-tab class →
+        // zero interaction with shared/code-tabs.js (.code-tab). Scoped to the
+        // owning .section so each section toggles independently.
+        document.querySelectorAll('.api-tabs').forEach(tabs => {
+            const section = tabs.closest('.section');
+            tabs.querySelectorAll('.api-tab').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    const api = tab.dataset.api;
+                    tabs.querySelectorAll('.api-tab').forEach(t =>
+                        t.classList.toggle('active', t === tab));
+                    section.querySelectorAll(':scope > .api-pane').forEach(p => {
+                        p.hidden = (p.dataset.api !== api);
+                    });
+                });
+            });
+        });
+    </script>
+</body>
+</html>

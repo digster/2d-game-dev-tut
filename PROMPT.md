@@ -37,3 +37,8 @@ its roadmap card to Ready.
 palette-swap, dissolve/burn, outline, hit-flash/blink, a fully-shaded-sprite
 mini-project — extend makeShaderToy with a backward-compatible texture
 branch, and flip its roadmap card to Ready.
+(4) Continue: ship the Shaders track's Advanced tier (Multi-Pass &
+Post-Processing) — render-to-texture/FBOs, ping-pong, separable blur, bloom,
+colour grade + CRT, post-process-stack mini-project. User chose to show BOTH
+WebGL1 (GLSL ES 1.00) and WebGL2 (GLSL ES 3.00) as paired demos with a
+page-local section toggle; new makeFXChain multi-pass runner; flip card.
