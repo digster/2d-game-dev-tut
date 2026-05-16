@@ -136,12 +136,13 @@ void main() {
                         <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
                         <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
                     </div>
-                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// We build the shader source as a string and hand it to makeShaderToy.
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// The shader source is a multi-line template literal — interpolate the
+// channels with ${...} and hand the string to makeShaderToy.
 function solid(r, g, b) {
-    return 'precision mediump float;\n' +
-           'void main() {\n' +
-           '  gl_FragColor = vec4(' + r + ', ' + g + ', ' + b + ', 1.0);\n' +
-           '}';
+    return `precision mediump float;
+void main() {
+  gl_FragColor = vec4(${r}, ${g}, ${b}, 1.0);
+}`;
 }
 
 const toy = makeShaderToy(canvas, solid('0.90', '0.25', '0.22'), { info: info });
@@ -150,10 +151,10 @@ document.getElementById('btnColTeal')?.addEventListener('click', () =&gt; {
     toy.setFrag(solid('0.20', '0.78', '0.70'));   // swap the whole shader
 });</code></pre>
                     <pre class="code-pane" data-lang="ts"><code class="language-typescript">function solid(r: string, g: string, b: string): string {
-    return 'precision mediump float;\n' +
-           'void main() {\n' +
-           '  gl_FragColor = vec4(' + r + ', ' + g + ', ' + b + ', 1.0);\n' +
-           '}';
+    return `precision mediump float;
+void main() {
+  gl_FragColor = vec4(${r}, ${g}, ${b}, 1.0);
+}`;
 }
 
 const toy = makeShaderToy(canvas, solid('0.90', '0.25', '0.22'), { info: info });
@@ -216,22 +217,20 @@ document.getElementById('btnColTeal')?.addEventListener('click', (): void =&gt; 
                         <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
                         <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
                     </div>
-                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">const RAW =
-    'precision mediump float;\n' +
-    'uniform vec2 u_resolution;\n' +
-    'void main() {\n' +
-    '  vec2 uv = gl_FragCoord.xy / u_resolution;\n' +
-    '  gl_FragColor = vec4(uv, 0.0, 1.0);\n' +   // red = x, green = y
-    '}';
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">const RAW = `precision mediump float;
+uniform vec2 u_resolution;
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  gl_FragColor = vec4(uv, 0.0, 1.0);   // red = x, green = y
+}`;
 
 const toy = makeShaderToy(canvas, RAW, { info: info });</code></pre>
-                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const RAW: string =
-    'precision mediump float;\n' +
-    'uniform vec2 u_resolution;\n' +
-    'void main() {\n' +
-    '  vec2 uv = gl_FragCoord.xy / u_resolution;\n' +
-    '  gl_FragColor = vec4(uv, 0.0, 1.0);\n' +
-    '}';
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const RAW: string = `precision mediump float;
+uniform vec2 u_resolution;
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  gl_FragColor = vec4(uv, 0.0, 1.0);   // red = x, green = y
+}`;
 
 const toy = makeShaderToy(canvas, RAW, { info: info });</code></pre>
                 </div>
@@ -283,33 +282,31 @@ const toy = makeShaderToy(canvas, RAW, { info: info });</code></pre>
                         <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
                         <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
                     </div>
-                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">const CIRCLE =
-    'precision mediump float;\n' +
-    'uniform vec2 u_resolution;\n' +
-    'uniform float u_param;\n' +              // edge softness, set from JS
-    'void main() {\n' +
-    '  vec2 uv = gl_FragCoord.xy / u_resolution;\n' +
-    '  uv.x *= u_resolution.x / u_resolution.y;\n' +
-    '  float c = u_resolution.x / u_resolution.y * 0.5;\n' +
-    '  float d = distance(uv, vec2(c, 0.5));\n' +
-    '  float m = 1.0 - smoothstep(0.28, 0.28 + u_param, d);\n' +
-    '  gl_FragColor = vec4(vec3(m) * vec3(0.31, 0.76, 0.97), 1.0);\n' +
-    '}';
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">const CIRCLE = `precision mediump float;
+uniform vec2 u_resolution;
+uniform float u_param;                 // edge softness, set from JS
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  uv.x *= u_resolution.x / u_resolution.y;
+  float c = u_resolution.x / u_resolution.y * 0.5;
+  float d = distance(uv, vec2(c, 0.5));
+  float m = 1.0 - smoothstep(0.28, 0.28 + u_param, d);
+  gl_FragColor = vec4(vec3(m) * vec3(0.31, 0.76, 0.97), 1.0);
+}`;
 
 const toy = makeShaderToy(canvas, CIRCLE, { info: info, param: 0.03 });
 // Softer button → toy.setParam(biggerNumber);</code></pre>
-                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const CIRCLE: string =
-    'precision mediump float;\n' +
-    'uniform vec2 u_resolution;\n' +
-    'uniform float u_param;\n' +
-    'void main() {\n' +
-    '  vec2 uv = gl_FragCoord.xy / u_resolution;\n' +
-    '  uv.x *= u_resolution.x / u_resolution.y;\n' +
-    '  float c = u_resolution.x / u_resolution.y * 0.5;\n' +
-    '  float d = distance(uv, vec2(c, 0.5));\n' +
-    '  float m = 1.0 - smoothstep(0.28, 0.28 + u_param, d);\n' +
-    '  gl_FragColor = vec4(vec3(m) * vec3(0.31, 0.76, 0.97), 1.0);\n' +
-    '}';
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const CIRCLE: string = `precision mediump float;
+uniform vec2 u_resolution;
+uniform float u_param;
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  uv.x *= u_resolution.x / u_resolution.y;
+  float c = u_resolution.x / u_resolution.y * 0.5;
+  float d = distance(uv, vec2(c, 0.5));
+  float m = 1.0 - smoothstep(0.28, 0.28 + u_param, d);
+  gl_FragColor = vec4(vec3(m) * vec3(0.31, 0.76, 0.97), 1.0);
+}`;
 
 const toy = makeShaderToy(canvas, CIRCLE, { info: info, param: 0.03 });</code></pre>
                 </div>
@@ -365,26 +362,24 @@ const toy = makeShaderToy(canvas, CIRCLE, { info: info, param: 0.03 });</code></
                         <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
                         <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
                     </div>
-                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">const LINEAR =
-    'precision mediump float;\n' +
-    'uniform vec2 u_resolution;\n' +
-    'vec3 A = vec3(0.05, 0.16, 0.40);\n' +    // deep blue
-    'vec3 B = vec3(1.00, 0.65, 0.30);\n' +    // warm amber
-    'void main() {\n' +
-    '  float t = gl_FragCoord.x / u_resolution.x;\n' +
-    '  gl_FragColor = vec4(mix(A, B, t), 1.0);\n' +
-    '}';
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">const LINEAR = `precision mediump float;
+uniform vec2 u_resolution;
+vec3 A = vec3(0.05, 0.16, 0.40);   // deep blue
+vec3 B = vec3(1.00, 0.65, 0.30);   // warm amber
+void main() {
+  float t = gl_FragCoord.x / u_resolution.x;
+  gl_FragColor = vec4(mix(A, B, t), 1.0);
+}`;
 
 const toy = makeShaderToy(canvas, LINEAR, { info: info });</code></pre>
-                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const LINEAR: string =
-    'precision mediump float;\n' +
-    'uniform vec2 u_resolution;\n' +
-    'vec3 A = vec3(0.05, 0.16, 0.40);\n' +
-    'vec3 B = vec3(1.00, 0.65, 0.30);\n' +
-    'void main() {\n' +
-    '  float t = gl_FragCoord.x / u_resolution.x;\n' +
-    '  gl_FragColor = vec4(mix(A, B, t), 1.0);\n' +
-    '}';
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const LINEAR: string = `precision mediump float;
+uniform vec2 u_resolution;
+vec3 A = vec3(0.05, 0.16, 0.40);   // deep blue
+vec3 B = vec3(1.00, 0.65, 0.30);   // warm amber
+void main() {
+  float t = gl_FragCoord.x / u_resolution.x;
+  gl_FragColor = vec4(mix(A, B, t), 1.0);
+}`;
 
 const toy = makeShaderToy(canvas, LINEAR, { info: info });</code></pre>
                 </div>
@@ -428,39 +423,37 @@ const toy = makeShaderToy(canvas, LINEAR, { info: info });</code></pre>
                         <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
                         <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
                     </div>
-                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">const FRAG =
-    'precision mediump float;\n' +
-    'uniform vec2 u_resolution;\n' +
-    'uniform float u_time;\n' +
-    'void main() {\n' +
-    '  vec2 uv = gl_FragCoord.xy / u_resolution;\n' +
-    '  uv.x *= u_resolution.x / u_resolution.y;\n' +
-    '  float c = u_resolution.x / u_resolution.y * 0.5;\n' +
-    '  float r = 0.22 + 0.06 * sin(u_time * 3.0);\n' +   // breathing radius
-    '  float d = distance(uv, vec2(c, 0.5));\n' +
-    '  float circle = 1.0 - smoothstep(r, r + 0.02, d);\n' +
-    '  float wave = 0.5 + 0.5 * sin(uv.x * 12.0 - u_time * 2.0);\n' +
-    '  vec3 bg = mix(vec3(0.05,0.07,0.15), vec3(0.10,0.20,0.35), wave);\n' +
-    '  gl_FragColor = vec4(mix(bg, vec3(1.0,0.65,0.30), circle), 1.0);\n' +
-    '}';
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">const FRAG = `precision mediump float;
+uniform vec2 u_resolution;
+uniform float u_time;
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  uv.x *= u_resolution.x / u_resolution.y;
+  float c = u_resolution.x / u_resolution.y * 0.5;
+  float r = 0.22 + 0.06 * sin(u_time * 3.0);   // breathing radius
+  float d = distance(uv, vec2(c, 0.5));
+  float circle = 1.0 - smoothstep(r, r + 0.02, d);
+  float wave = 0.5 + 0.5 * sin(uv.x * 12.0 - u_time * 2.0);
+  vec3 bg = mix(vec3(0.05,0.07,0.15), vec3(0.10,0.20,0.35), wave);
+  gl_FragColor = vec4(mix(bg, vec3(1.0,0.65,0.30), circle), 1.0);
+}`;
 
 const toy = makeShaderToy(canvas, FRAG, { info: info });
 // Pause/speed are host-side: toy.setPaused(true); toy.setTimeScale(2.5);</code></pre>
-                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const FRAG: string =
-    'precision mediump float;\n' +
-    'uniform vec2 u_resolution;\n' +
-    'uniform float u_time;\n' +
-    'void main() {\n' +
-    '  vec2 uv = gl_FragCoord.xy / u_resolution;\n' +
-    '  uv.x *= u_resolution.x / u_resolution.y;\n' +
-    '  float c = u_resolution.x / u_resolution.y * 0.5;\n' +
-    '  float r = 0.22 + 0.06 * sin(u_time * 3.0);\n' +
-    '  float d = distance(uv, vec2(c, 0.5));\n' +
-    '  float circle = 1.0 - smoothstep(r, r + 0.02, d);\n' +
-    '  float wave = 0.5 + 0.5 * sin(uv.x * 12.0 - u_time * 2.0);\n' +
-    '  vec3 bg = mix(vec3(0.05,0.07,0.15), vec3(0.10,0.20,0.35), wave);\n' +
-    '  gl_FragColor = vec4(mix(bg, vec3(1.0,0.65,0.30), circle), 1.0);\n' +
-    '}';
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const FRAG: string = `precision mediump float;
+uniform vec2 u_resolution;
+uniform float u_time;
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  uv.x *= u_resolution.x / u_resolution.y;
+  float c = u_resolution.x / u_resolution.y * 0.5;
+  float r = 0.22 + 0.06 * sin(u_time * 3.0);
+  float d = distance(uv, vec2(c, 0.5));
+  float circle = 1.0 - smoothstep(r, r + 0.02, d);
+  float wave = 0.5 + 0.5 * sin(uv.x * 12.0 - u_time * 2.0);
+  vec3 bg = mix(vec3(0.05,0.07,0.15), vec3(0.10,0.20,0.35), wave);
+  gl_FragColor = vec4(mix(bg, vec3(1.0,0.65,0.30), circle), 1.0);
+}`;
 
 const toy = makeShaderToy(canvas, FRAG, { info: info });</code></pre>
                 </div>
@@ -508,28 +501,26 @@ const toy = makeShaderToy(canvas, FRAG, { info: info });</code></pre>
                         <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
                         <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
                     </div>
-                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">const SPOT =
-    'precision mediump float;\n' +
-    'uniform vec2 u_resolution;\n' +
-    'uniform vec2 u_mouse;\n' +
-    'void main() {\n' +
-    '  float d = distance(gl_FragCoord.xy, u_mouse) / u_resolution.y;\n' +
-    '  float light = 1.0 - smoothstep(0.0, 0.45, d);\n' +
-    '  vec3 col = mix(vec3(0.04,0.05,0.10), vec3(0.31,0.76,0.97), light);\n' +
-    '  gl_FragColor = vec4(col, 1.0);\n' +
-    '}';
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">const SPOT = `precision mediump float;
+uniform vec2 u_resolution;
+uniform vec2 u_mouse;
+void main() {
+  float d = distance(gl_FragCoord.xy, u_mouse) / u_resolution.y;
+  float light = 1.0 - smoothstep(0.0, 0.45, d);
+  vec3 col = mix(vec3(0.04,0.05,0.10), vec3(0.31,0.76,0.97), light);
+  gl_FragColor = vec4(col, 1.0);
+}`;
 
 const toy = makeShaderToy(canvas, SPOT, { info: info });</code></pre>
-                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const SPOT: string =
-    'precision mediump float;\n' +
-    'uniform vec2 u_resolution;\n' +
-    'uniform vec2 u_mouse;\n' +
-    'void main() {\n' +
-    '  float d = distance(gl_FragCoord.xy, u_mouse) / u_resolution.y;\n' +
-    '  float light = 1.0 - smoothstep(0.0, 0.45, d);\n' +
-    '  vec3 col = mix(vec3(0.04,0.05,0.10), vec3(0.31,0.76,0.97), light);\n' +
-    '  gl_FragColor = vec4(col, 1.0);\n' +
-    '}';
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const SPOT: string = `precision mediump float;
+uniform vec2 u_resolution;
+uniform vec2 u_mouse;
+void main() {
+  float d = distance(gl_FragCoord.xy, u_mouse) / u_resolution.y;
+  float light = 1.0 - smoothstep(0.0, 0.45, d);
+  vec3 col = mix(vec3(0.04,0.05,0.10), vec3(0.31,0.76,0.97), light);
+  gl_FragColor = vec4(col, 1.0);
+}`;
 
 const toy = makeShaderToy(canvas, SPOT, { info: info });</code></pre>
                 </div>
@@ -575,56 +566,62 @@ const toy = makeShaderToy(canvas, SPOT, { info: info });</code></pre>
                     <pre class="code-pane active" data-lang="js"><code class="language-javascript">// buildFrag() assembles the shader from a small state object so the
 // buttons can swap amplitude / tint / scanline without WebGL plumbing.
 function buildFrag(s) {
-    const shallow = s.murky ? 'vec3(0.18,0.38,0.30)' : 'vec3(0.35,0.78,0.92)';
-    const deep    = s.murky ? 'vec3(0.02,0.10,0.09)' : 'vec3(0.03,0.18,0.38)';
+    const shallow = s.murky ? 'vec3(0.18, 0.38, 0.30)' : 'vec3(0.35, 0.78, 0.92)';
+    const deep    = s.murky ? 'vec3(0.02, 0.10, 0.09)' : 'vec3(0.03, 0.18, 0.38)';
     const scan = s.scanline
-        ? '  col *= 0.86 + 0.14 * sin(gl_FragCoord.y * 3.14159);\n' : '';
-    return 'precision mediump float;\n' +
-        'uniform vec2 u_resolution;\n' +
-        'uniform vec2 u_mouse;\n' +
-        'uniform float u_time;\n' +
-        'void main() {\n' +
-        '  vec2 uv = gl_FragCoord.xy / u_resolution;\n' +
-        '  vec2 m = u_mouse / u_resolution;\n' +
-        '  float md = distance(uv, m);\n' +
-        '  float ripple = sin(md*38.0 - u_time*4.0) * exp(-md*6.0) * 0.025;\n' +
-        '  float wave = sin(uv.x*11.0 + u_time*1.4) * ' + s.amp + '\n' +
-        '             + sin(uv.y*17.0 - u_time*2.0) * ' + s.amp + ' * 0.6 + ripple;\n' +
-        '  float depth = clamp(uv.y + wave, 0.0, 1.0);\n' +
-        '  vec3 col = mix(' + deep + ', ' + shallow + ', depth);\n' +
-        '  float caustic = smoothstep(0.55, 1.0,\n' +
-        '      sin(uv.x*26.0 + u_time*2.0 + wave*22.0) * sin(uv.y*20.0 - u_time*1.6));\n' +
-        '  col += caustic * 0.10;\n' + scan +
-        '  gl_FragColor = vec4(col, 1.0);\n' +
-        '}';
+        ? '  col *= 0.86 + 0.14 * sin(gl_FragCoord.y * 3.14159);\n'
+        : '';
+    return `precision mediump float;
+uniform vec2 u_resolution;
+uniform vec2 u_mouse;
+uniform float u_time;
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec2 m = u_mouse / u_resolution;
+  float md = distance(uv, m);
+  float ripple = sin(md * 38.0 - u_time * 4.0) * exp(-md * 6.0) * 0.025;
+  float wave = sin(uv.x * 11.0 + u_time * 1.4) * ${s.amp}
+             + sin(uv.y * 17.0 - u_time * 2.0) * ${s.amp} * 0.6
+             + ripple;
+  float depth = clamp(uv.y + wave, 0.0, 1.0);
+  vec3 col = mix(${deep}, ${shallow}, depth);
+  float caustic = smoothstep(0.55, 1.0,
+      sin(uv.x * 26.0 + u_time * 2.0 + wave * 22.0)
+    * sin(uv.y * 20.0 - u_time * 1.6));
+  col += caustic * 0.10;
+${scan}  gl_FragColor = vec4(col, 1.0);
+}`;
 }
 
 const toy = makeShaderToy(canvas, buildFrag(state), { info: info });</code></pre>
                     <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface WaterState { amp: string; scanline: boolean; murky: boolean; }
 
 function buildFrag(s: WaterState): string {
-    const shallow = s.murky ? 'vec3(0.18,0.38,0.30)' : 'vec3(0.35,0.78,0.92)';
-    const deep    = s.murky ? 'vec3(0.02,0.10,0.09)' : 'vec3(0.03,0.18,0.38)';
+    const shallow = s.murky ? 'vec3(0.18, 0.38, 0.30)' : 'vec3(0.35, 0.78, 0.92)';
+    const deep    = s.murky ? 'vec3(0.02, 0.10, 0.09)' : 'vec3(0.03, 0.18, 0.38)';
     const scan = s.scanline
-        ? '  col *= 0.86 + 0.14 * sin(gl_FragCoord.y * 3.14159);\n' : '';
-    return 'precision mediump float;\n' +
-        'uniform vec2 u_resolution;\n' +
-        'uniform vec2 u_mouse;\n' +
-        'uniform float u_time;\n' +
-        'void main() {\n' +
-        '  vec2 uv = gl_FragCoord.xy / u_resolution;\n' +
-        '  vec2 m = u_mouse / u_resolution;\n' +
-        '  float md = distance(uv, m);\n' +
-        '  float ripple = sin(md*38.0 - u_time*4.0) * exp(-md*6.0) * 0.025;\n' +
-        '  float wave = sin(uv.x*11.0 + u_time*1.4) * ' + s.amp + '\n' +
-        '             + sin(uv.y*17.0 - u_time*2.0) * ' + s.amp + ' * 0.6 + ripple;\n' +
-        '  float depth = clamp(uv.y + wave, 0.0, 1.0);\n' +
-        '  vec3 col = mix(' + deep + ', ' + shallow + ', depth);\n' +
-        '  float caustic = smoothstep(0.55, 1.0,\n' +
-        '      sin(uv.x*26.0 + u_time*2.0 + wave*22.0) * sin(uv.y*20.0 - u_time*1.6));\n' +
-        '  col += caustic * 0.10;\n' + scan +
-        '  gl_FragColor = vec4(col, 1.0);\n' +
-        '}';
+        ? '  col *= 0.86 + 0.14 * sin(gl_FragCoord.y * 3.14159);\n'
+        : '';
+    return `precision mediump float;
+uniform vec2 u_resolution;
+uniform vec2 u_mouse;
+uniform float u_time;
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec2 m = u_mouse / u_resolution;
+  float md = distance(uv, m);
+  float ripple = sin(md * 38.0 - u_time * 4.0) * exp(-md * 6.0) * 0.025;
+  float wave = sin(uv.x * 11.0 + u_time * 1.4) * ${s.amp}
+             + sin(uv.y * 17.0 - u_time * 2.0) * ${s.amp} * 0.6
+             + ripple;
+  float depth = clamp(uv.y + wave, 0.0, 1.0);
+  vec3 col = mix(${deep}, ${shallow}, depth);
+  float caustic = smoothstep(0.55, 1.0,
+      sin(uv.x * 26.0 + u_time * 2.0 + wave * 22.0)
+    * sin(uv.y * 20.0 - u_time * 1.6));
+  col += caustic * 0.10;
+${scan}  gl_FragColor = vec4(col, 1.0);
+}`;
 }
 
 const toy = makeShaderToy(canvas, buildFrag(state), { info: info });</code></pre>
