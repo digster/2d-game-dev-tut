@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Intermediate — Shaders Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <!-- Prism.js Syntax Highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+    <!-- GLSL highlighting: `glsl` extends `c` extends `clike`. Core bundles only
+         `clike`, so `c` must load before `glsl`. -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-glsl.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>🎨 Intermediate — Patterns, Noise &amp; Distortion</h1>
+        <p class="subtitle">Tile space, fake randomness, build noise &amp; fbm, then warp and distort it into fire</p>
+
+        <!-- Navigation -->
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="beginner.html" class="nav-button">← Beginner</a>
+            <a href="intermediate.html" class="nav-button active">Intermediate</a>
+            <a href="expert.html" class="nav-button">Expert →</a>
+        </div>
+
+        <!-- Table of Contents -->
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#tiling">Tiling &amp; Repetition</a></li>
+                <li><a href="#random">Randomness: the hash</a></li>
+                <li><a href="#value-noise">Value Noise</a></li>
+                <li><a href="#fbm">fbm (Fractal Brownian Motion)</a></li>
+                <li><a href="#domain-warp">Domain Warping</a></li>
+                <li><a href="#distortion">UV Distortion</a></li>
+                <li><a href="#fire">Mini-Project: Animated Fire / Smoke</a></li>
+            </ul>
+        </div>
+
+        <div class="key-point">
+            <strong>💡 Prereq:</strong> this tier assumes the
+            <a href="beginner.html">Beginner tier</a> — <code>uv</code>, <code>fract</code>,
+            <code>step</code>/<code>smoothstep</code>, <code>mix</code>, <code>u_time</code>,
+            <code>u_mouse</code>, and the <code>makeShaderToy</code> runner. We build straight on it.
+        </div>
+
+        <!-- ============================================ -->
+        <!-- TILING -->
+        <!-- ============================================ -->
+        <div id="tiling" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🔲 Tiling &amp; Repetition</h2>
+
+            <p>
+                One shader, run per pixel, can fill the screen with a repeating pattern for free —
+                no loop, no instancing. The trick is <code>fract()</code>: multiply <code>uv</code> by
+                <code>n</code> and take <code>fract</code>, and space wraps into <code>n</code> identical
+                cells, each with its own fresh <code>0..1</code> coordinate.
+            </p>
+
+            <div class="concept-box">
+                <h4>The two halves of a tiled coordinate</h4>
+                <div class="formula">
+                    vec2 g = uv * n;<br>
+                    vec2 cell = floor(g); &nbsp; // which tile (integer)<br>
+                    vec2 f = fract(g); &nbsp;&nbsp; // position inside it (0..1)
+                </div>
+                <p>
+                    <code>cell</code> lets you vary tiles (a checkerboard via
+                    <code>mod(cell.x + cell.y, 2.0)</code>); <code>f</code> draws the same motif in
+                    every tile. This is the backbone of brick walls, grids, sprite sheets, and noise.
+                </p>
+            </div>
+
+            <div class="key-point">
+                <strong>💡 GLSL ES 1.00:</strong> the tile count is baked into the shader as a
+                constant, so the buttons <em>rebuild</em> the shader (<code>toy.setFrag(...)</code>)
+                rather than push a uniform — the same pattern you'll need for fbm octaves below.
+            </div>
+
+            <details data-demo-id="sh_tilingGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy">
+                <summary>📝 Click to see: the tiling shader</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Cell count is a shader constant → a button rebuilds the shader.
+function buildFrag(n) {
+    return `precision mediump float;
+uniform vec2 u_resolution;
+uniform float u_time;
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  uv.x *= u_resolution.x / u_resolution.y;
+  vec2 g = uv * ${n}.0;
+  vec2 cell = floor(g);
+  vec2 f = fract(g);
+  float checker = mod(cell.x + cell.y, 2.0);
+  float d = distance(f, vec2(0.5));
+  float dot = 1.0 - smoothstep(0.30, 0.34 + 0.05 * sin(u_time * 2.0), d);
+  vec3 bg = mix(vec3(0.07,0.10,0.18), vec3(0.12,0.16,0.28), checker);
+  gl_FragColor = vec4(mix(bg, vec3(0.31,0.76,0.97), dot), 1.0);
+}`;
+}
+
+const toy = makeShaderToy(canvas, buildFrag(6), { info: info });
+document.getElementById('btnTileMany')?.addEventListener('click', () =&gt; {
+    toy.setFrag(buildFrag(12));
+});</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function buildFrag(n: number): string {
+    return `precision mediump float;
+uniform vec2 u_resolution;
+uniform float u_time;
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  uv.x *= u_resolution.x / u_resolution.y;
+  vec2 g = uv * ${n}.0;
+  vec2 cell = floor(g);
+  vec2 f = fract(g);
+  float checker = mod(cell.x + cell.y, 2.0);
+  float d = distance(f, vec2(0.5));
+  float dot = 1.0 - smoothstep(0.30, 0.34 + 0.05 * sin(u_time * 2.0), d);
+  vec3 bg = mix(vec3(0.07,0.10,0.18), vec3(0.12,0.16,0.28), checker);
+  gl_FragColor = vec4(mix(bg, vec3(0.31,0.76,0.97), dot), 1.0);
+}`;
+}
+
+const toy = makeShaderToy(canvas, buildFrag(6), { info: info });
+document.getElementById('btnTileMany')?.addEventListener('click', (): void =&gt; {
+    toy.setFrag(buildFrag(12));
+});</code></pre>
+                </div>
+            </details>
+
+            <div class="diagram">
+                <canvas id="tilingGL" width="800" height="450"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnTileFew">Fewer (3)</button>
+                <button id="btnTileDefault">Default (6)</button>
+                <button id="btnTileMany">More (12)</button>
+            </div>
+            <div id="tilingGLInfo" class="info-display">fract(uv * n) gives every cell its own 0..1 space.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- RANDOM -->
+        <!-- ============================================ -->
+        <div id="random" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🎲 Randomness: the hash</h2>
+
+            <p>
+                GLSL has no <code>rand()</code>. Shaders must be <em>deterministic</em> — the same
+                pixel must produce the same value every frame. So we fake randomness with a
+                <strong>hash</strong>: a function that scrambles an input into a chaotic-looking but
+                repeatable number. The classic one-liner:
+            </p>
+
+            <pre><code class="language-glsl">// The "canonical" GLSL hash. Not real randomness — a deterministic
+// scramble. sin() goes wild, the big multiply amplifies it, fract()
+// keeps the chaotic low bits in 0..1.
+float hash(vec2 p) {
+    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}</code></pre>
+
+            <div class="concept-box">
+                <h4>Why this works (intuitively)</h4>
+                <ul>
+                    <li><code>dot(p, k)</code> — collapse the 2D coord to one number, mixing x and y.</li>
+                    <li><code>sin(...)</code> — a wildly non-linear curve; tiny input changes swing the output.</li>
+                    <li><code>* 43758.5453</code> — amplify so the unpredictable fractional bits dominate.</li>
+                    <li><code>fract(...)</code> — keep just those bits, in <code>[0, 1)</code>.</li>
+                </ul>
+                <p>Feed it a per-cell <code>floor(uv * n)</code> and every cell gets its own value → TV static.</p>
+            </div>
+
+            <div class="key-point">
+                <strong>💡 <code>mediump</code> caveat:</strong> we keep
+                <code>precision mediump float;</code> for consistency and broad device support. The
+                big multiply can band slightly on low-precision GPUs — fine for a tutorial; production
+                code sometimes uses <code>highp</code> or a bit-hash instead.
+            </div>
+
+            <details data-demo-id="sh_randomGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy">
+                <summary>📝 Click to see: per-cell random</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">const STATIC = `precision mediump float;
+uniform vec2 u_resolution;
+uniform float u_time;
+float hash(vec2 p) {
+  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  uv.x *= u_resolution.x / u_resolution.y;
+  vec2 cell = floor(uv * 24.0);
+  gl_FragColor = vec4(vec3(hash(cell)), 1.0);
+}`;
+
+const toy = makeShaderToy(canvas, STATIC, { info: info });</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const STATIC: string = `precision mediump float;
+uniform vec2 u_resolution;
+uniform float u_time;
+float hash(vec2 p) {
+  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  uv.x *= u_resolution.x / u_resolution.y;
+  vec2 cell = floor(uv * 24.0);
+  gl_FragColor = vec4(vec3(hash(cell)), 1.0);
+}`;
+
+const toy = makeShaderToy(canvas, STATIC, { info: info });</code></pre>
+                </div>
+            </details>
+
+            <div class="diagram">
+                <canvas id="randomGL" width="800" height="450"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnRandStatic">Static</button>
+                <button id="btnRandAnim">Animated</button>
+            </div>
+            <div id="randomGLInfo" class="info-display">fract(sin(dot(p, k)) * big) — GLSL's pseudo-random hash.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- VALUE NOISE -->
+        <!-- ============================================ -->
+        <div id="value-noise" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🌫️ Value Noise</h2>
+
+            <p>
+                Raw per-cell hash is too harsh for natural effects. <strong>Value noise</strong> tames
+                it: hash the four corners of each cell, then <code>mix</code> between them by the
+                fractional position — with a <em>smooth fade</em> so cell boundaries vanish. The
+                result is the smooth, organic randomness clouds and terrain are made of.
+            </p>
+
+            <div class="concept-box">
+                <h4>The fade curve matters</h4>
+                <p>
+                    A plain linear <code>mix</code> leaves visible diamond creases at cell edges. The
+                    fix is the Beginner-tier <code>smoothstep</code> idea applied to the blend factor:
+                    <code>f * f * (3.0 - 2.0 * f)</code> (zero slope at 0 and 1) so neighbouring cells
+                    join seamlessly. Same maths as easing curves.
+                </p>
+            </div>
+
+            <details data-demo-id="sh_valueNoiseGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy">
+                <summary>📝 Click to see: bilinear value noise</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// inside the fragment shader:
+float valueNoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  float a = hash(i);
+  float b = hash(i + vec2(1.0, 0.0));
+  float c = hash(i + vec2(0.0, 1.0));
+  float d = hash(i + vec2(1.0, 1.0));
+  vec2 u = f * f * (3.0 - 2.0 * f);          // smooth fade
+  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// inside the fragment shader (GLSL is identical across JS/TS):
+float valueNoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  float a = hash(i);
+  float b = hash(i + vec2(1.0, 0.0));
+  float c = hash(i + vec2(0.0, 1.0));
+  float d = hash(i + vec2(1.0, 1.0));
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}</code></pre>
+                </div>
+            </details>
+
+            <div class="diagram">
+                <canvas id="valueNoiseGL" width="800" height="450"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnVNBlocky">Blocky (raw hash)</button>
+                <button id="btnVNSmooth">Smooth (interp)</button>
+            </div>
+            <div id="valueNoiseGLInfo" class="info-display">Interpolate the hash at cell corners → continuous noise.</div>
+
+            <div class="challenge-box">
+                <h4>🎯 Try this</h4>
+                <p>Toggle Blocky vs Smooth. Blocky is the raw hash grid (this tier's previous demo);
+                Smooth is the <em>only</em> change being the corner-mix + fade. That single step is
+                the leap from "TV static" to "drifting fog".</p>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- FBM -->
+        <!-- ============================================ -->
+        <div id="fbm" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🪵 fbm (Fractal Brownian Motion)</h2>
+
+            <p>
+                One layer of value noise is soft but featureless. <strong>fbm</strong> stacks several
+                <em>octaves</em>: each adds noise at double the frequency and half the amplitude. Big
+                shapes from the low octaves, fine grain from the high ones — the texture of clouds,
+                marble, wood, terrain, smoke.
+            </p>
+
+            <div class="concept-box">
+                <h4>The octave loop</h4>
+                <div class="formula">
+                    for each octave: sum += amp * noise(p * freq);<br>
+                    &nbsp;&nbsp;freq *= 2.0; &nbsp; amp *= 0.5;
+                </div>
+                <p>
+                    <strong>GLSL ES 1.00 constraint:</strong> a <code>for</code> loop's bound must be a
+                    <em>constant</em> — you can't drive octave count with a uniform. So changing octaves
+                    means rebuilding the shader with the number baked in (the buttons do exactly this
+                    via <code>toy.setFrag</code>). Continuous knobs still use <code>u_param</code>;
+                    structural ones rebuild.
+                </p>
+            </div>
+
+            <details data-demo-id="sh_fbmGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy">
+                <summary>📝 Click to see: fbm with a constant octave count</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">function buildFrag(octaves) {
+    return `precision mediump float;
+uniform vec2 u_resolution;
+uniform float u_time;
+// ... hash() and valueNoise() here ...
+float fbm(vec2 p) {
+  float sum = 0.0, amp = 0.5, freq = 1.0;
+  for (int i = 0; i &lt; ${octaves}; i++) {   // bound MUST be constant
+    sum += amp * valueNoise(p * freq);
+    freq *= 2.0;
+    amp *= 0.5;
+  }
+  return sum;
+}
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  uv.x *= u_resolution.x / u_resolution.y;
+  float v = fbm(uv * 4.0 + vec2(u_time * 0.15, 0.0));
+  gl_FragColor = vec4(vec3(v), 1.0);
+}`;
+}
+
+const toy = makeShaderToy(canvas, buildFrag(6), { info: info });</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function buildFrag(octaves: number): string {
+    return `precision mediump float;
+uniform vec2 u_resolution;
+uniform float u_time;
+// ... hash() and valueNoise() here ...
+float fbm(vec2 p) {
+  float sum = 0.0, amp = 0.5, freq = 1.0;
+  for (int i = 0; i &lt; ${octaves}; i++) {
+    sum += amp * valueNoise(p * freq);
+    freq *= 2.0;
+    amp *= 0.5;
+  }
+  return sum;
+}
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  uv.x *= u_resolution.x / u_resolution.y;
+  float v = fbm(uv * 4.0 + vec2(u_time * 0.15, 0.0));
+  gl_FragColor = vec4(vec3(v), 1.0);
+}`;
+}
+
+const toy = makeShaderToy(canvas, buildFrag(6), { info: info });</code></pre>
+                </div>
+            </details>
+
+            <div class="diagram">
+                <canvas id="fbmGL" width="800" height="450"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnFbm1">1 octave</button>
+                <button id="btnFbm3">3 octaves</button>
+                <button id="btnFbm6">6 octaves</button>
+            </div>
+            <div id="fbmGLInfo" class="info-display">Sum octaves of noise (freq x2, amp /2) → cloud texture.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- DOMAIN WARP -->
+        <!-- ============================================ -->
+        <div id="domain-warp" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🌀 Domain Warping</h2>
+
+            <p>
+                Here's the trick that makes procedural art look <em>alive</em>: instead of evaluating
+                noise at <code>p</code>, evaluate it at <code>p + noise(p)</code> — feed noise into
+                its own input. The pattern drags itself around, producing the swirling, flowing,
+                marbled looks behind fire, nebulae, oil, and magic effects.
+            </p>
+
+            <div class="concept-box">
+                <h4>One line, big payoff</h4>
+                <div class="formula">
+                    vec2 q = vec2(fbm(p), fbm(p + offset));<br>
+                    float v = fbm(p + strength * q);
+                </div>
+                <p>
+                    <code>u_param</code> is the warp strength (continuous → a uniform, no rebuild
+                    needed). <code>u_mouse</code> nudges the warp source, so dragging the cursor stirs
+                    the field. Off (strength 0) it's plain fbm; turn it up and it churns.
+                </p>
+            </div>
+
+            <details data-demo-id="sh_warpGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy">
+                <summary>📝 Click to see: the domain warp</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// ... hash(), valueNoise(), fbm() (5 octaves) in the shader ...
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  uv.x *= u_resolution.x / u_resolution.y;
+  vec2 p = uv * 3.0;
+  vec2 mo = (u_mouse / u_resolution - 0.5);
+  vec2 q = vec2(fbm(p + u_time * 0.10),
+                fbm(p + vec2(5.2, 1.3) - u_time * 0.10));
+  float v = fbm(p + u_param * (q + mo));   // &lt;- the domain warp
+  vec3 col = mix(vec3(0.04,0.10,0.22), vec3(0.45,0.85,0.95), v);
+  gl_FragColor = vec4(col, 1.0);
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// ... hash(), valueNoise(), fbm() (5 octaves) in the shader ...
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  uv.x *= u_resolution.x / u_resolution.y;
+  vec2 p = uv * 3.0;
+  vec2 mo = (u_mouse / u_resolution - 0.5);
+  vec2 q = vec2(fbm(p + u_time * 0.10),
+                fbm(p + vec2(5.2, 1.3) - u_time * 0.10));
+  float v = fbm(p + u_param * (q + mo));
+  vec3 col = mix(vec3(0.04,0.10,0.22), vec3(0.45,0.85,0.95), v);
+  gl_FragColor = vec4(col, 1.0);
+}</code></pre>
+                </div>
+            </details>
+
+            <div class="diagram">
+                <canvas id="warpGL" width="800" height="450"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnWarpOff">Warp off</button>
+                <button id="btnWarpOn">Warp on</button>
+                <button id="btnWarpStrong">Strong</button>
+            </div>
+            <div id="warpGLInfo" class="info-display">fbm(p + fbm(p)) — feed noise into noise. Move the mouse.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- DISTORTION -->
+        <!-- ============================================ -->
+        <div id="distortion" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>♨️ UV Distortion</h2>
+
+            <p>
+                Warping noise is pretty; warping the <em>UV you sample a scene with</em> is a real
+                game effect. Offset the lookup coordinate by a small field and the whole image
+                wobbles — that's heat-haze over lava, refraction through water, a shockwave, a portal.
+                Here a procedural "scene" (gradient + stripes, so the distortion is obvious) is
+                displaced two ways.
+            </p>
+
+            <div class="concept-box">
+                <h4>Same idea, two offset fields</h4>
+                <ul>
+                    <li><strong>Heat haze:</strong> a vertical <code>sin(uv.y * f + u_time)</code> shimmer on x only.</li>
+                    <li><strong>Water refraction:</strong> a 2D value-noise field offsetting both axes.</li>
+                </ul>
+                <p><code>u_param</code> scales the strength — subtle for in-game realism, cranked to make the mechanism visible.</p>
+            </div>
+
+            <details data-demo-id="sh_distortGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy">
+                <summary>📝 Click to see: scene + UV offset</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// A "scene" we can see the distortion against:
+vec3 scene(vec2 uv) {
+  float stripes = step(0.5, fract(uv.x * 10.0));
+  vec3 grad = mix(vec3(0.10,0.20,0.45), vec3(0.95,0.65,0.30), uv.y);
+  return mix(grad, grad * 0.45, stripes);
+}
+// Heat haze: shimmer the sampling UV, then read the scene there.
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec2 off = vec2(sin(uv.y * 40.0 + u_time * 6.0), 0.0) * 0.02;
+  gl_FragColor = vec4(scene(uv + off * u_param), 1.0);
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">vec3 scene(vec2 uv) {
+  float stripes = step(0.5, fract(uv.x * 10.0));
+  vec3 grad = mix(vec3(0.10,0.20,0.45), vec3(0.95,0.65,0.30), uv.y);
+  return mix(grad, grad * 0.45, stripes);
+}
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec2 off = vec2(sin(uv.y * 40.0 + u_time * 6.0), 0.0) * 0.02;
+  gl_FragColor = vec4(scene(uv + off * u_param), 1.0);
+}</code></pre>
+                </div>
+            </details>
+
+            <div class="diagram">
+                <canvas id="distortGL" width="800" height="450"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnDistHeat">Heat haze</button>
+                <button id="btnDistWater">Water refraction</button>
+                <button id="btnDistStronger">Stronger</button>
+                <button id="btnDistSubtler">Subtler</button>
+            </div>
+            <div id="distortGLInfo" class="info-display">Offset the sampling UV of a scene → heat/water effects.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- FIRE MINI-PROJECT -->
+        <!-- ============================================ -->
+        <div id="fire" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🔥 Mini-Project: Animated Fire / Smoke</h2>
+
+            <p>
+                Everything composes into one of the most-shipped 2D shader effects. Recipe:
+            </p>
+            <ul>
+                <li><strong>fbm</strong> for the turbulent texture</li>
+                <li><strong>a rising flow</strong> — scroll the noise domain downward over <code>u_time</code></li>
+                <li><strong>a vertical falloff</strong> — <code>(1.0 - uv.y)</code> so it's dense at the base, wispy on top</li>
+                <li><strong>a palette</strong> — <code>mix</code> dark-red → orange → yellow for fire; a grey ramp for smoke</li>
+            </ul>
+
+            <div class="key-point">
+                <strong>💡 Same building blocks:</strong> turbulence just swaps the fbm octave count
+                (structural → rebuild via state, exactly like Beginner's water <code>buildFrag</code>);
+                intensity is continuous → <code>u_param</code>. No new concepts — just composition.
+            </div>
+
+            <details data-demo-id="sh_fireGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy">
+                <summary>📝 Click to see: the fire shader (state-built)</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">function buildFrag(s) {
+    const octaves = s.turbulent ? '6' : '3';
+    const palette = s.smoke
+        ? 'vec3 col = mix(vec3(0.02,0.02,0.03), vec3(0.55,0.55,0.58), v);'
+        : 'vec3 col = mix(vec3(0.40,0.02,0.0), vec3(1.0,0.85,0.25), v);\n' +
+          '  col = mix(col, vec3(1.0,0.35,0.05), smoothstep(0.45,0.05,v));';
+    return `precision mediump float;
+uniform vec2 u_resolution;
+uniform float u_time;
+uniform float u_param;
+// ... hash(), valueNoise(), fbm() with ${octaves} octaves ...
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec2 p = vec2(uv.x * 3.0, uv.y * 4.0 - u_time * 2.0);  // rising flow
+  float n = fbm(p);
+  float flame = n * (1.0 - uv.y) * 2.2 * u_param;        // base-heavy
+  float v = smoothstep(0.0, 0.7, flame);
+  ${palette}
+  gl_FragColor = vec4(col, 1.0);
+}`;
+}
+
+const toy = makeShaderToy(canvas, buildFrag(state), { info: info, param: 1.0 });</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface FireState { smoke: boolean; turbulent: boolean; }
+
+function buildFrag(s: FireState): string {
+    const octaves: string = s.turbulent ? '6' : '3';
+    const palette: string = s.smoke
+        ? 'vec3 col = mix(vec3(0.02,0.02,0.03), vec3(0.55,0.55,0.58), v);'
+        : 'vec3 col = mix(vec3(0.40,0.02,0.0), vec3(1.0,0.85,0.25), v);\n' +
+          '  col = mix(col, vec3(1.0,0.35,0.05), smoothstep(0.45,0.05,v));';
+    return `precision mediump float;
+uniform vec2 u_resolution;
+uniform float u_time;
+uniform float u_param;
+// ... hash(), valueNoise(), fbm() with ${octaves} octaves ...
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec2 p = vec2(uv.x * 3.0, uv.y * 4.0 - u_time * 2.0);
+  float n = fbm(p);
+  float flame = n * (1.0 - uv.y) * 2.2 * u_param;
+  float v = smoothstep(0.0, 0.7, flame);
+  ${palette}
+  gl_FragColor = vec4(col, 1.0);
+}`;
+}
+
+const toy = makeShaderToy(canvas, buildFrag(state), { info: info, param: 1.0 });</code></pre>
+                </div>
+            </details>
+
+            <div class="diagram">
+                <canvas id="fireGL" width="800" height="450"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnFireFire">Fire</button>
+                <button id="btnFireSmoke">Smoke</button>
+                <button id="btnFireTurb">Toggle turbulence</button>
+                <button id="btnFireHotter">Hotter</button>
+            </div>
+            <div id="fireGLInfo" class="info-display">fbm + rising flow + falloff + palette = fire/smoke.</div>
+
+            <div class="example-box">
+                <h4>🎮 What you just built</h4>
+                <p>
+                    A reusable animated fire/smoke shader — drop it on a torch sprite, a campfire, a
+                    burning building, or a smoke plume. No textures, no particles, runs free on the
+                    GPU. Hit 📋 Export on any demo for a standalone runnable file.
+                </p>
+            </div>
+
+            <div class="key-point">
+                <strong>💡 What's next:</strong> the <a href="expert.html">Expert tier</a> moves to
+                <em>textures &amp; sprite shaders</em> — sampling a <code>sampler2D</code>, then
+                dissolve, palette-swap, outline, and hit-flash on actual sprites.
+            </div>
+        </div>
+
+        <!-- Next Steps -->
+        <div class="section" style="text-align: center;">
+            <h2>✅ Intermediate Tier Complete</h2>
+            <p style="font-size: 1.1em; margin: 24px 0;">
+                You can tile space, fake randomness with a hash, build value noise and fbm, warp the
+                domain, distort a scene, and compose it all into fire. That's the procedural-texture
+                core of 2D shader FX.
+            </p>
+            <a href="expert.html" class="nav-button" style="font-size: 1.2em; padding: 20px 40px;">
+                Continue to Expert →
+            </a>
+            <p style="margin-top: 20px;"><em>Expert isn't written yet — coming in the next phase. Track progress on the <a href="index.html">track index</a>.</em></p>
+        </div>
+    </div>
+
+    <!-- Scroll to Top Button -->
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <!-- Shared utilities (loaded for consistency with other pages). -->
+    <script src="../shared/utils.js"></script>
+
+    <!-- Code-tab toggle (JavaScript / TypeScript). -->
+    <script src="../shared/code-tabs.js"></script>
+
+    <!-- Page-specific interactive WebGL demos. -->
+    <script src="intermediate-demos.js"></script>
+
+    <!-- Shaders-specific bundles for the 📋 Export button. -->
+    <script src="bundles-intermediate.js"></script>
+    <script src="../shared/export-demo.js"></script>
+
+    <script>
+        // Scroll-to-top behavior. Mirrors every other page in the project.
+        const scrollToTopBtn = document.getElementById('scrollToTop');
+        scrollToTopBtn.addEventListener('click', () => {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+        window.addEventListener('scroll', () => {
+            scrollToTopBtn.style.opacity = window.pageYOffset > 300 ? '1' : '0';
+        });
+        scrollToTopBtn.style.opacity = '0';
+        scrollToTopBtn.style.transition = 'opacity 0.3s';
+    </script>
+</body>
+</html>

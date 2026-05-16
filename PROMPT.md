@@ -21,3 +21,14 @@ isometric-strategy track. Decisions made with the user: real WebGL + GLSL
 ships the Beginner tier (other four tiers are locked "Coming soon" roadmap
 cards, built iteratively later); content blends shader fundamentals with
 concrete 2D-game effects, fundamentals → game effects across the tiers.
+
+# 2026-05-16 — Make shader GLSL readable, then ship Shaders Intermediate tier
+
+(1) Refactor: the Beginner tier wrote GLSL as line-by-line JS string
+concatenation, which was unintuitive — convert to multi-line template
+literals (plain in *-demos.js; escaped-backtick nested literals in
+bundles-*.js). Pure readability, behavior byte-identical.
+(2) Continue with the next phase: ship the Shaders track's Intermediate
+tier (Patterns, Noise & Distortion) — tiling, the hash, value noise, fbm,
+domain warping, UV distortion, animated fire/smoke mini-project — and flip
+its roadmap card to Ready.
