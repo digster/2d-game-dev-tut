@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expert — Shaders Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <!-- Prism.js Syntax Highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+    <!-- GLSL highlighting: `glsl` extends `c` extends `clike`. Core bundles only
+         `clike`, so `c` must load before `glsl`. -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-glsl.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>🎨 Expert — Textures &amp; Sprite Shaders</h1>
+        <p class="subtitle">Sample a texture, then write the material shaders 2D games actually ship</p>
+
+        <!-- Navigation -->
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="intermediate.html" class="nav-button">← Intermediate</a>
+            <a href="expert.html" class="nav-button active">Expert</a>
+            <a href="advanced.html" class="nav-button">Advanced →</a>
+        </div>
+
+        <!-- Table of Contents -->
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#sampling">Sampling a Texture</a></li>
+                <li><a href="#tint">Tinting &amp; Multiply</a></li>
+                <li><a href="#palette">Palette Swap</a></li>
+                <li><a href="#dissolve">Dissolve &amp; Burn</a></li>
+                <li><a href="#outline">Outline / Rim</a></li>
+                <li><a href="#hitflash">Hit-Flash &amp; Invincibility Blink</a></li>
+                <li><a href="#shaded-sprite">Mini-Project: Fully Shaded Sprite</a></li>
+            </ul>
+        </div>
+
+        <div class="key-point">
+            <strong>💡 New this tier — textures.</strong> Up to now every pixel's colour was
+            computed from maths. Real games sample <strong>sprites</strong>. We won't ship an image
+            file: the runner paints a procedural gem onto an offscreen 2D canvas and uploads it as
+            <code>u_tex</code>, so every demo still Exports fully self-contained. You write
+            <code>texture2D(u_tex, uv)</code>; the rest is wired for you.
+        </div>
+
+        <!-- ============================================ -->
+        <!-- SAMPLING -->
+        <!-- ============================================ -->
+        <div id="sampling" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🖼️ Sampling a Texture</h2>
+
+            <p>
+                A texture is an image the GPU can read per pixel. Declare a
+                <code>uniform sampler2D u_tex;</code> and read it with
+                <code>texture2D(u_tex, uv)</code> where <code>uv</code> is <code>0..1</code> across
+                the image. That's the whole API — here's a complete minimal texture shader:
+            </p>
+
+            <pre><code class="language-glsl">precision mediump float;
+uniform vec2 u_resolution;
+uniform sampler2D u_tex;            // the sprite, on texture unit 0
+
+void main() {
+    vec2 uv = gl_FragCoord.xy / u_resolution;
+    gl_FragColor = texture2D(u_tex, uv);   // rgba straight from the image
+}</code></pre>
+
+            <div class="concept-box">
+                <h4>Two gotchas, both fixed once in the runner</h4>
+                <ul>
+                    <li><strong>Y is flipped.</strong> A 2D canvas is Y-down; <code>gl_FragCoord</code>
+                    is Y-up. The runner sets <code>UNPACK_FLIP_Y_WEBGL</code> so the sprite samples
+                    upright (mirrors the Beginner <code>u_mouse</code> Y-flip fix).</li>
+                    <li><strong>Aspect.</strong> A square 256² sprite in an 800×450 canvas would
+                    squash. <code>toSpriteUV()</code> maps a centred, aspect-correct square box;
+                    outside it a checkerboard <code>backdrop()</code> shows through the sprite's
+                    transparent margin. Try "Stretched" to see why the fit matters.</li>
+                </ul>
+            </div>
+
+            <details data-demo-id="sh_sampleGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy,sh_drawSprite,sh_glslKit">
+                <summary>📝 Click to see: sampling the sprite</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// GLSL_HEAD declares the uniforms + toSpriteUV()/backdrop() helpers.
+const FIT = GLSL_HEAD + `void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec4 tex = texture2D(u_tex, toSpriteUV(uv));
+  gl_FragColor = vec4(mix(backdrop(uv), tex.rgb, tex.a), 1.0);
+}`;
+
+// drawSprite paints the offscreen 2D canvas the runner uploads as u_tex.
+const toy = makeShaderToy(canvas, FIT, { info: info, sprite: drawSprite });</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const FIT: string = GLSL_HEAD + `void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec4 tex = texture2D(u_tex, toSpriteUV(uv));
+  gl_FragColor = vec4(mix(backdrop(uv), tex.rgb, tex.a), 1.0);
+}`;
+
+const toy = makeShaderToy(canvas, FIT, { info: info, sprite: drawSprite });</code></pre>
+                </div>
+            </details>
+
+            <div class="diagram">
+                <canvas id="sampleGL" width="800" height="450"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnSampFit">Fitted</button>
+                <button id="btnSampStretch">Stretched</button>
+                <button id="btnSampUV">Show UV</button>
+            </div>
+            <div id="sampleGLInfo" class="info-display">texture2D(u_tex, uv) — map a procedural sprite into the canvas.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- TINT -->
+        <!-- ============================================ -->
+        <div id="tint" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🎨 Tinting &amp; Multiply</h2>
+
+            <p>
+                The simplest sprite shader, and one of the most used: <strong>multiply</strong> the
+                sampled colour by a tint. Because it's a multiply, the sprite's own shading and
+                shadows survive — a flat overlay would erase them. Keep <code>tex.a</code> so the
+                silhouette stays crisp.
+            </p>
+
+            <div class="concept-box">
+                <p><code>vec3 tinted = tex.rgb * tint;</code> — that's the entire effect. It's the
+                team-colour in an RTS, the red damage flash, the gold of a power-up, the grey of a
+                disabled button.</p>
+            </div>
+
+            <details data-demo-id="sh_tintGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy,sh_drawSprite,sh_glslKit">
+                <summary>📝 Click to see: tint multiply</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">function buildFrag(tint) {
+    return GLSL_HEAD + `void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec4 tex = texture2D(u_tex, toSpriteUV(uv));
+  vec3 tinted = tex.rgb * ${tint};        // multiply keeps shading
+  gl_FragColor = vec4(mix(backdrop(uv), tinted, tex.a), 1.0);
+}`;
+}
+// Damage tint:
+toy.setFrag(buildFrag('vec3(1.0, 0.35, 0.35)'));</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function buildFrag(tint: string): string {
+    return GLSL_HEAD + `void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec4 tex = texture2D(u_tex, toSpriteUV(uv));
+  vec3 tinted = tex.rgb * ${tint};
+  gl_FragColor = vec4(mix(backdrop(uv), tinted, tex.a), 1.0);
+}`;
+}
+toy.setFrag(buildFrag('vec3(1.0, 0.35, 0.35)'));</code></pre>
+                </div>
+            </details>
+
+            <div class="diagram">
+                <canvas id="tintGL" width="800" height="450"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnTintNone">None</button>
+                <button id="btnTintRed">Damage (red)</button>
+                <button id="btnTintGreen">Poison (green)</button>
+                <button id="btnTintGold">Power-up (gold)</button>
+            </div>
+            <div id="tintGLInfo" class="info-display">texColor.rgb * tint — keeps shading, preserves alpha.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- PALETTE -->
+        <!-- ============================================ -->
+        <div id="palette" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🌈 Palette Swap</h2>
+
+            <p>
+                Ship one sprite, recolour it a dozen ways. Read the sample's
+                <strong>luminance</strong> (perceived brightness) and remap it through a small
+                colour <strong>ramp</strong>. The four luminance bands the gem is drawn in become
+                four stops of any palette — fire, ice, poison, gold-rare.
+            </p>
+
+            <div class="concept-box">
+                <div class="formula">
+                    float l = dot(tex.rgb, vec3(0.299, 0.587, 0.114));<br>
+                    vec3 c = l &lt; 0.5 ? mix(A, B, l*2.0) : mix(B, C, (l-0.5)*2.0);
+                </div>
+                <p>This is how NES-era games (and modern pixel-art ones) get a whole palette of
+                enemy variants from a single sprite sheet.</p>
+            </div>
+
+            <details data-demo-id="sh_paletteGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy,sh_drawSprite,sh_glslKit">
+                <summary>📝 Click to see: luminance → ramp</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">function buildFrag(a, b, c) {
+    return GLSL_HEAD + `void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec4 tex = texture2D(u_tex, toSpriteUV(uv));
+  float l = dot(tex.rgb, vec3(0.299, 0.587, 0.114));
+  vec3 ramp = l &lt; 0.5
+    ? mix(${a}, ${b}, l * 2.0)
+    : mix(${b}, ${c}, (l - 0.5) * 2.0);
+  gl_FragColor = vec4(mix(backdrop(uv), ramp, tex.a), 1.0);
+}`;
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function buildFrag(a: string, b: string, c: string): string {
+    return GLSL_HEAD + `void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec4 tex = texture2D(u_tex, toSpriteUV(uv));
+  float l = dot(tex.rgb, vec3(0.299, 0.587, 0.114));
+  vec3 ramp = l &lt; 0.5
+    ? mix(${a}, ${b}, l * 2.0)
+    : mix(${b}, ${c}, (l - 0.5) * 2.0);
+  gl_FragColor = vec4(mix(backdrop(uv), ramp, tex.a), 1.0);
+}`;
+}</code></pre>
+                </div>
+            </details>
+
+            <div class="diagram">
+                <canvas id="paletteGL" width="800" height="450"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnPalOrig">Original</button>
+                <button id="btnPalFire">Fire</button>
+                <button id="btnPalIce">Ice</button>
+                <button id="btnPalToxic">Toxic</button>
+            </div>
+            <div id="paletteGLInfo" class="info-display">luminance → a 3-stop ramp: one sprite, many recolors.</div>
+
+            <div class="challenge-box">
+                <h4>🎯 Try this</h4>
+                <p>Cycle the palettes and watch the white sparkle stay bright while the dark base
+                shifts hue — that's the luminance ramp preserving the sprite's internal contrast.
+                A flat tint can't do that.</p>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- DISSOLVE -->
+        <!-- ============================================ -->
+        <div id="dissolve" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>💨 Dissolve &amp; Burn</h2>
+
+            <p>
+                Death, teleport-out, a disintegrating enemy. Sample the Intermediate-tier
+                <strong>value noise</strong> per pixel and compare it to a <code>progress</code>
+                value: where <code>noise &lt; progress</code>, drop the pixel. A thin band right at
+                the threshold glows — the burning edge.
+            </p>
+
+            <div class="key-point">
+                <strong>💡 <code>discard</code> &amp; thresholding:</strong> here we simply skip
+                colouring dissolved pixels (leaving the backdrop). GLSL ES 1.00's <code>discard</code>
+                does the same for true alpha sprites. <code>progress</code> is a continuous knob →
+                the <code>u_param</code> uniform; the "Auto" button instead drives it from
+                <code>fract(u_time)</code> for a looping effect.
+            </p>
+
+            <details data-demo-id="sh_dissolveGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy,sh_drawSprite,sh_glslKit">
+                <summary>📝 Click to see: noise-thresholded dissolve</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// GLSL_NOISE adds hash()/valueNoise() (from the Intermediate tier).
+function buildFrag(progressExpr) {
+    return GLSL_HEAD + GLSL_NOISE + `void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec2 s = toSpriteUV(uv);
+  vec4 tex = texture2D(u_tex, s);
+  float prog = ${progressExpr};
+  float n = valueNoise(s * 14.0);
+  vec3 col = backdrop(uv);
+  if (tex.a > 0.5) {
+    if (n >= prog) {
+      col = tex.rgb;
+      float edge = smoothstep(prog, prog + 0.08, n);
+      col = mix(vec3(1.0, 0.6, 0.1), col, edge);   // burn edge
+    }
+  }
+  gl_FragColor = vec4(col, 1.0);
+}`;
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function buildFrag(progressExpr: string): string {
+    return GLSL_HEAD + GLSL_NOISE + `void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec2 s = toSpriteUV(uv);
+  vec4 tex = texture2D(u_tex, s);
+  float prog = ${progressExpr};
+  float n = valueNoise(s * 14.0);
+  vec3 col = backdrop(uv);
+  if (tex.a > 0.5) {
+    if (n >= prog) {
+      col = tex.rgb;
+      float edge = smoothstep(prog, prog + 0.08, n);
+      col = mix(vec3(1.0, 0.6, 0.1), col, edge);
+    }
+  }
+  gl_FragColor = vec4(col, 1.0);
+}`;
+}</code></pre>
+                </div>
+            </details>
+
+            <div class="diagram">
+                <canvas id="dissolveGL" width="800" height="450"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnDis0">0%</button>
+                <button id="btnDis50">50%</button>
+                <button id="btnDis95">95%</button>
+                <button id="btnDisAuto">Auto</button>
+            </div>
+            <div id="dissolveGLInfo" class="info-display">discard where noise &lt; progress; glowing burn edge.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- OUTLINE -->
+        <!-- ============================================ -->
+        <div id="outline" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>⭕ Outline / Rim</h2>
+
+            <p>
+                The selection highlight in every strategy game. A pixel just <em>outside</em> the
+                sprite should glow if one of its neighbours is <em>inside</em>. Sample the sprite's
+                alpha at the eight neighbouring texels — one texel is
+                <code>1.0 / u_texResolution</code> — and if any is opaque while this pixel isn't,
+                you're on the rim.
+            </p>
+
+            <div class="concept-box">
+                <h4>Why <code>u_texResolution</code></h4>
+                <p>To step exactly one texel you must know the texture's pixel size. The runner
+                passes it as <code>u_texResolution</code> (256, 256). <code>u_param</code> scales
+                the step → outline thickness, with zero recompiles.</p>
+            </div>
+
+            <details data-demo-id="sh_outlineGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy,sh_drawSprite,sh_glslKit">
+                <summary>📝 Click to see: 8-tap alpha dilation</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// 8 fixed taps (no loop) → GLSL ES 1.00-safe.
+float silhouette(vec2 s) {
+  vec2 px = u_param / u_texResolution;      // texel step * thickness
+  float m = 0.0;
+  m = max(m, texture2D(u_tex, s + vec2( px.x, 0.0)).a);
+  m = max(m, texture2D(u_tex, s + vec2(-px.x, 0.0)).a);
+  m = max(m, texture2D(u_tex, s + vec2(0.0,  px.y)).a);
+  m = max(m, texture2D(u_tex, s + vec2(0.0, -px.y)).a);
+  m = max(m, texture2D(u_tex, s + px).a);
+  m = max(m, texture2D(u_tex, s - px).a);
+  m = max(m, texture2D(u_tex, s + vec2( px.x, -px.y)).a);
+  m = max(m, texture2D(u_tex, s + vec2(-px.x,  px.y)).a);
+  return m;
+}
+// ring = neighbour-is-opaque but I'm not → draw the outline colour there.</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// GLSL is identical across JS/TS; only the host code differs.
+float silhouette(vec2 s) {
+  vec2 px = u_param / u_texResolution;
+  float m = 0.0;
+  m = max(m, texture2D(u_tex, s + vec2( px.x, 0.0)).a);
+  m = max(m, texture2D(u_tex, s + vec2(-px.x, 0.0)).a);
+  m = max(m, texture2D(u_tex, s + vec2(0.0,  px.y)).a);
+  m = max(m, texture2D(u_tex, s + vec2(0.0, -px.y)).a);
+  m = max(m, texture2D(u_tex, s + px).a);
+  m = max(m, texture2D(u_tex, s - px).a);
+  m = max(m, texture2D(u_tex, s + vec2( px.x, -px.y)).a);
+  m = max(m, texture2D(u_tex, s + vec2(-px.x,  px.y)).a);
+  return m;
+}</code></pre>
+                </div>
+            </details>
+
+            <div class="diagram">
+                <canvas id="outlineGL" width="800" height="450"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnOutOff">No outline</button>
+                <button id="btnOutCyan">Outline</button>
+                <button id="btnOutThick">Thicker</button>
+                <button id="btnOutGold">Gold</button>
+            </div>
+            <div id="outlineGLInfo" class="info-display">8-tap alpha dilation around the silhouette.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- HIT FLASH -->
+        <!-- ============================================ -->
+        <div id="hitflash" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>⚡ Hit-Flash &amp; Invincibility Blink</h2>
+
+            <p>
+                The two pieces of damage feedback every action game ships.
+                <strong>Hit-flash</strong>: <code>mix</code> the sprite toward white on a fast
+                pulse. <strong>Invincibility blink</strong>: toggle the sprite's alpha on and off
+                during i-frames. Both are one line driven by <code>u_time</code>.
+            </p>
+
+            <div class="key-point">
+                <strong>💡 Triggering it for real:</strong> in a game you'd start the pulse on the
+                damage event and let it decay. Here, clicking the canvas re-arms the flash — the
+                same idea, JS-side. (A one-shot decay needs a "hit time" uniform; that's an
+                Advanced-tier topic.)
+            </div>
+
+            <details data-demo-id="sh_hitflashGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy,sh_drawSprite,sh_glslKit">
+                <summary>📝 Click to see: flash &amp; blink</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">const FLASH = GLSL_HEAD + `void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec4 tex = texture2D(u_tex, toSpriteUV(uv));
+  float f = 0.5 + 0.5 * sin(u_time * 18.0);
+  vec3 hit = mix(tex.rgb, vec3(1.0), f);          // white-out pulse
+  gl_FragColor = vec4(mix(backdrop(uv), hit, tex.a), 1.0);
+}`;
+const BLINK = GLSL_HEAD + `void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec4 tex = texture2D(u_tex, toSpriteUV(uv));
+  float on = step(0.5, fract(u_time * 6.0));      // i-frame blink
+  gl_FragColor = vec4(mix(backdrop(uv), tex.rgb, tex.a * on), 1.0);
+}`;
+canvas.addEventListener('click', () =&gt; toy.setFrag(FLASH));</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const FLASH: string = GLSL_HEAD + `void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec4 tex = texture2D(u_tex, toSpriteUV(uv));
+  float f = 0.5 + 0.5 * sin(u_time * 18.0);
+  vec3 hit = mix(tex.rgb, vec3(1.0), f);
+  gl_FragColor = vec4(mix(backdrop(uv), hit, tex.a), 1.0);
+}`;
+const BLINK: string = GLSL_HEAD + `void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec4 tex = texture2D(u_tex, toSpriteUV(uv));
+  float on = step(0.5, fract(u_time * 6.0));
+  gl_FragColor = vec4(mix(backdrop(uv), tex.rgb, tex.a * on), 1.0);
+}`;
+canvas.addEventListener('click', (): void =&gt; toy.setFrag(FLASH));</code></pre>
+                </div>
+            </details>
+
+            <div class="diagram">
+                <canvas id="hitflashGL" width="800" height="450"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnHitFlash">Hit flash</button>
+                <button id="btnHitBlink">Invuln blink</button>
+                <button id="btnHitNormal">Normal</button>
+            </div>
+            <div id="hitflashGLInfo" class="info-display">mix(sprite, white, pulse) + alpha blink. Click to re-trigger.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- SHADED SPRITE MINI-PROJECT -->
+        <!-- ============================================ -->
+        <div id="shaded-sprite" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>💎 Mini-Project: Fully Shaded Sprite</h2>
+
+            <p>
+                Compose the tier into one production-shaped sprite material:
+            </p>
+            <ul>
+                <li><strong>palette-swap</strong> the base colour (original / fire / ice)</li>
+                <li>a toggleable <strong>selection outline</strong></li>
+                <li>a <strong>hit-flash</strong> on click</li>
+            </ul>
+            <p>
+                It's state-built — the buttons rebuild the shader from a small state object, the
+                same pattern as Beginner's water and Intermediate's fire.
+            </p>
+
+            <details data-demo-id="sh_spriteGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy,sh_drawSprite,sh_glslKit">
+                <summary>📝 Click to see: the composed sprite material</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">function buildFrag(s) {
+    const pal = PALETTES[s.pal];
+    const colorExpr = pal
+        ? '(l &lt; 0.5 ? mix(' + pal[0] + ', ' + pal[1] + ', l*2.0) : mix(' + pal[1] + ', ' + pal[2] + ', (l-0.5)*2.0))'
+        : 'tex.rgb';
+    const outlineBlock = s.outline ? '/* 8-tap dilation → col */' : '';
+    const flashBlock = s.flash
+        ? '  spr = mix(spr, vec3(1.0), 0.5 + 0.5 * sin(u_time * 18.0));' : '';
+    return GLSL_HEAD + `void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec2 sUV = toSpriteUV(uv);
+  vec4 tex = texture2D(u_tex, sUV);
+  float l = dot(tex.rgb, vec3(0.299, 0.587, 0.114));
+  vec3 spr = ${colorExpr};
+${flashBlock}
+  vec3 col = backdrop(uv);
+${outlineBlock}
+  col = mix(col, spr, tex.a);
+  gl_FragColor = vec4(col, 1.0);
+}`;
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface SpriteState { pal: number; outline: boolean; flash: boolean; }
+
+function buildFrag(s: SpriteState): string {
+    const pal = PALETTES[s.pal];
+    const colorExpr = pal
+        ? '(l &lt; 0.5 ? mix(' + pal[0] + ', ' + pal[1] + ', l*2.0) : mix(' + pal[1] + ', ' + pal[2] + ', (l-0.5)*2.0))'
+        : 'tex.rgb';
+    const outlineBlock = s.outline ? '/* 8-tap dilation → col */' : '';
+    const flashBlock = s.flash
+        ? '  spr = mix(spr, vec3(1.0), 0.5 + 0.5 * sin(u_time * 18.0));' : '';
+    return GLSL_HEAD + `void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec2 sUV = toSpriteUV(uv);
+  vec4 tex = texture2D(u_tex, sUV);
+  float l = dot(tex.rgb, vec3(0.299, 0.587, 0.114));
+  vec3 spr = ${colorExpr};
+${flashBlock}
+  vec3 col = backdrop(uv);
+${outlineBlock}
+  col = mix(col, spr, tex.a);
+  gl_FragColor = vec4(col, 1.0);
+}`;
+}</code></pre>
+                </div>
+            </details>
+
+            <div class="diagram">
+                <canvas id="spriteGL" width="800" height="450"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnSprPalette">Palette</button>
+                <button id="btnSprOutline">Toggle outline</button>
+                <button id="btnSprHit">Hit!</button>
+                <button id="btnSprReset">Reset</button>
+            </div>
+            <div id="spriteGLInfo" class="info-display">Composed: palette-swap + outline + hit-flash. Click the sprite.</div>
+
+            <div class="example-box">
+                <h4>🎮 What you just built</h4>
+                <p>
+                    A production-shaped sprite material — recolour, selection ring, damage feedback —
+                    from one procedural texture, no assets. Hit 📋 Export on any demo for a
+                    standalone runnable file (the <code>drawSprite</code> painter ships inline).
+                </p>
+            </div>
+
+            <div class="key-point">
+                <strong>💡 What's next:</strong> the <a href="advanced.html">Advanced tier</a> moves
+                to <em>multi-pass &amp; post-processing</em> — render-to-texture (FBOs), blur, bloom,
+                and full-screen colour grading. WebGL2 / GLSL ES 3.00 is introduced there.
+            </div>
+        </div>
+
+        <!-- Next Steps -->
+        <div class="section" style="text-align: center;">
+            <h2>✅ Expert Tier Complete</h2>
+            <p style="font-size: 1.1em; margin: 24px 0;">
+                You can sample a texture, tint it, swap its palette, dissolve it, outline it, and
+                flash it on hit — the material-shader toolkit 2D games actually ship.
+            </p>
+            <a href="advanced.html" class="nav-button" style="font-size: 1.2em; padding: 20px 40px;">
+                Continue to Advanced →
+            </a>
+            <p style="margin-top: 20px;"><em>Advanced isn't written yet — coming in the next phase. Track progress on the <a href="index.html">track index</a>.</em></p>
+        </div>
+    </div>
+
+    <!-- Scroll to Top Button -->
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <!-- Shared utilities (loaded for consistency with other pages). -->
+    <script src="../shared/utils.js"></script>
+
+    <!-- Code-tab toggle (JavaScript / TypeScript). -->
+    <script src="../shared/code-tabs.js"></script>
+
+    <!-- Page-specific interactive WebGL demos. -->
+    <script src="expert-demos.js"></script>
+
+    <!-- Shaders-specific bundles for the 📋 Export button. -->
+    <script src="bundles-expert.js"></script>
+    <script src="../shared/export-demo.js"></script>
+
+    <script>
+        // Scroll-to-top behavior. Mirrors every other page in the project.
+        const scrollToTopBtn = document.getElementById('scrollToTop');
+        scrollToTopBtn.addEventListener('click', () => {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+        window.addEventListener('scroll', () => {
+            scrollToTopBtn.style.opacity = window.pageYOffset > 300 ? '1' : '0';
+        });
+        scrollToTopBtn.style.opacity = '0';
+        scrollToTopBtn.style.transition = 'opacity 0.3s';
+    </script>
+</body>
+</html>

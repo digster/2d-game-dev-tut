@@ -26,9 +26,9 @@ own subdirectory with a per-tier file structure mirroring the Fundamentals layou
   tier files are landing iteratively.
 - `shaders/` — learn WebGL / GLSL fragment shaders for 2D game effects.
   See `shaders/index.html` for the track roadmap. The Beginner (Shader
-  Foundations) and Intermediate (Patterns, Noise & Distortion) tiers are
-  shipped; later tiers land iteratively. Uses WebGL1 + GLSL ES 1.00; demo IDs
-  and helper bundles are prefixed `sh_`.
+  Foundations), Intermediate (Patterns, Noise & Distortion), and Expert
+  (Textures & Sprite Shaders) tiers are shipped; later tiers land iteratively.
+  Uses WebGL1 + GLSL ES 1.00; demo IDs and helper bundles are prefixed `sh_`.
 
 ## Shared assets
 

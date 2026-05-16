@@ -32,3 +32,8 @@ bundles-*.js). Pure readability, behavior byte-identical.
 tier (Patterns, Noise & Distortion) — tiling, the hash, value noise, fbm,
 domain warping, UV distortion, animated fire/smoke mini-project — and flip
 its roadmap card to Ready.
+(3) Continue with the next phase: ship the Shaders track's Expert tier
+(Textures & Sprite Shaders) — sampling a procedural sprite texture, tint,
+palette-swap, dissolve/burn, outline, hit-flash/blink, a fully-shaded-sprite
+mini-project — extend makeShaderToy with a backward-compatible texture
+branch, and flip its roadmap card to Ready.
