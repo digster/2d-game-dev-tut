@@ -174,14 +174,18 @@ function makeSim(canvas, spec, opts) {
     if (!buildAll(spec)) return noop;
 
     const mouse = { x: 0.5, y: 0.5, down: 0 };
-    canvas.addEventListener('mousemove', (e) => {
+    const onMove = (e) => {
         const r = canvas.getBoundingClientRect();
         mouse.x = (e.clientX - r.left) / r.width;
         mouse.y = 1.0 - (e.clientY - r.top) / r.height;   // Y-flip → gl_FragCoord space
-    });
-    canvas.addEventListener('mousedown', () => { mouse.down = 1; });
-    window.addEventListener('mouseup', () => { mouse.down = 0; });
-    canvas.addEventListener('mouseleave', () => { mouse.down = 0; });
+    };
+    const onDown = () => { mouse.down = 1; };
+    const onUp = () => { mouse.down = 0; };
+    const onLeave = () => { mouse.down = 0; };
+    canvas.addEventListener('mousemove', onMove);
+    canvas.addEventListener('mousedown', onDown);
+    window.addEventListener('mouseup', onUp);
+    canvas.addEventListener('mouseleave', onLeave);
 
     let frameN = 0, tNow = 0;
     function bindQuad(prog) {
@@ -246,7 +250,8 @@ function makeSim(canvas, spec, opts) {
         }
         raf = requestAnimationFrame(frame);
     }
-    canvas.addEventListener('webglcontextlost', (e) => e.preventDefault(), false);
+    const onLost = (e) => e.preventDefault();
+    canvas.addEventListener('webglcontextlost', onLost, false);
     raf = requestAnimationFrame(frame);
 
     return {
@@ -254,7 +259,27 @@ function makeSim(canvas, spec, opts) {
         reset() { cur = A; nxt = B; seed(); },
         setParam(v) { uParam = v; },
         setPaused(b) { paused = b; if (!b) last = performance.now(); },
-        rebuild(s) { spec = s; if (buildAll(s)) { cur = A; nxt = B; seed(); } }
+        rebuild(s) { spec = s; if (buildAll(s)) { cur = A; nxt = B; seed(); } },
+        // Full teardown so the lazy wrapper can free the WebGL2 context when the
+        // demo scrolls off-screen (delete programs/buffers/float RTs + remove
+        // the window-level mouseup listener, then lose the context).
+        destroy() {
+            cancelAnimationFrame(raf);
+            canvas.removeEventListener('mousemove', onMove);
+            canvas.removeEventListener('mousedown', onDown);
+            window.removeEventListener('mouseup', onUp);
+            canvas.removeEventListener('mouseleave', onLeave);
+            canvas.removeEventListener('webglcontextlost', onLost, false);
+            try {
+                [seedProg, stepProg, dispProg, pointProg].forEach(p => { if (p) gl.deleteProgram(p); });
+                if (quad) gl.deleteBuffer(quad);
+                [A, B].forEach(b => {
+                    if (b) { gl.deleteTexture(b.t); gl.deleteFramebuffer(b.f); }
+                });
+            } catch (e) { /* context may already be lost */ }
+            const ext = gl.getExtension('WEBGL_lose_context');
+            if (ext) ext.loseContext();
+        }
     };
 }
 
@@ -265,7 +290,7 @@ function makeSim(canvas, spec, opts) {
     const canvas = document.getElementById('simLoopGL');
     if (!canvas) return;
     const info = document.getElementById('simLoopGLInfo');
-    makeSim(canvas, {
+    lazyToy(canvas, (cv) => makeSim(cv, {
         seed: SIM_HEAD + `void main() { outColor = vec4(0.0); }`,
         step: SIM_HEAD + SIM_LIB + `void main() {
   vec2 uv = gl_FragCoord.xy / u_resolution;
@@ -278,7 +303,7 @@ function makeSim(canvas, spec, opts) {
   vec3 c = mix(vec3(0.03,0.04,0.08), vec3(1.0,0.6,0.15), v);
   outColor = vec4(c, 1.0);
 }`
-    }, { info: info });
+    }, { info: info }));
 })();
 
 // =============================================================================
@@ -288,7 +313,7 @@ function makeSim(canvas, spec, opts) {
     const canvas = document.getElementById('lifeGL');
     if (!canvas) return;
     const info = document.getElementById('lifeGLInfo');
-    const sim = makeSim(canvas, {
+    const sim = lazyToy(canvas, (cv) => makeSim(cv, {
         seed: SIM_HEAD + SIM_LIB + `void main() {
   float r = hash(gl_FragCoord.xy + 0.123);
   outColor = vec4(step(0.7, r), 0.0, 0.0, 1.0);
@@ -307,7 +332,7 @@ function makeSim(canvas, spec, opts) {
   float a = texture(u_state, gl_FragCoord.xy / u_resolution).r;
   outColor = vec4(mix(vec3(0.04,0.05,0.09), vec3(0.4,1.0,0.55), a), 1.0);
 }`
-    }, { info: info });
+    }, { info: info }));
     document.getElementById('btnLifeReseed')?.addEventListener('click', () => {
         sim.reset(); info.textContent = 'Reseeded — random soup. Drag to draw cells.';
     });
@@ -357,7 +382,7 @@ void main() {
 }`
         };
     }
-    const sim = makeSim(canvas, spec(PRESETS.coral), { info: info });
+    const sim = lazyToy(canvas, (cv) => makeSim(cv, spec(PRESETS.coral), { info: info }));
     Object.keys(PRESETS).forEach(name => {
         document.getElementById('btnRD' + name)?.addEventListener('click', () => {
             sim.rebuild(spec(PRESETS[name]));
@@ -374,7 +399,7 @@ void main() {
     if (!canvas) return;
     const info = document.getElementById('particlesGLInfo');
     const N = 256;
-    makeSim(canvas, {
+    lazyToy(canvas, (cv) => makeSim(cv, {
         stateW: N, stateH: N, points: { vert: POINT_VERT, frag: POINT_FRAG, count: N * N },
         seed: SIM_HEAD + SIM_LIB + `void main() {
   vec2 t = gl_FragCoord.xy;
@@ -396,7 +421,7 @@ void main() {
   outColor = vec4(p, v);
 }`,
         display: DISP_HEAD + `void main() { outColor = vec4(0.0); }`   // unused (points display)
-    }, { info: info });
+    }, { info: info }));
 })();
 
 // =============================================================================
@@ -432,8 +457,8 @@ const FLUID_DISP = DISP_HEAD + `void main() {
     const canvas = document.getElementById('fluidGL');
     if (!canvas) return;
     const info = document.getElementById('fluidGLInfo');
-    makeSim(canvas, { substeps: 2, seed: FLUID_SEED, step: FLUID_STEP, display: FLUID_DISP },
-        { info: info });
+    lazyToy(canvas, (cv) => makeSim(cv, { substeps: 2, seed: FLUID_SEED, step: FLUID_STEP, display: FLUID_DISP },
+        { info: info }));
 })();
 
 // =============================================================================
@@ -443,7 +468,7 @@ const FLUID_DISP = DISP_HEAD + `void main() {
     const canvas = document.getElementById('sandGL');
     if (!canvas) return;
     const info = document.getElementById('sandGLInfo');
-    const sim = makeSim(canvas, {
+    const sim = lazyToy(canvas, (cv) => makeSim(cv, {
         seed: SIM_HEAD + `void main() { outColor = vec4(0.0); }`,
         step: SIM_HEAD + SIM_LIB + `void main() {
   float me = cell(ivec2(0)).r;                       // 0 empty, 1 sand, 2 wall
@@ -467,7 +492,7 @@ const FLUID_DISP = DISP_HEAD + `void main() {
   c = mix(c, vec3(0.45, 0.47, 0.55), step(1.5, m)); // wall
   outColor = vec4(c, 1.0);
 }`
-    }, { info: info, param: 1.0 });
+    }, { info: info, param: 1.0 }));
 
     let paused = false;
     document.getElementById('btnSandSand')?.addEventListener('click', () => {
@@ -493,7 +518,7 @@ const FLUID_DISP = DISP_HEAD + `void main() {
     if (!canvas) return;
     const info = document.getElementById('boidsGLInfo');
     const N = 96;   // 9,216 boids
-    const sim = makeSim(canvas, {
+    const sim = lazyToy(canvas, (cv) => makeSim(cv, {
         stateW: N, stateH: N,
         points: { vert: POINT_VERT, frag: POINT_FRAG, count: N * N },
         seed: SIM_HEAD + SIM_LIB + `void main() {
@@ -530,7 +555,7 @@ const FLUID_DISP = DISP_HEAD + `void main() {
   outColor = vec4(p, v);
 }`,
         display: DISP_HEAD + `void main() { outColor = vec4(0.0); }`
-    }, { info: info, param: 1.0 });
+    }, { info: info, param: 1.0 }));
 
     document.getElementById('btnBoidLoose')?.addEventListener('click', () => {
         sim.setParam(1.0); info.textContent = 'Loose flock — light cohesion.';
@@ -553,7 +578,7 @@ const FLUID_DISP = DISP_HEAD + `void main() {
     const canvas = document.getElementById('waveGL');
     if (!canvas) return;
     const info = document.getElementById('waveGLInfo');
-    const sim = makeSim(canvas, {
+    const sim = lazyToy(canvas, (cv) => makeSim(cv, {
         substeps: 2,
         seed: SIM_HEAD + `void main() { outColor = vec4(0.0); }`,
         step: SIM_HEAD + SIM_LIB + `void main() {
@@ -577,7 +602,7 @@ const FLUID_DISP = DISP_HEAD + `void main() {
   vec3 col = mix(vec3(0.02, 0.06, 0.16), vec3(0.40, 0.78, 1.0), 0.5 + 0.5 * h);
   outColor = vec4(col * (0.35 + 0.85 * light), 1.0);
 }`
-    }, { info: info, param: 1.0 });
+    }, { info: info, param: 1.0 }));
 
     let paused = false;
     document.getElementById('btnWaveSlow')?.addEventListener('click', () => {
@@ -621,8 +646,8 @@ const FLUID_DISP = DISP_HEAD + `void main() {
 }`;
     }
     const state = { dye: 'aqua' };
-    const sim = makeSim(canvas, { substeps: 2, seed: FLUID_SEED, step: stepFor(DYES.aqua), display: FLUID_DISP },
-        { info: info, param: 0.5 });
+    const sim = lazyToy(canvas, (cv) => makeSim(cv, { substeps: 2, seed: FLUID_SEED, step: stepFor(DYES.aqua), display: FLUID_DISP },
+        { info: info, param: 0.5 }));
     Object.keys(DYES).forEach(name => {
         document.getElementById('btnPg' + name)?.addEventListener('click', () => {
             state.dye = name;

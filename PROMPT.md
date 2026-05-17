@@ -66,3 +66,23 @@ tier verified in a real browser: zero GLSL console errors, all controls
 exercised, and the 📋 Export standalone HTML run for the riskiest demos
 (JS path; TS path proven via byte-identical GLSL parity since the sandbox
 blocks the Sucrase CDN for all repo exports).
+(7) Bug report (regression from #6): "The first example in the advanced
+section is not working." Root cause: every shaders tier eagerly creates one
+WebGL context per demo canvas; advanced.html has 9 effects × {GL1,GL2} = 18
+contexts at load, the browser caps ~16 and evicts the OLDEST (rttGL1) with no
+recovery → blank canvas; the +6 contexts from #6 tipped it over. User chose
+the robust fix (lazy mount + real teardown) applied to ALL five tiers. Added
+shared/lazy-demo.js — a stable proxy + IntersectionObserver that mounts a
+demo's harness only while its canvas is on screen and tears it down when it
+scrolls away; because a <canvas> is permanently bound to its one context, the
+wrapper also REPLACES the canvas element on unmount so a fresh context can be
+made, and replays the last mutator call so button state survives. Added a real
+destroy() (delete GL programs/buffers/textures/FBOs + WEBGL_lose_context, remove
+listeners) to makeFXChain, all three makeShaderToy copies, and makeSim; wrapped
+every demo call site (and mountFX) with lazyToy; added the script include to all
+5 tier pages. Bundles/Exports untouched (standalone = one always-visible
+canvas; verified byte-identical + still runs). Accepted trade-off: stateful
+sims/feedback demos re-seed when scrolled fully away and back. Verified per
+tier in a real browser: rttGL1 renders, ZERO "too many WebGL contexts"
+warnings even after scrolling the whole page and back, api-tab GL1↔GL2
+mount/unmount works, state replayed.

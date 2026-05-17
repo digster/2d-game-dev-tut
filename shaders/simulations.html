@@ -477,6 +477,9 @@ const sim = makeSim(canvas, { substeps: 2, seed, step: stepFor(DYES.aqua),
 
     <script src="../shared/utils.js"></script>
     <script src="../shared/code-tabs.js"></script>
+    <!-- Lazy demo mounting: only on-screen demos hold a WebGL2 context (browsers
+         cap simultaneous contexts at ~16). Must load before the demos script. -->
+    <script src="../shared/lazy-demo.js"></script>
     <script src="simulations-demos.js"></script>
     <script src="bundles-simulations.js"></script>
     <script src="../shared/export-demo.js"></script>

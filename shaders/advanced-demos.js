@@ -203,14 +203,32 @@ function makeFXChain(canvas, gl, VERT, sceneFrag, postFrags, opts) {
         }
         raf = requestAnimationFrame(frame);
     }
-    canvas.addEventListener('webglcontextlost', (e) => e.preventDefault(), false);
+    const onLost = (e) => e.preventDefault();
+    canvas.addEventListener('webglcontextlost', onLost, false);
     raf = requestAnimationFrame(frame);
 
     return {
         stop() { cancelAnimationFrame(raf); },
         setParam(v) { uParam = v; },
         setPaused(b) { paused = b; if (!b) last = performance.now(); },
-        rebuild(sF, pF) { compileAll(sF, pF); }
+        rebuild(sF, pF) { compileAll(sF, pF); },
+        // Full teardown so the lazy wrapper can free the WebGL context when the
+        // demo scrolls off-screen (delete GL objects, then lose the context —
+        // dropping JS refs alone does not release it).
+        destroy() {
+            cancelAnimationFrame(raf);
+            canvas.removeEventListener('webglcontextlost', onLost, false);
+            try {
+                if (sceneProg) gl.deleteProgram(sceneProg);
+                postProgs.forEach(p => gl.deleteProgram(p));
+                gl.deleteBuffer(quad);
+                [sceneFB, pingA, pingB].forEach(b => {
+                    gl.deleteTexture(b.t); gl.deleteFramebuffer(b.f);
+                });
+            } catch (e) { /* context may already be lost */ }
+            const ext = gl.getExtension('WEBGL_lose_context');
+            if (ext) ext.loseContext();
+        }
     };
 }
 function makeFXChainGL1(canvas, scene, post, opts) {
@@ -424,8 +442,17 @@ function mountFX(canvasId, infoId, api, effect, initState, wireButtons) {
     const make = api === 'gl2' ? makeFXChainGL2 : makeFXChainGL1;
     const state = Object.assign({}, initState);
     function build() { return chainFor(effect, state).map(g); }
-    const toy = make(canvas, SCENE, build(), { info: info, param: initState._param != null ? initState._param : 1.0 });
-    toy.rebuildChain = () => toy.rebuild(SCENE, build());
+    // Lazy: the FBO chain is only built while the canvas is on screen and is
+    // torn down when it scrolls away (bounds live WebGL contexts to what's
+    // visible). `state` lives in this closure, so every (re)mount's build()
+    // reflects the latest preset/iters/mode; recorded setParam/rebuildChain
+    // calls are replayed by the wrapper to restore the rest.
+    const toy = lazyToy(canvas, (cv) => {
+        const real = make(cv, SCENE, build(),
+            { info: info, param: initState._param != null ? initState._param : 1.0 });
+        real.rebuildChain = () => real.rebuild(SCENE, build());
+        return real;
+    });
     if (wireButtons) wireButtons(toy, state, info);
     return toy;
 }

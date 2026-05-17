@@ -94,14 +94,15 @@ function makeShaderToy(canvas, fragSrc, opts) {
     const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
     if (!gl) { fail('WebGL is not available in this browser/context.', null); return noop; }
 
-    let program = null, uTime, uRes, uMouse, uP;
+    let program = null, quadBuf = null, uTime, uRes, uMouse, uP;
     function build(src) {
         try {
             const next = createShaderProgram(gl, SH_VERT_SRC, src);
             if (program) gl.deleteProgram(program);
             program = next;
             gl.useProgram(program);
-            setupFullscreenQuad(gl, program);
+            if (quadBuf) gl.deleteBuffer(quadBuf);
+            quadBuf = setupFullscreenQuad(gl, program);
             uTime = gl.getUniformLocation(program, 'u_time');
             uRes = gl.getUniformLocation(program, 'u_resolution');
             uMouse = gl.getUniformLocation(program, 'u_mouse');
@@ -118,16 +119,18 @@ function makeShaderToy(canvas, fragSrc, opts) {
                  setPaused() {}, setTimeScale() {} };
     }
 
-    canvas.addEventListener('mousemove', (e) => {
+    const onMove = (e) => {
         const r = canvas.getBoundingClientRect();
         mouse.x = (e.clientX - r.left) * (canvas.width / r.width);
         mouse.y = canvas.height - (e.clientY - r.top) * (canvas.height / r.height);
-    });
-    canvas.addEventListener('mouseleave', () => {
-        mouse.x = canvas.width / 2; mouse.y = canvas.height / 2;
-    });
-    canvas.addEventListener('webglcontextlost', (e) => e.preventDefault(), false);
-    canvas.addEventListener('webglcontextrestored', () => build(fragSrc), false);
+    };
+    const onLeave = () => { mouse.x = canvas.width / 2; mouse.y = canvas.height / 2; };
+    const onLost = (e) => e.preventDefault();
+    const onRestored = () => build(fragSrc);
+    canvas.addEventListener('mousemove', onMove);
+    canvas.addEventListener('mouseleave', onLeave);
+    canvas.addEventListener('webglcontextlost', onLost, false);
+    canvas.addEventListener('webglcontextrestored', onRestored, false);
 
     let raf = 0, acc = 0, last = performance.now();
     function frame(now) {
@@ -149,7 +152,22 @@ function makeShaderToy(canvas, fragSrc, opts) {
         setFrag(src) { build(src); },
         setParam(v) { uParam = v; },
         setPaused(b) { paused = b; if (!b) last = performance.now(); },
-        setTimeScale(s) { timeScale = s; }
+        setTimeScale(s) { timeScale = s; },
+        // Full teardown so the lazy wrapper can free the WebGL context when the
+        // demo scrolls off-screen (delete GL objects, then lose the context).
+        destroy() {
+            cancelAnimationFrame(raf);
+            canvas.removeEventListener('mousemove', onMove);
+            canvas.removeEventListener('mouseleave', onLeave);
+            canvas.removeEventListener('webglcontextlost', onLost, false);
+            canvas.removeEventListener('webglcontextrestored', onRestored, false);
+            try {
+                if (program) gl.deleteProgram(program);
+                if (quadBuf) gl.deleteBuffer(quadBuf);
+            } catch (e) { /* context may already be lost */ }
+            const ext = gl.getExtension('WEBGL_lose_context');
+            if (ext) ext.loseContext();
+        }
     };
 }
 
@@ -182,7 +200,7 @@ void main() {
 }`;
     }
 
-    const toy = makeShaderToy(canvas, buildFrag(6), { info: info });
+    const toy = lazyToy(canvas, (cv) => makeShaderToy(cv, buildFrag(6), { info: info }));
 
     document.getElementById('btnTileFew')?.addEventListener('click', () => {
         toy.setFrag(buildFrag(3)); info.textContent = '3 cells — uv * 3.0, one program tiles the screen.';
@@ -230,7 +248,7 @@ void main() {
   gl_FragColor = vec4(vec3(hash(cell + floor(u_time * 3.0))), 1.0);
 }`;
 
-    const toy = makeShaderToy(canvas, STATIC, { info: info });
+    const toy = lazyToy(canvas, (cv) => makeShaderToy(cv, STATIC, { info: info }));
 
     document.getElementById('btnRandStatic')?.addEventListener('click', () => {
         toy.setFrag(STATIC); info.textContent = 'Static: one deterministic value per cell.';
@@ -285,7 +303,7 @@ void main() {
   gl_FragColor = vec4(vec3(n), 1.0);
 }`;
 
-    const toy = makeShaderToy(canvas, SMOOTH, { info: info });
+    const toy = lazyToy(canvas, (cv) => makeShaderToy(cv, SMOOTH, { info: info }));
 
     document.getElementById('btnVNBlocky')?.addEventListener('click', () => {
         toy.setFrag(BLOCKY); info.textContent = 'Raw hash per cell — blocky, no interpolation.';
@@ -338,7 +356,7 @@ void main() {
 }`;
     }
 
-    const toy = makeShaderToy(canvas, buildFrag(6), { info: info });
+    const toy = lazyToy(canvas, (cv) => makeShaderToy(cv, buildFrag(6), { info: info }));
 
     document.getElementById('btnFbm1')?.addEventListener('click', () => {
         toy.setFrag(buildFrag(1)); info.textContent = '1 octave — just the base value noise.';
@@ -396,7 +414,7 @@ void main() {
   gl_FragColor = vec4(col, 1.0);
 }`;
 
-    const toy = makeShaderToy(canvas, FRAG, { info: info, param: 1.0 });
+    const toy = lazyToy(canvas, (cv) => makeShaderToy(cv, FRAG, { info: info, param: 1.0 }));
 
     document.getElementById('btnWarpOff')?.addEventListener('click', () => {
         toy.setParam(0.0); info.textContent = 'Warp 0 — plain fbm, no distortion.';
@@ -461,7 +479,7 @@ void main() {
   gl_FragColor = vec4(scene(uv + off * u_param), 1.0);
 }`;
 
-    const toy = makeShaderToy(canvas, HEAT, { info: info, param: 1.0 });
+    const toy = lazyToy(canvas, (cv) => makeShaderToy(cv, HEAT, { info: info, param: 1.0 }));
 
     document.getElementById('btnDistHeat')?.addEventListener('click', () => {
         toy.setFrag(HEAT); toy.setParam(1.0);
@@ -528,7 +546,7 @@ void main() {
         warp:   '0.5 + 0.5 * fbm(uv * 4.0 + vec2(fbm(uv * 4.0 + u_time * 0.15), fbm(uv * 4.0 - u_time * 0.1)))'
     };
 
-    const toy = makeShaderToy(canvas, buildFrag(EXPR.single), { info: info });
+    const toy = lazyToy(canvas, (cv) => makeShaderToy(cv, buildFrag(EXPR.single), { info: info }));
     function set(k, msg) { toy.setFrag(buildFrag(EXPR[k])); info.textContent = msg; }
 
     document.getElementById('btnPerlinSingle')?.addEventListener('click', () =>
@@ -590,7 +608,7 @@ void main() {
         cracked:  'mix(vec3(0.05, 0.03, 0.02), vec3(0.34, 0.24, 0.15), smoothstep(0.0, 0.10, f2 - f1))'
     };
 
-    const toy = makeShaderToy(canvas, buildFrag(OUT.distance), { info: info });
+    const toy = lazyToy(canvas, (cv) => makeShaderToy(cv, buildFrag(OUT.distance), { info: info }));
     function set(k, msg) { toy.setFrag(buildFrag(OUT[k])); info.textContent = msg; }
 
     document.getElementById('btnVorDistance')?.addEventListener('click', () =>
@@ -647,7 +665,7 @@ void main() {
         field:    'vec2 fl = vec2(0.8, 0.5 * sin(uv.y * 6.2831 + u_time));\n  float n = fbm(uv * 5.0 - fl * u_time * 0.6);\n  col = mix(vec3(0.04,0.10,0.18), vec3(0.30,0.80,0.85), n);'
     };
 
-    const toy = makeShaderToy(canvas, buildFrag(BODY.conveyor), { info: info });
+    const toy = lazyToy(canvas, (cv) => makeShaderToy(cv, buildFrag(BODY.conveyor), { info: info }));
     function set(k, msg) { toy.setFrag(buildFrag(BODY[k])); info.textContent = msg; }
 
     document.getElementById('btnFlowConveyor')?.addEventListener('click', () =>
@@ -716,7 +734,7 @@ void main() {
 }`;
     }
 
-    const toy = makeShaderToy(canvas, buildFrag(state), { info: info, param: 1.0 });
+    const toy = lazyToy(canvas, (cv) => makeShaderToy(cv, buildFrag(state), { info: info, param: 1.0 }));
     function refresh(msg) { toy.setFrag(buildFrag(state)); info.textContent = msg; }
 
     document.getElementById('btnFireFire')?.addEventListener('click', () => {

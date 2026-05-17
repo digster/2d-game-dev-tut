@@ -753,6 +753,10 @@ const toy = makeFXChainGL1(canvas, SCENE_GL1, build(st), { info: info, param: 1.
 
     <script src="../shared/utils.js"></script>
     <script src="../shared/code-tabs.js"></script>
+    <!-- Lazy demo mounting: only on-screen demos hold a WebGL context (the
+         page has many; browsers cap simultaneous contexts at ~16). Must load
+         before the demos script — they call lazyToy(). -->
+    <script src="../shared/lazy-demo.js"></script>
     <script src="advanced-demos.js"></script>
     <script src="bundles-advanced.js"></script>
     <script src="../shared/export-demo.js"></script>

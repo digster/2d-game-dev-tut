@@ -165,14 +165,15 @@ function makeShaderToy(canvas, fragSrc, opts) {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     }
 
-    let program = null, uTime, uRes, uMouse, uP, uTex, uTexRes;
+    let program = null, quadBuf = null, uTime, uRes, uMouse, uP, uTex, uTexRes;
     function build(src) {
         try {
             const next = createShaderProgram(gl, SH_VERT_SRC, src);
             if (program) gl.deleteProgram(program);
             program = next;
             gl.useProgram(program);
-            setupFullscreenQuad(gl, program);
+            if (quadBuf) gl.deleteBuffer(quadBuf);
+            quadBuf = setupFullscreenQuad(gl, program);
             uTime = gl.getUniformLocation(program, 'u_time');
             uRes = gl.getUniformLocation(program, 'u_resolution');
             uMouse = gl.getUniformLocation(program, 'u_mouse');
@@ -192,16 +193,18 @@ function makeShaderToy(canvas, fragSrc, opts) {
                  setPaused() {}, setTimeScale() {} };
     }
 
-    canvas.addEventListener('mousemove', (e) => {
+    const onMove = (e) => {
         const r = canvas.getBoundingClientRect();
         mouse.x = (e.clientX - r.left) * (canvas.width / r.width);
         mouse.y = canvas.height - (e.clientY - r.top) * (canvas.height / r.height);
-    });
-    canvas.addEventListener('mouseleave', () => {
-        mouse.x = canvas.width / 2; mouse.y = canvas.height / 2;
-    });
-    canvas.addEventListener('webglcontextlost', (e) => e.preventDefault(), false);
-    canvas.addEventListener('webglcontextrestored', () => { spriteTex = null; build(fragSrc); }, false);
+    };
+    const onLeave = () => { mouse.x = canvas.width / 2; mouse.y = canvas.height / 2; };
+    const onLost = (e) => e.preventDefault();
+    const onRestored = () => { spriteTex = null; build(fragSrc); };
+    canvas.addEventListener('mousemove', onMove);
+    canvas.addEventListener('mouseleave', onLeave);
+    canvas.addEventListener('webglcontextlost', onLost, false);
+    canvas.addEventListener('webglcontextrestored', onRestored, false);
 
     let raf = 0, acc = 0, last = performance.now();
     function frame(now) {
@@ -229,7 +232,24 @@ function makeShaderToy(canvas, fragSrc, opts) {
         setFrag(src) { build(src); },
         setParam(v) { uParam = v; },
         setPaused(b) { paused = b; if (!b) last = performance.now(); },
-        setTimeScale(s) { timeScale = s; }
+        setTimeScale(s) { timeScale = s; },
+        // Full teardown so the lazy wrapper can free the WebGL context when the
+        // demo scrolls off-screen (delete GL objects incl. the sprite texture,
+        // then lose the context).
+        destroy() {
+            cancelAnimationFrame(raf);
+            canvas.removeEventListener('mousemove', onMove);
+            canvas.removeEventListener('mouseleave', onLeave);
+            canvas.removeEventListener('webglcontextlost', onLost, false);
+            canvas.removeEventListener('webglcontextrestored', onRestored, false);
+            try {
+                if (program) gl.deleteProgram(program);
+                if (quadBuf) gl.deleteBuffer(quadBuf);
+                if (spriteTex) gl.deleteTexture(spriteTex);
+            } catch (e) { /* context may already be lost */ }
+            const ext = gl.getExtension('WEBGL_lose_context');
+            if (ext) ext.loseContext();
+        }
     };
 }
 
@@ -297,7 +317,7 @@ float valueNoise(vec2 p) {
   gl_FragColor = vec4(c, 1.0);
 }`;
 
-    const toy = makeShaderToy(canvas, FIT, { info: info, sprite: drawSprite });
+    const toy = lazyToy(canvas, (cv) => makeShaderToy(cv, FIT, { info: info, sprite: drawSprite }));
 
     document.getElementById('btnSampFit')?.addEventListener('click', () => {
         toy.setFrag(FIT); info.textContent = 'Fitted: aspect-correct square sprite space.';
@@ -327,7 +347,7 @@ float valueNoise(vec2 p) {
 }`;
     }
 
-    const toy = makeShaderToy(canvas, buildFrag('vec3(1.0)'), { info: info, sprite: drawSprite });
+    const toy = lazyToy(canvas, (cv) => makeShaderToy(cv, buildFrag('vec3(1.0)'), { info: info, sprite: drawSprite }));
 
     document.getElementById('btnTintNone')?.addEventListener('click', () => {
         toy.setFrag(buildFrag('vec3(1.0)')); info.textContent = 'No tint — texColor * vec3(1.0).';
@@ -369,7 +389,7 @@ float valueNoise(vec2 p) {
   gl_FragColor = vec4(mix(backdrop(uv), tex.rgb, tex.a), 1.0);
 }`;
 
-    const toy = makeShaderToy(canvas, ORIGINAL, { info: info, sprite: drawSprite });
+    const toy = lazyToy(canvas, (cv) => makeShaderToy(cv, ORIGINAL, { info: info, sprite: drawSprite }));
 
     document.getElementById('btnPalOrig')?.addEventListener('click', () => {
         toy.setFrag(ORIGINAL); info.textContent = 'Original sprite colours.';
@@ -420,7 +440,7 @@ float valueNoise(vec2 p) {
     const MANUAL = buildFrag('u_param');
     const AUTO = buildFrag('fract(u_time * 0.25)');
 
-    const toy = makeShaderToy(canvas, MANUAL, { info: info, sprite: drawSprite, param: 0.0 });
+    const toy = lazyToy(canvas, (cv) => makeShaderToy(cv, MANUAL, { info: info, sprite: drawSprite, param: 0.0 }));
 
     document.getElementById('btnDis0')?.addEventListener('click', () => {
         toy.setFrag(MANUAL); toy.setParam(0.0); info.textContent = 'Progress 0% — intact.';
@@ -478,7 +498,7 @@ void main() {
     const CYAN = buildFrag('vec3(0.3, 0.9, 1.0)');
     const GOLD = buildFrag('vec3(1.0, 0.82, 0.25)');
 
-    const toy = makeShaderToy(canvas, OFF, { info: info, sprite: drawSprite, param: 3.0 });
+    const toy = lazyToy(canvas, (cv) => makeShaderToy(cv, OFF, { info: info, sprite: drawSprite, param: 3.0 }));
 
     document.getElementById('btnOutOff')?.addEventListener('click', () => {
         toy.setFrag(OFF); info.textContent = 'No outline.';
@@ -523,7 +543,7 @@ void main() {
   gl_FragColor = vec4(mix(backdrop(uv), tex.rgb, tex.a * on), 1.0);
 }`;
 
-    const toy = makeShaderToy(canvas, FLASH, { info: info, sprite: drawSprite });
+    const toy = lazyToy(canvas, (cv) => makeShaderToy(cv, FLASH, { info: info, sprite: drawSprite }));
 
     document.getElementById('btnHitFlash')?.addEventListener('click', () => {
         toy.setFrag(FLASH); info.textContent = 'Hit flash — mix to white on a fast sine.';
@@ -578,7 +598,7 @@ void main() {
         flat:    'tex.rgb'
     };
 
-    const toy = makeShaderToy(canvas, buildFrag(OUT.lit), { info: info, sprite: drawSprite });
+    const toy = lazyToy(canvas, (cv) => makeShaderToy(cv, buildFrag(OUT.lit), { info: info, sprite: drawSprite }));
     function set(k, msg) { toy.setFrag(buildFrag(OUT[k])); info.textContent = msg; }
 
     document.getElementById('btnNmLit')?.addEventListener('click', () =>
@@ -644,7 +664,7 @@ void main() {
   gl_FragColor = vec4(mix(backdrop(uv), tex.rgb, tex.a), 1.0);
 }`;
 
-    const toy = makeShaderToy(canvas, buildFrag('8.0'), { info: info, sprite: drawSheet });
+    const toy = lazyToy(canvas, (cv) => makeShaderToy(cv, buildFrag('8.0'), { info: info, sprite: drawSheet }));
 
     document.getElementById('btnSheetSlow')?.addEventListener('click', () => {
         toy.setFrag(buildFrag('4.0')); info.textContent = '4 fps — you can see each of the 16 frames.';
@@ -698,7 +718,7 @@ void main() {
         palette:   'float g = lum(col);\n  g = floor(g * 4.0 + bayer4(P)) / 4.0;\n  outc = mix(vec3(0.06,0.22,0.06), vec3(0.61,0.74,0.06), g);'
     };
 
-    const toy = makeShaderToy(canvas, buildFrag(MODE.dither), { info: info, sprite: drawSprite });
+    const toy = lazyToy(canvas, (cv) => makeShaderToy(cv, buildFrag(MODE.dither), { info: info, sprite: drawSprite }));
     function set(k, msg) { toy.setFrag(buildFrag(MODE[k])); info.textContent = msg; }
 
     document.getElementById('btnDitPosterize')?.addEventListener('click', () =>
@@ -760,7 +780,7 @@ ${outlineBlock}
 }`;
     }
 
-    const toy = makeShaderToy(canvas, buildFrag(state), { info: info, sprite: drawSprite });
+    const toy = lazyToy(canvas, (cv) => makeShaderToy(cv, buildFrag(state), { info: info, sprite: drawSprite }));
     function refresh(msg) { toy.setFrag(buildFrag(state)); info.textContent = msg; }
 
     document.getElementById('btnSprPalette')?.addEventListener('click', () => {

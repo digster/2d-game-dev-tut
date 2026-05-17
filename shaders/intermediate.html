@@ -953,6 +953,10 @@ const toy = makeShaderToy(canvas, buildFrag(state), { info: info, param: 1.0 });
     <!-- Code-tab toggle (JavaScript / TypeScript). -->
     <script src="../shared/code-tabs.js"></script>
 
+    <!-- Lazy demo mounting: only on-screen demos hold a WebGL context (browsers
+         cap simultaneous contexts at ~16). Must load before the demos script. -->
+    <script src="../shared/lazy-demo.js"></script>
+
     <!-- Page-specific interactive WebGL demos. -->
     <script src="intermediate-demos.js"></script>
 
