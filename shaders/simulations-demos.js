@@ -99,6 +99,55 @@ const SIM_LIB = `vec4 cell(ivec2 o) {
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 `;
 
+// ---- Agent-sim GLSL kit (for makeAgentSim — two coupled fields) -------------
+// Agents read BOTH the agent buffer (their own state) and the trail field;
+// trail/display passes read only the trail. u_trailRes is the trail's pixel
+// size so an agent can convert a pixel sensor distance into UV space.
+const AGENT_HEAD = `#version 300 es
+precision highp float;
+uniform sampler2D u_agents;
+uniform sampler2D u_trail;
+uniform vec2 u_resolution;
+uniform vec2 u_trailRes;
+uniform float u_time;
+uniform int u_frame;
+uniform vec2 u_mouse;
+uniform float u_mouseDown;
+uniform float u_param;
+out vec4 outColor;
+`;
+const TRAIL_HEAD = `#version 300 es
+precision highp float;
+uniform sampler2D u_trail;
+uniform vec2 u_resolution;
+uniform vec2 u_trailRes;
+uniform float u_time;
+uniform int u_frame;
+uniform vec2 u_mouse;
+uniform float u_mouseDown;
+uniform float u_param;
+out vec4 outColor;
+`;
+const AGENT_LIB = `float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+vec2 rot(vec2 v, float a) { float c = cos(a), s = sin(a); return vec2(c*v.x - s*v.y, s*v.x + c*v.y); }
+`;
+// Deposit = the SCATTER pass: one gl.POINTS vertex per agent. The vertex
+// shader IS the scatter (gl_VertexID → agent texel → its trail position);
+// the fragment writes a small scent value, blended ONE,ONE into the trail.
+const DEPOSIT_VERT = `#version 300 es
+uniform sampler2D u_agents;
+void main() {
+  int W = textureSize(u_agents, 0).x;
+  ivec2 t = ivec2(gl_VertexID % W, gl_VertexID / W);
+  vec4 a = texelFetch(u_agents, t, 0);
+  gl_Position = vec4(a.xy * 2.0 - 1.0, 0.0, 1.0);
+  gl_PointSize = 1.0;
+}`;
+const DEPOSIT_FRAG = `#version 300 es
+precision highp float;
+out vec4 outColor;
+void main() { outColor = vec4(0.20, 0.0, 0.0, 1.0); }`;
+
 // -----------------------------------------------------------------------------
 // makeSim — persistent double-buffered simulation runner (WebGL2 + float).
 // spec = { seed, step, display, substeps?, stateW?, stateH?, points? }
@@ -276,6 +325,224 @@ function makeSim(canvas, spec, opts) {
                 [A, B].forEach(b => {
                     if (b) { gl.deleteTexture(b.t); gl.deleteFramebuffer(b.f); }
                 });
+            } catch (e) { /* context may already be lost */ }
+            const ext = gl.getExtension('WEBGL_lose_context');
+            if (ext) ext.loseContext();
+        }
+    };
+}
+
+// =============================================================================
+// makeAgentSim — agent-based GPU sim runner (two coupled fields: agents↔trail)
+// =============================================================================
+// makeSim is ONE grid, ONE step, gather-only — each output texel may only read
+// its neighbours and write itself. Physarum-class sims can't fit that: they
+// need a SMALL agent buffer (x,y,heading per texel) AND a SCREEN-SIZED trail
+// field (different sizes → can't share one grid), THREE passes per frame, plus
+// a SCATTER (agents stamp the trail at arbitrary spots). So this is a sibling
+// harness — makeSim and its 9 demos are untouched. It returns the SAME object
+// shape, so `lazyToy` drives it identically (mount/teardown unchanged).
+//
+// spec = { agentW, agentH, trailW?, trailH?, substeps?,
+//          agentSeed, agentStep,        // frag over the agent grid (gather)
+//          trailSeed, trailStep,        // frag over the trail grid (gather)
+//          deposit?{vert,frag},         // gl.POINTS → scatter into the trail
+//          display }                    // frag, trail → screen
+// Per substep: (1) agents sense the trail + move  (2) trail diffuse + decay
+//   (3) agents scatter-deposit additively onto the diffused trail → display.
+// RGBA16F + EXT_color_buffer_float covers additive blending into the trail
+// (EXT_float_blend is only needed for 32-bit float targets, not 16F).
+// -----------------------------------------------------------------------------
+function makeAgentSim(canvas, spec, opts) {
+    opts = opts || {};
+    const info = opts.info || null;
+    let uParam = opts.param != null ? opts.param : 0;
+    let paused = !!opts.paused;
+
+    function fail(m) {
+        console.error(m);
+        if (info) { info.textContent = m; info.style.color = '#ff7b72'; }
+        const c2d = canvas.getContext('2d');
+        if (c2d) {
+            c2d.fillStyle = '#3a0d12'; c2d.fillRect(0, 0, canvas.width, canvas.height);
+            c2d.fillStyle = '#ff7b72'; c2d.font = '13px monospace';
+            String(m).split('\n').forEach((l, i) => c2d.fillText(l.slice(0, 92), 12, 24 + i * 18));
+        }
+    }
+    const noop = { stop() {}, reset() {}, setParam() {}, setPaused() {}, rebuild() {}, destroy() {} };
+
+    const gl = canvas.getContext('webgl2');
+    if (!gl) { fail('WebGL2 is not available in this browser/context.'); return noop; }
+    if (!gl.getExtension('EXT_color_buffer_float')) {
+        fail("This browser can't render to float textures (EXT_color_buffer_float missing).");
+        return noop;
+    }
+
+    const AW = spec.agentW || 256, AH = spec.agentH || 256;   // 256² = 65,536 agents
+    const TW = spec.trailW || canvas.width, TH = spec.trailH || canvas.height;
+    const substeps = spec.substeps || 1;
+    const ptCount = AW * AH;
+
+    const quad = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, -1,1, 1,-1, 1,1]), gl.STATIC_DRAW);
+
+    // Float render target. Agents: NEAREST + CLAMP (a data texture, fetched by
+    // index). Trail: LINEAR + REPEAT (smooth sensing + a toroidal world).
+    function rt(w, h, linear, wrap) {
+        const t = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, t);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null);
+        const flt = linear ? gl.LINEAR : gl.NEAREST;
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, flt);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, flt);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap);
+        const f = gl.createFramebuffer();
+        gl.bindFramebuffer(gl.FRAMEBUFFER, f);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+        const ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        return { f, t, ok };
+    }
+
+    let Ag0, Ag1, Tr0, Tr1;
+    let agentSeedP, agentStepP, trailSeedP, trailStepP, depositP, dispP;
+    function buildAll(s) {
+        try {
+            const d = s.deposit || { vert: DEPOSIT_VERT, frag: DEPOSIT_FRAG };
+            const asp  = createShaderProgram(gl, SIM_VERT, s.agentSeed);
+            const astp = createShaderProgram(gl, SIM_VERT, s.agentStep);
+            const tsp  = createShaderProgram(gl, SIM_VERT, s.trailSeed);
+            const tstp = createShaderProgram(gl, SIM_VERT, s.trailStep);
+            const dpp  = createShaderProgram(gl, d.vert, d.frag);
+            const dsp  = createShaderProgram(gl, SIM_VERT, s.display);
+            if (agentSeedP) [agentSeedP, agentStepP, trailSeedP, trailStepP, depositP, dispP].forEach(p => gl.deleteProgram(p));
+            agentSeedP = asp; agentStepP = astp; trailSeedP = tsp;
+            trailStepP = tstp; depositP = dpp; dispP = dsp;
+            if (!Ag0) {
+                Ag0 = rt(AW, AH, false, gl.CLAMP_TO_EDGE);
+                Ag1 = rt(AW, AH, false, gl.CLAMP_TO_EDGE);
+                Tr0 = rt(TW, TH, true, gl.REPEAT);
+                Tr1 = rt(TW, TH, true, gl.REPEAT);
+            }
+            if (!(Ag0.ok && Ag1.ok && Tr0.ok && Tr1.ok)) throw new Error('Float framebuffer incomplete');
+            if (info) info.style.color = '';
+            return true;
+        } catch (e) { fail(e && e.message ? e.message : String(e)); return false; }
+    }
+    if (!buildAll(spec)) return noop;
+
+    const mouse = { x: 0.5, y: 0.5, down: 0 };
+    const onMove = (e) => {
+        const r = canvas.getBoundingClientRect();
+        mouse.x = (e.clientX - r.left) / r.width;
+        mouse.y = 1.0 - (e.clientY - r.top) / r.height;   // Y-flip → gl_FragCoord space
+    };
+    const onDown = () => { mouse.down = 1; };
+    const onUp = () => { mouse.down = 0; };
+    const onLeave = () => { mouse.down = 0; };
+    canvas.addEventListener('mousemove', onMove);
+    canvas.addEventListener('mousedown', onDown);
+    window.addEventListener('mouseup', onUp);
+    canvas.addEventListener('mouseleave', onLeave);
+
+    let frameN = 0, tNow = 0;
+    function bindQuad(prog) {
+        const l = gl.getAttribLocation(prog, 'a_position');
+        gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+        gl.enableVertexAttribArray(l);
+        gl.vertexAttribPointer(l, 2, gl.FLOAT, false, 0, 0);
+    }
+    function setCommon(prog, w, h) {
+        let u;
+        if ((u = gl.getUniformLocation(prog, 'u_resolution'))) gl.uniform2f(u, w, h);
+        if ((u = gl.getUniformLocation(prog, 'u_trailRes')))   gl.uniform2f(u, TW, TH);
+        if ((u = gl.getUniformLocation(prog, 'u_time')))       gl.uniform1f(u, tNow);
+        if ((u = gl.getUniformLocation(prog, 'u_frame')))      gl.uniform1i(u, frameN);
+        if ((u = gl.getUniformLocation(prog, 'u_mouse')))      gl.uniform2f(u, mouse.x, mouse.y);
+        if ((u = gl.getUniformLocation(prog, 'u_mouseDown')))  gl.uniform1f(u, mouse.down);
+        if ((u = gl.getUniformLocation(prog, 'u_param')))      gl.uniform1f(u, uParam);
+        if ((u = gl.getUniformLocation(prog, 'u_agents')))     gl.uniform1i(u, 0);
+        if ((u = gl.getUniformLocation(prog, 'u_trail')))      gl.uniform1i(u, 1);
+    }
+    function tex(unit, t) { gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, t); }
+    function quadPass(prog, dstFB, w, h, aTex, tTex) {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, dstFB);
+        gl.viewport(0, 0, w, h);
+        gl.useProgram(prog); bindQuad(prog);
+        if (aTex) tex(0, aTex);
+        if (tTex) tex(1, tTex);
+        setCommon(prog, w, h);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+    }
+
+    function seed() {
+        // Seed BOTH of each pair so the first read is valid regardless of parity.
+        quadPass(agentSeedP, Ag0.f, AW, AH, null, null);
+        quadPass(agentSeedP, Ag1.f, AW, AH, null, null);
+        quadPass(trailSeedP, Tr0.f, TW, TH, null, null);
+        quadPass(trailSeedP, Tr1.f, TW, TH, null, null);
+        frameN = 0;
+    }
+    seed();
+
+    let cA = Ag0, nA = Ag1, cT = Tr0, nT = Tr1, raf = 0, last = performance.now();
+    function frame(now) {
+        if (!paused) tNow += (now - last) * 0.001;
+        last = now;
+        for (let k = 0; k < substeps; k++) {
+            // 1) Agents sense the trail (3 sensors) + move → next agent buffer.
+            quadPass(agentStepP, nA.f, AW, AH, cA.t, cT.t);
+            let s = cA; cA = nA; nA = s;                       // cA = the NEW agents
+            // 2) Trail diffuse + decay → next trail buffer (reads old trail).
+            quadPass(trailStepP, nT.f, TW, TH, null, cT.t);
+            // 3) Scatter-deposit: stamp each agent additively ON TOP of the
+            //    just-diffused trail (no clear — diffuse wrote every texel).
+            gl.bindFramebuffer(gl.FRAMEBUFFER, nT.f);
+            gl.viewport(0, 0, TW, TH);
+            gl.useProgram(depositP);
+            tex(0, cA.t);
+            { const u = gl.getUniformLocation(depositP, 'u_agents'); if (u) gl.uniform1i(u, 0); }
+            gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);   // additive accumulate
+            gl.drawArrays(gl.POINTS, 0, ptCount);
+            gl.disable(gl.BLEND);
+            s = cT; cT = nT; nT = s;
+            frameN++;
+        }
+        // Display the trail → screen.
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        gl.useProgram(dispP); bindQuad(dispP);
+        tex(1, cT.t);
+        setCommon(dispP, canvas.width, canvas.height);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+        raf = requestAnimationFrame(frame);
+    }
+    const onLost = (e) => e.preventDefault();
+    canvas.addEventListener('webglcontextlost', onLost, false);
+    raf = requestAnimationFrame(frame);
+
+    return {
+        stop() { cancelAnimationFrame(raf); },
+        reset() { cA = Ag0; nA = Ag1; cT = Tr0; nT = Tr1; seed(); },
+        setParam(v) { uParam = v; },
+        setPaused(b) { paused = b; if (!b) last = performance.now(); },
+        rebuild(s) { spec = s; if (buildAll(s)) { cA = Ag0; nA = Ag1; cT = Tr0; nT = Tr1; seed(); } },
+        // Mirrors makeSim.destroy() — the lazyToy wrapper calls this to free the
+        // WebGL2 context when the demo scrolls off-screen (4 textures + 4 FBs +
+        // 6 programs + dummy buffer, drop the window mouseup listener, lose ctx).
+        destroy() {
+            cancelAnimationFrame(raf);
+            canvas.removeEventListener('mousemove', onMove);
+            canvas.removeEventListener('mousedown', onDown);
+            window.removeEventListener('mouseup', onUp);
+            canvas.removeEventListener('mouseleave', onLeave);
+            canvas.removeEventListener('webglcontextlost', onLost, false);
+            try {
+                [agentSeedP, agentStepP, trailSeedP, trailStepP, depositP, dispP].forEach(p => { if (p) gl.deleteProgram(p); });
+                if (quad) gl.deleteBuffer(quad);
+                [Ag0, Ag1, Tr0, Tr1].forEach(b => { if (b) { gl.deleteTexture(b.t); gl.deleteFramebuffer(b.f); } });
             } catch (e) { /* context may already be lost */ }
             const ext = gl.getExtension('WEBGL_lose_context');
             if (ext) ext.loseContext();
@@ -615,6 +882,86 @@ const FLUID_DISP = DISP_HEAD + `void main() {
         sim.reset(); info.textContent = 'Calm surface. Click / drag to make waves.';
     });
     document.getElementById('btnWavePause')?.addEventListener('click', () => {
+        paused = !paused; sim.setPaused(paused);
+        info.textContent = paused ? 'Paused — the field is frozen.' : 'Running.';
+    });
+})();
+
+// =============================================================================
+// 5e — Slime Mold (Physarum) — agent-based, makeAgentSim (two coupled fields)
+// =============================================================================
+// First demo on the SIBLING harness: ~65k agents sense a separately-diffused
+// trail, steer toward scent, move, and stamp the trail (a scatter). The classic
+// emergent transport-network behaviour — impossible on makeSim's single grid.
+(function slime() {
+    const canvas = document.getElementById('slimeGL');
+    if (!canvas) return;
+    const info = document.getElementById('slimeGLInfo');
+    const sim = lazyToy(canvas, (cv) => makeAgentSim(cv, {
+        agentW: 256, agentH: 256,                       // 65,536 agents
+        agentSeed: AGENT_HEAD + AGENT_LIB + `void main() {
+  vec2 t = gl_FragCoord.xy;
+  vec2 p = vec2(hash(t), hash(t + 13.7));
+  float ang = hash(t + 41.3) * 6.28318530718;
+  outColor = vec4(p, ang, 1.0);
+}`,
+        agentStep: AGENT_HEAD + AGENT_LIB + `void main() {
+  vec4 a = texelFetch(u_agents, ivec2(gl_FragCoord.xy), 0);
+  vec2 pos = a.xy; float ang = a.z;
+  float SA = 0.30 + 0.55 * u_param;        // sensor angle (rad) — the look knob
+  const float SD = 9.0;                    // sensor distance (px)
+  const float TS = 0.45;                   // turn speed (rad)
+  const float SS = 1.0;                    // move speed (px)
+  vec2 tpx = 1.0 / u_trailRes;
+  vec2 dF = vec2(cos(ang), sin(ang));
+  float wF = texture(u_trail, pos + dF           * SD * tpx).r;
+  float wL = texture(u_trail, pos + rot(dF,  SA) * SD * tpx).r;
+  float wR = texture(u_trail, pos + rot(dF, -SA) * SD * tpx).r;
+  float rnd = hash(gl_FragCoord.xy + float(u_frame) * 0.013);
+  if (wF >= wL && wF >= wR) {              // ahead is strongest → go straight
+  } else if (wF < wL && wF < wR) {         // both sides better → random turn
+    ang += (rnd < 0.5 ? -TS : TS);
+  } else if (wL > wR) { ang += TS; }       // steer toward the stronger side
+  else                { ang -= TS; }
+  vec2 dir = vec2(cos(ang), sin(ang));
+  pos = fract(pos + dir * SS * tpx);       // toroidal world
+  ang = mod(ang, 6.28318530718);
+  outColor = vec4(pos, ang, 1.0);
+}`,
+        trailSeed: TRAIL_HEAD + `void main() { outColor = vec4(0.0); }`,
+        trailStep: TRAIL_HEAD + `void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec2 px = 1.0 / u_resolution;
+  float s = 0.0;
+  for (int y = -1; y <= 1; y++)
+    for (int x = -1; x <= 1; x++)
+      s += texture(u_trail, uv + vec2(float(x), float(y)) * px).r;
+  s = s / 9.0 * 0.90;                       // 3x3 box blur (diffuse) + decay
+  if (u_mouseDown > 0.5 && distance(uv, u_mouse) < 0.04) s += 0.6;   // feed scent
+  outColor = vec4(clamp(s, 0.0, 1.0), 0.0, 0.0, 1.0);
+}`,
+        display: TRAIL_HEAD + `void main() {
+  float v = texture(u_trail, gl_FragCoord.xy / u_resolution).r;
+  vec3 col = mix(vec3(0.02, 0.01, 0.05), vec3(0.96, 0.86, 0.55), pow(v, 0.65));
+  col += vec3(0.10, 0.32, 0.55) * smoothstep(0.0, 0.22, v) * (1.0 - v);
+  outColor = vec4(col, 1.0);
+}`
+    }, { info: info, param: 1.0 }));
+
+    let paused = false;
+    document.getElementById('btnSlimeExplore')?.addEventListener('click', () => {
+        sim.setParam(0.2); info.textContent = 'Explore — narrow sensors: wandering, sparse filaments.';
+    });
+    document.getElementById('btnSlimeNetwork')?.addEventListener('click', () => {
+        sim.setParam(1.0); info.textContent = 'Network — the classic Physarum vein web.';
+    });
+    document.getElementById('btnSlimeTight')?.addEventListener('click', () => {
+        sim.setParam(2.2); info.textContent = 'Tight — wide sensors: dense, knotted clumps.';
+    });
+    document.getElementById('btnSlimeReset')?.addEventListener('click', () => {
+        sim.reset(); info.textContent = 'Reset — fresh random swarm. Drag to feed scent.';
+    });
+    document.getElementById('btnSlimePause')?.addEventListener('click', () => {
         paused = !paused; sim.setPaused(paused);
         info.textContent = paused ? 'Paused — the field is frozen.' : 'Running.';
     });

@@ -86,3 +86,20 @@ sims/feedback demos re-seed when scrolled fully away and back. Verified per
 tier in a real browser: rttGL1 renders, ZERO "too many WebGL contexts"
 warnings even after scrolling the whole page and back, api-tab GL1↔GL2
 mount/unmount works, state replayed.
+
+# 2026-05-17 — Slime-mold scope flag: explain, then make the project support it
+
+Re the part-1 "scope deviation" flag (2D wave shipped instead of slime mold
+because `makeSim` is single-buffer ping-pong and Physarum needs agents that
+sense a separately-diffused trail — two coupled fields the harness can't feed
+back): "Explain in a very simple way what this means and why this could not be
+done. And if we had to do this, what do we have to do?" Then: "How can we set
+up the project to support examples like slime mould in the future while at the
+same time support the current example infrastructure as well?" Decided
+(plan-mode): sibling harness `makeAgentSim` (no `makeSim` refactor — zero
+regression risk) + ship the Physarum demo as its first consumer + document the
+harness-contract extension seam in a new `ARCHITECTURE.md`. Built and verified
+in a real browser (vein network forms & is stable, 0 console errors, lazy
+teardown frees the context, makeSim demos unaffected). Standalone-export
+bundle registration deliberately deferred (avoids duplicating a ~180-line
+harness as a brittle string) and flagged in ARCHITECTURE.md.

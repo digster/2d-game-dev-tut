@@ -38,7 +38,10 @@ own subdirectory with a per-tier file structure mirroring the Fundamentals layou
   (2D normal-map lighting, sprite-sheet animation, dither/posterize),
   Advanced (scene transitions, radial blur & god rays, pixelation — each in
   WebGL1 + WebGL2), Simulations (falling-sand Margolus CA, boids/flocking,
-  2D wave equation).
+  2D wave equation, agent-based slime mold / Physarum). The slime-mold demo
+  runs on a sibling harness, `makeAgentSim` (two coupled fields + a scatter
+  pass), added alongside the gather-only `makeSim`; see `ARCHITECTURE.md`
+  for the harness-contract extension seam.
 
 ## Shared assets
 

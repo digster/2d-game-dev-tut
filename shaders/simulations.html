@@ -36,6 +36,7 @@
                 <li><a href="#sand">Falling Sand (Margolus CA)</a></li>
                 <li><a href="#boids">Boids / Flocking</a></li>
                 <li><a href="#wave">Wave Propagation</a></li>
+                <li><a href="#slime">Slime Mold (Physarum) — agent-based</a></li>
                 <li><a href="#playground">Mini-Project: Interactive Fluid Playground</a></li>
             </ul>
         </div>
@@ -411,6 +412,76 @@ step: SIM_HEAD + SIM_LIB + `void main() {
                 <button id="btnWavePause">Pause</button>
             </div>
             <div id="waveGLInfo" class="info-display">Click / drag to make waves. Watch them interfere &amp; reflect.</div>
+        </div>
+
+        <!-- ============================================ SLIME (PHYSARUM) -->
+        <div id="slime" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>🦠 Slime Mold (Physarum) — agents that build their own roads</h2>
+            <p>
+                Every demo so far used <strong>one</strong> grid that updates from its own
+                neighbours (a “gather”). Physarum can’t fit that: it has <strong>two coupled
+                fields of different sizes</strong>. Tens of thousands of <em>agents</em> (a tiny
+                data texture — each texel is one agent’s <code>x, y, heading</code>) crawl over a
+                big screen-sized <em>trail</em> field. Each step an agent <strong>smells</strong>
+                the trail ahead-left / ahead / ahead-right, <strong>steers</strong> toward the
+                strongest scent, <strong>moves</strong>, and <strong>stamps</strong> scent where
+                it lands. The trail then <strong>blurs &amp; fades</strong> on its own. Out of
+                that loop, transport networks emerge — the same behaviour real slime mold uses
+                to solve mazes and approximate road maps.
+            </p>
+            <div class="concept-box">
+                <h4>Why this needs a different harness — <code>makeAgentSim</code>, not <code>makeSim</code></h4>
+                <p><code>makeSim</code> is one ping-pong buffer, one step, gather-only (each texel
+                may only read its neighbours and write itself). Physarum needs <em>two</em> buffer
+                pairs, <em>three</em> passes, and a <strong>scatter</strong> — agents write the
+                trail at arbitrary spots, done by drawing them as <code>gl.POINTS</code> with
+                additive blending. So it runs on a <em>sibling</em> engine; <code>makeSim</code>
+                and its other demos are untouched.</p>
+                <pre style="background:#0d1117;color:#9cdcfe;padding:14px 16px;border-radius:8px;overflow:auto;line-height:1.4;font-size:13px;">  ┌──────────────┐    sense 3 pts    ┌───────────────┐
+  │ TRAIL  field │ ─────────────────▶│    AGENTS      │
+  │ (screen size)│                   │ (256×256 tex)  │
+  │ blur + fade  │◀──── deposit ─────│ steer + move   │
+  └──────────────┘  (gl.POINTS,      └───────────────┘
+                     additive blend)
+   per frame:  ① agents sense+move   ② trail diffuse+decay
+               ③ agents scatter-deposit   ④ colourise → screen</pre>
+            </div>
+            <details>
+                <summary>📝 Click to see: the sense/steer step + diffuse step</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">agentStep: AGENT_HEAD + AGENT_LIB + `void main() {
+  vec4 a = texelFetch(u_agents, ivec2(gl_FragCoord.xy), 0);
+  vec2 pos = a.xy; float ang = a.z;
+  float SA = 0.30 + 0.55 * u_param;            // sensor angle (the look knob)
+  vec2 tpx = 1.0 / u_trailRes, dF = vec2(cos(ang), sin(ang));
+  float wF = texture(u_trail, pos + dF           * 9.0 * tpx).r;
+  float wL = texture(u_trail, pos + rot(dF,  SA) * 9.0 * tpx).r;
+  float wR = texture(u_trail, pos + rot(dF, -SA) * 9.0 * tpx).r;
+  if      (wF >= wL &amp;&amp; wF >= wR) {}            // ahead best → straight
+  else if (wF &lt;  wL &amp;&amp; wF &lt;  wR) ang += rnd &lt; .5 ? -.45 : .45;
+  else if (wL &gt;  wR) ang += 0.45; else ang -= 0.45;
+  pos = fract(pos + vec2(cos(ang), sin(ang)) / u_trailRes);  // toroidal
+  outColor = vec4(pos, mod(ang, 6.2831853), 1.0);
+}`</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// trailStep = 3×3 box blur (diffuse) × 0.90 (decay). deposit = a gl.POINTS
+// pass: one point per agent, additively stamped into the trail buffer.
+// makeAgentSim per frame: ① sense+move ② diffuse+decay ③ deposit ④ display.</code></pre>
+                </div>
+            </details>
+            <div class="diagram"><canvas id="slimeGL" width="800" height="450"></canvas></div>
+            <div class="controls">
+                <button id="btnSlimeExplore">Explore</button>
+                <button id="btnSlimeNetwork">Network</button>
+                <button id="btnSlimeTight">Tight</button>
+                <button id="btnSlimeReset">Reset</button>
+                <button id="btnSlimePause">Pause</button>
+            </div>
+            <div id="slimeGLInfo" class="info-display">Agents build emergent road networks. Drag to feed scent.</div>
         </div>
 
         <!-- ============================================ PLAYGROUND -->
