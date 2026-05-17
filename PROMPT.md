@@ -42,3 +42,9 @@ Post-Processing) — render-to-texture/FBOs, ping-pong, separable blur, bloom,
 colour grade + CRT, post-process-stack mini-project. User chose to show BOTH
 WebGL1 (GLSL ES 1.00) and WebGL2 (GLSL ES 3.00) as paired demos with a
 page-local section toggle; new makeFXChain multi-pass runner; flip card.
+(5) Continue (final tier): ship the Shaders track's Simulations tier
+(GPU Compute-Style Effects) — state-in-a-texture loop, Conway's Life,
+Gray-Scott reaction-diffusion, GPU particles, 2D fluid/ink, interactive
+fluid playground. User chose WebGL2-only + RGBA16F float textures; new
+makeSim persistent double-buffer runner; flip card → all 5 tiers shipped,
+shaders track complete.

@@ -25,12 +25,14 @@ own subdirectory with a per-tier file structure mirroring the Fundamentals layou
   See `isometric-strategy/index.html` for the track roadmap. Currently scaffolded;
   tier files are landing iteratively.
 - `shaders/` — learn WebGL / GLSL fragment shaders for 2D game effects.
-  See `shaders/index.html` for the track roadmap. The Beginner (Shader
-  Foundations), Intermediate (Patterns, Noise & Distortion), Expert
-  (Textures & Sprite Shaders), and Advanced (Multi-Pass & Post-Processing)
-  tiers are shipped; later tiers land iteratively. WebGL1 + GLSL ES 1.00
-  throughout, with the Advanced tier additionally showing every effect in
-  WebGL2 + GLSL ES 3.00. Demo IDs and helper bundles are prefixed `sh_`.
+  See `shaders/index.html` for the track roadmap. **Fully shipped — all 5
+  tiers:** Beginner (Shader Foundations), Intermediate (Patterns, Noise &
+  Distortion), Expert (Textures & Sprite Shaders), Advanced (Multi-Pass &
+  Post-Processing), Simulations (GPU Compute-Style Effects). WebGL1 + GLSL
+  ES 1.00 through Expert; Advanced shows every effect in WebGL1 *and* WebGL2;
+  Simulations is WebGL2 + GLSL ES 3.00 with `RGBA16F` float textures
+  (`EXT_color_buffer_float`, with graceful degradation). Demo IDs and helper
+  bundles are prefixed `sh_`.
 
 ## Shared assets
 

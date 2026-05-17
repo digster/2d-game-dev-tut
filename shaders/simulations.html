@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulations — Shaders Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+    <!-- glsl extends c extends clike; core bundles only clike, so c before glsl. -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-glsl.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Simulations — GPU Compute-Style Effects</h1>
+        <p class="subtitle">State that lives in float textures and evolves itself every frame — the final tier</p>
+
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="advanced.html" class="nav-button">← Advanced</a>
+            <a href="simulations.html" class="nav-button active">Simulations</a>
+        </div>
+
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#stateloop">State in a Texture (the sim loop)</a></li>
+                <li><a href="#life">Conway's Game of Life</a></li>
+                <li><a href="#reaction">Reaction-Diffusion (Gray-Scott)</a></li>
+                <li><a href="#particles">GPU Particles</a></li>
+                <li><a href="#fluid">2D Fluid / Ink</a></li>
+                <li><a href="#playground">Mini-Project: Interactive Fluid Playground</a></li>
+            </ul>
+        </div>
+
+        <div class="key-point">
+            <strong>💡 New this tier — persistent state &amp; WebGL2 float textures.</strong> Until
+            now a shader's output vanished after one frame. A <em>simulation</em> keeps its state in
+            a texture and reads it back next frame: <code>state(t+1) = f(state(t))</code>. That's
+            <strong>ping-pong feedback</strong> across frames (not Advanced's in-frame scratch). The
+            values (chemical concentrations, velocities) need real precision, so this tier is
+            <strong>WebGL2 + <code>RGBA16F</code></strong> float render targets — exactly where the
+            Advanced note said float would earn its keep. The <code>makeSim</code> helper hides the
+            double-buffer plumbing; you write the <em>step</em> shader.
+        </div>
+
+        <div class="key-point">
+            <strong>⚠️ Requires <code>EXT_color_buffer_float</code>.</strong> If your browser can't
+            render to float textures the demos show a clear message instead of breaking — that's the
+            graceful-degradation path, not a bug.
+        </div>
+
+        <!-- ============================================ STATE LOOP -->
+        <div id="stateloop" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>🔁 State in a Texture (the sim loop)</h2>
+            <p>
+                The whole tier in one idea: two float FBOs. Each frame, read the
+                <strong>previous</strong> state texture, compute the <strong>next</strong> one, write
+                it to the other FBO, swap, and draw a colourised view. Here the "state" is a
+                brightness field that simply decays — drag to splat light into it and watch it fade.
+                On 8-bit that decay would visibly stair-step; on float it's smooth.
+            </p>
+            <pre><code class="language-glsl">#version 300 es
+precision highp float;
+uniform sampler2D u_state;          // last frame's buffer
+uniform vec2 u_resolution;
+uniform vec2 u_mouse;               // 0..1, Y-flipped
+uniform float u_mouseDown;
+out vec4 outColor;
+
+void main() {
+    vec2 uv = gl_FragCoord.xy / u_resolution;
+    // texelFetch = exact texel, no filtering — the right read for sims.
+    float v = texelFetch(u_state, ivec2(gl_FragCoord.xy), 0).r * 0.985;
+    if (u_mouseDown &gt; 0.5 &amp;&amp; distance(uv, u_mouse) &lt; 0.03) v = 1.0;
+    outColor = vec4(v, 0.0, 0.0, 1.0);   // → becomes next frame's u_state
+}</code></pre>
+
+            <details data-demo-id="sh_simLoop" data-deps="sh_compileShader,sh_createProgram,sh_simKit,sh_makeSim">
+                <summary>📝 Click to see: the sim-loop scaffold</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// makeSim seeds both float buffers, then each frame: step (ping-pong)
+// → colourised display. SIM_HEAD / SIM_LIB / DISP_HEAD are shared kit.
+makeSim(canvas, {
+  seed:    SIM_HEAD + `void main() { outColor = vec4(0.0); }`,
+  step:    SIM_HEAD + SIM_LIB + `void main() {
+    vec2 uv = gl_FragCoord.xy / u_resolution;
+    float v = cell(ivec2(0)).r * 0.985;          // cell() = texelFetch helper
+    if (u_mouseDown &gt; 0.5 &amp;&amp; distance(uv, u_mouse) &lt; 0.03) v = 1.0;
+    outColor = vec4(v, 0.0, 0.0, 1.0);
+  }`,
+  display: DISP_HEAD + `void main() {
+    float v = texture(u_state, gl_FragCoord.xy / u_resolution).r;
+    outColor = vec4(mix(vec3(0.03,0.04,0.08), vec3(1.0,0.6,0.15), v), 1.0);
+  }`
+}, { info: info });</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Identical — the helper + GLSL are dialect-agnostic JS strings.
+makeSim(canvas, { seed: SIM_HEAD + `…`, step: SIM_HEAD + SIM_LIB + `…`,
+  display: DISP_HEAD + `…` }, { info: info });</code></pre>
+                </div>
+            </details>
+            <div class="diagram"><canvas id="simLoopGL" width="800" height="450"></canvas></div>
+            <div id="simLoopGLInfo" class="info-display">A buffer that reads itself each frame. Drag to splat.</div>
+        </div>
+
+        <!-- ============================================ LIFE -->
+        <div id="life" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>🦠 Conway's Game of Life</h2>
+            <p>
+                Cellular automata: every cell looks at its 8 neighbours and lives or dies by the
+                B3/S23 rule. One <code>texelFetch</code> per neighbour, a count, a branch — the
+                entire universe in a step shader. Reseed for fresh soup; drag to draw cells.
+            </p>
+            <details data-demo-id="sh_life" data-deps="sh_compileShader,sh_createProgram,sh_simKit,sh_makeSim">
+                <summary>📝 Click to see: the Life rule</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">step: SIM_HEAD + SIM_LIB + `void main() {
+  float a = cell(ivec2(0)).r;
+  float n = cell(ivec2(-1,-1)).r + cell(ivec2(0,-1)).r + cell(ivec2(1,-1)).r
+          + cell(ivec2(-1,0)).r                        + cell(ivec2(1,0)).r
+          + cell(ivec2(-1,1)).r + cell(ivec2(0,1)).r  + cell(ivec2(1,1)).r;
+  float alive = (n == 3.0 || (a &gt; 0.5 &amp;&amp; n == 2.0)) ? 1.0 : 0.0;
+  outColor = vec4(alive, 0.0, 0.0, 1.0);
+}`</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// cell(offset) clamps + texelFetches a neighbour (shared SIM_LIB helper).
+step: SIM_HEAD + SIM_LIB + `…8-neighbour count → B3/S23…`</code></pre>
+                </div>
+            </details>
+            <div class="diagram"><canvas id="lifeGL" width="800" height="450"></canvas></div>
+            <div class="controls"><button id="btnLifeReseed">Reseed</button></div>
+            <div id="lifeGLInfo" class="info-display">Cellular automata on the GPU. Drag to draw cells.</div>
+        </div>
+
+        <!-- ============================================ REACTION-DIFFUSION -->
+        <div id="reaction" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>🧫 Reaction-Diffusion (Gray-Scott)</h2>
+            <p>
+                Two chemicals A and B diffuse and react: <code>A + 2B → 3B</code>. A
+                <strong>Laplacian</strong> (9-tap neighbour sum) diffuses each; <em>feed</em> adds A,
+                <em>kill</em> removes B. Tiny parameter changes flip it between coral, mitotic
+                blobs, and writhing worms. <strong>This is the demo float precision is for</strong> —
+                at 8-bit the slow accumulation just bands into mush.
+            </p>
+            <div class="key-point">
+                <strong>💡 Sub-steps:</strong> RD converges slowly, so <code>makeSim</code> runs the
+                step shader 12× per frame (<code>substeps: 12</code>) — 12 ping-pong swaps every rAF.
+            </div>
+            <details data-demo-id="sh_reaction" data-deps="sh_compileShader,sh_createProgram,sh_simKit,sh_makeSim">
+                <summary>📝 Click to see: Gray-Scott step</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// feed/kill are baked into the shader per preset, then rebuilt:
+step: SIM_HEAD + SIM_LIB + `const float Da=1.0, Db=0.5, dt=1.0;
+const float feed=${p.f}, kill=${p.k};
+void main() {
+  vec2 s = cell(ivec2(0)).rg;                 // A=r, B=g
+  vec2 lap = /* 9-tap Laplacian of A,B */ ;
+  float r = s.r * s.g * s.g;
+  float nA = s.r + (Da*lap.r - r + feed*(1.0 - s.r)) * dt;
+  float nB = s.g + (Db*lap.g + r - (feed+kill)*s.g) * dt;
+  outColor = vec4(clamp(nA,0.0,1.0), clamp(nB,0.0,1.0), 0.0, 1.0);
+}`</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Presets {coral, mitosis, worms} just swap feed/kill, then sim.rebuild().
+function spec(p) { return { substeps: 12, seed, step: /*…${p.f}/${p.k}…*/, display }; }</code></pre>
+                </div>
+            </details>
+            <div class="diagram"><canvas id="reactionGL" width="800" height="450"></canvas></div>
+            <div class="controls">
+                <button id="btnRDcoral">Coral</button>
+                <button id="btnRDmitosis">Mitosis</button>
+                <button id="btnRDworms">Worms</button>
+            </div>
+            <div id="reactionGLInfo" class="info-display">Two chemicals, a Laplacian, feed/kill. Why float matters.</div>
+        </div>
+
+        <!-- ============================================ PARTICLES -->
+        <div id="particles" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>✨ GPU Particles</h2>
+            <p>
+                65,536 particles, one per texel of a 256×256 float texture: <code>.xy</code> =
+                position, <code>.zw</code> = velocity. The step shader integrates motion for every
+                particle in parallel. The clever bit is the display: a
+                <strong>vertex shader that <em>is</em> the particle</strong> —
+                <code>gl_VertexID</code> → texel → position (a WebGL2/GLSL ES 3.00 trick). Drag to
+                attract the swarm.
+            </p>
+            <details data-demo-id="sh_particles" data-deps="sh_compileShader,sh_createProgram,sh_simKit,sh_makeSim">
+                <summary>📝 Click to see: the particle vertex fetch</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// POINT_VERT: no vertex buffer — the texture IS the geometry.
+const POINT_VERT = `#version 300 es
+uniform sampler2D u_state;
+out float v_spd;
+void main() {
+  int W = textureSize(u_state, 0).x;
+  ivec2 t = ivec2(gl_VertexID % W, gl_VertexID / W);
+  vec4 s = texelFetch(u_state, t, 0);
+  v_spd = length(s.zw);
+  gl_Position = vec4(s.xy * 2.0 - 1.0, 0.0, 1.0);
+  gl_PointSize = 2.0;
+}`;
+// makeSim(..., { points: { vert: POINT_VERT, frag: POINT_FRAG, count: 256*256 } })</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Drawn with gl.POINTS, count = particle texels; additive-blended glow.</code></pre>
+                </div>
+            </details>
+            <div class="diagram"><canvas id="particlesGL" width="800" height="450"></canvas></div>
+            <div id="particlesGLInfo" class="info-display">65k particles; the texture IS the particle buffer. Drag to attract.</div>
+        </div>
+
+        <!-- ============================================ FLUID -->
+        <div id="fluid" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>🌊 2D Fluid / Ink</h2>
+            <p>
+                A compact Stam-style fluid: <strong>advect</strong> the velocity &amp; dye fields
+                (sample backward along the flow), add force where you drag, fade. Velocity in
+                <code>.xy</code>, dye in <code>.zw</code> of the float state. Stir it with the mouse.
+            </p>
+            <div class="key-point">
+                <strong>💡 Honest scope:</strong> this is a <em>lite</em>, non-projected fluid (no
+                pressure solve) sampled with <code>NEAREST</code> — believable ink, not physically
+                incompressible Navier-Stokes. The technique (advect a float field in a ping-pong
+                buffer) is exactly how the real thing is built; the capstone adds controls.
+            </div>
+            <details data-demo-id="sh_fluid" data-deps="sh_compileShader,sh_createProgram,sh_simKit,sh_makeSim">
+                <summary>📝 Click to see: the advection step</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">step: SIM_HEAD + SIM_LIB + `void main() {
+  vec2 uv  = gl_FragCoord.xy / u_resolution;
+  vec2 vel = cell(ivec2(0)).xy;
+  vec4 a   = texture(u_state, uv - vel * 0.012);   // trace back along flow
+  vel = a.xy * 0.998;
+  vec2 dye = a.zw * 0.99;
+  float md = distance(uv, u_mouse);
+  if (u_mouseDown &gt; 0.5 &amp;&amp; md &lt; 0.07) {
+    vel += normalize(uv - u_mouse + 1e-4) * (0.07 - md) * 2.2;
+    dye += vec2(0.6, 1.0) * (0.07 - md) * 6.0;
+  }
+  outColor = vec4(clamp(vel,-3.0,3.0), clamp(dye,0.0,4.0));
+}`</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// substeps: 2 — two advection iterations per frame for stability.</code></pre>
+                </div>
+            </details>
+            <div class="diagram"><canvas id="fluidGL" width="800" height="450"></canvas></div>
+            <div id="fluidGLInfo" class="info-display">Advect velocity + dye, mouse adds force. Drag to stir.</div>
+        </div>
+
+        <!-- ============================================ PLAYGROUND -->
+        <div id="playground" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>🎮 Mini-Project: Interactive Fluid Playground</h2>
+            <p>
+                The capstone: the fluid sim wrapped in controls — dye-colour presets, a
+                viscosity/damping knob (<code>u_param</code>), and Clear. The step shader is rebuilt
+                per dye preset; everything else is the same persistent-buffer machinery.
+            </p>
+            <details data-demo-id="sh_playground" data-deps="sh_compileShader,sh_createProgram,sh_simKit,sh_makeSim">
+                <summary>📝 Click to see: the playground wiring</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">const DYES = { aqua:'vec2(0.7,1.0)', fire:'vec2(1.0,0.25)', toxic:'vec2(0.3,0.9)' };
+const sim = makeSim(canvas, { substeps: 2, seed, step: stepFor(DYES.aqua),
+                              display: disp }, { info: info, param: 0.5 });
+// preset button → sim.rebuild({ …, step: stepFor(DYES[name]) });
+// Viscous/Thin → sim.setParam(1.0 | 0.0);   Clear → sim.reset();</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// u_param feeds the velocity damping: 0.990 + u_param * 0.009.</code></pre>
+                </div>
+            </details>
+            <div class="diagram"><canvas id="playgroundGL" width="800" height="450"></canvas></div>
+            <div class="controls">
+                <button id="btnPgaqua">Aqua</button>
+                <button id="btnPgfire">Fire</button>
+                <button id="btnPgtoxic">Toxic</button>
+                <button id="btnPgThick">Viscous</button>
+                <button id="btnPgThin">Thin</button>
+                <button id="btnPgClear">Clear</button>
+            </div>
+            <div id="playgroundGLInfo" class="info-display">Fluid + controls. Drag to stir.</div>
+
+            <div class="example-box">
+                <h4>🎮 What you just built</h4>
+                <p>
+                    A real GPU compute pipeline — persistent float state, sub-stepped ping-pong,
+                    a vertex-shader particle fetch, an interactive fluid — all asset-free and
+                    Exportable to a standalone file.
+                </p>
+            </div>
+        </div>
+
+        <!-- Track complete -->
+        <div class="section" style="text-align: center;">
+            <h2>🎉 Shaders Track Complete</h2>
+            <p style="font-size: 1.1em; margin: 24px 0;">
+                All five tiers shipped — Beginner → Intermediate → Expert → Advanced →
+                Simulations. You can write fragment shaders, build noise &amp; fbm, shade sprites,
+                chain multi-pass post-processing in WebGL1 <em>and</em> WebGL2, and run
+                compute-style GPU simulations on float textures. That's the full 2D shader toolkit.
+            </p>
+            <a href="index.html" class="nav-button" style="font-size: 1.2em; padding: 20px 40px;">
+                ← Back to the Track Index
+            </a>
+        </div>
+    </div>
+
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <script src="../shared/utils.js"></script>
+    <script src="../shared/code-tabs.js"></script>
+    <script src="simulations-demos.js"></script>
+    <script src="bundles-simulations.js"></script>
+    <script src="../shared/export-demo.js"></script>
+
+    <script>
+        const scrollToTopBtn = document.getElementById('scrollToTop');
+        scrollToTopBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+        window.addEventListener('scroll', () => {
+            scrollToTopBtn.style.opacity = window.pageYOffset > 300 ? '1' : '0';
+        });
+        scrollToTopBtn.style.opacity = '0';
+        scrollToTopBtn.style.transition = 'opacity 0.3s';
+    </script>
+</body>
+</html>
