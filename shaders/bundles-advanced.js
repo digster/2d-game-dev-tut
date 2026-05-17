@@ -283,12 +283,74 @@ var PRESETS = {
   crt:     { exposure:'1.05', contrast:'1.15', sat:'1.1', tint:'vec3(1.0)', scan:'3.14159', vignette:'1.2', chroma:'vec2(2.0,0.0)' },
   noir:    { exposure:'1.0', contrast:'1.3', sat:'0.0', tint:'vec3(1.0)', scan:'0.0', vignette:'1.0', chroma:'vec2(0.0)' }
 };
+function transition(mode) {
+  var mask = mode === 'iris'
+    ? 'vec2 q = uv - 0.5; q.x *= u_resolution.x / u_resolution.y; float m = 1.0 - smoothstep(t, t + 0.03, length(q) * 1.7);'
+    : mode === 'dissolve'
+    ? 'float n = fract(sin(dot(floor(uv * u_resolution / 4.0), vec2(127.1, 311.7))) * 43758.5453); float m = step(n, t);'
+    : mode === 'bars'
+    ? 'float m = step(fract(uv.y * 9.0), t);'
+    : 'float m = 1.0 - smoothstep(t, t + 0.05, uv.x);';
+  return PHEAD + \`void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  float t = 0.5 - 0.5 * cos(u_time * 0.8);
+  \` + mask + \`
+  OUT = vec4(TEX(u_prev, uv).rgb * m, 1.0);
+}\`;
+}
+function radial(mode) {
+  var rays = mode === 'rays';
+  var acc = rays
+    ? 'w *= 0.92; s += TEX(u_prev, uv + dir * (float(i) / 15.0) * u_param * 0.5) * w;'
+    : 's += TEX(u_prev, uv + dir * (float(i) / 15.0) * u_param * 0.5);';
+  var fin = rays
+    ? 'OUT = vec4(s.rgb * (2.4 / 16.0) + TEX(u_prev, uv).rgb * 0.15, 1.0);'
+    : 'OUT = s / 16.0;';
+  return PHEAD + \`void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec2 dir = vec2(0.5) - uv;
+  vec4 s = vec4(0.0);
+  float w = 1.0;
+  for (int i = 0; i < 16; i++) {
+    \` + acc + \`
+  }
+  \` + fin + \`
+}\`;
+}
+function pixel(mode) {
+  if (mode === 'mosaic') return PHEAD + \`void main() {
+  float n = u_param;
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec2 q = (floor(uv * n) + 0.5) / n;
+  vec3 c = TEX(u_prev, q).rgb;
+  vec2 f = fract(uv * n);
+  c *= 0.6 + 6.0 * (f.x * f.y * (1.0 - f.x) * (1.0 - f.y));
+  OUT = vec4(c, 1.0);
+}\`;
+  if (mode === 'crt') return PHEAD + \`void main() {
+  float n = u_param;
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec2 q = (floor(uv * n) + 0.5) / n;
+  vec3 c = TEX(u_prev, q).rgb;
+  c *= 0.72 + 0.28 * sin(uv.y * n * 3.14159);
+  OUT = vec4(c, 1.0);
+}\`;
+  return PHEAD + \`void main() {
+  float n = u_param;
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec2 q = (floor(uv * n) + 0.5) / n;
+  OUT = TEX(u_prev, q);
+}\`;
+}
 function chainFor(effect, st) {
   if (effect === 'rtt') return [IDENT];
   if (effect === 'ping') { var a = []; for (var i = 0; i < st.iters; i++) a.push(BOX); return a; }
   if (effect === 'blur') return [BLURH, BLURV];
   if (effect === 'bloom') return [BRIGHT, BBH, BBV, COMP];
   if (effect === 'grade') return [grade(PRESETS[st.preset])];
+  if (effect === 'transition') return [transition(st.mode)];
+  if (effect === 'radial') return [radial(st.mode)];
+  if (effect === 'pixel') return [pixel(st.mode)];
   if (effect === 'stack') { var a = []; if (st.bloom) { a.push(BRIGHT, BBH, BBV, COMP); } a.push(grade(PRESETS[st.preset])); return a; }
   return [IDENT];
 }`;
@@ -347,7 +409,22 @@ const DEFS = [
       info: 'scene → [bloom] → grade, composed.',
       init: "{ bloom: true, preset: 'crt' }",
       wire: `var bb = document.getElementById('btnStackBloom'); if (bb) bb.addEventListener('click', function () { st.bloom = !st.bloom; toy.rebuild(SCENE, chainFor('stack', st)); info.textContent = 'Bloom stage ' + (st.bloom ? 'ON' : 'OFF') + '.'; });
-[['btnStackWarm','warm'],['btnStackCrt','crt'],['btnStackNoir','noir']].forEach(function (e) { var b = document.getElementById(e[0]); if (b) b.addEventListener('click', function () { st.preset = e[1]; toy.rebuild(SCENE, chainFor('stack', st)); info.textContent = 'Stack: scene → ' + (st.bloom ? 'bloom → ' : '') + e[1] + ' grade.'; }); });` }
+[['btnStackWarm','warm'],['btnStackCrt','crt'],['btnStackNoir','noir']].forEach(function (e) { var b = document.getElementById(e[0]); if (b) b.addEventListener('click', function () { st.preset = e[1]; toy.rebuild(SCENE, chainFor('stack', st)); info.textContent = 'Stack: scene → ' + (st.bloom ? 'bloom → ' : '') + e[1] + ' grade.'; }); });` },
+    { fx: 'transition', title: 'Scene Transitions',
+      controls: [{ id: 'btnTransWipe', text: 'Wipe' }, { id: 'btnTransIris', text: 'Iris' }, { id: 'btnTransDissolve', text: 'Dissolve' }, { id: 'btnTransBars', text: 'Bars' }],
+      info: 'A scene-change wipe as one post pass, progress driven by u_time.',
+      init: "{ mode: 'wipe' }",
+      wire: `[['btnTransWipe','wipe'],['btnTransIris','iris'],['btnTransDissolve','dissolve'],['btnTransBars','bars']].forEach(function (e) { var b = document.getElementById(e[0]); if (b) b.addEventListener('click', function () { st.mode = e[1]; toy.rebuild(SCENE, chainFor('transition', st)); info.textContent = e[1] + ' transition — animated by u_time.'; }); });` },
+    { fx: 'radial', title: 'Radial Blur & God Rays', param: '0.0',
+      controls: [{ id: 'btnRadOff', text: 'Off' }, { id: 'btnRadBlur', text: 'Blur' }, { id: 'btnRadRays', text: 'God rays' }, { id: 'btnRadStrong', text: 'Strong' }],
+      info: 'Sample toward the centre — zoom blur / light shafts.',
+      init: "{ mode: 'blur' }",
+      wire: `[['btnRadOff','blur',0.0],['btnRadBlur','blur',1.0],['btnRadRays','rays',1.0],['btnRadStrong','rays',1.8]].forEach(function (e) { var b = document.getElementById(e[0]); if (b) b.addEventListener('click', function () { st.mode = e[1]; toy.rebuild(SCENE, chainFor('radial', st)); toy.setParam(e[2]); info.textContent = (e[1] === 'rays' ? 'God rays' : 'Radial blur') + (e[2] > 0.0 ? ' strength ' + e[2] : ' off') + '.'; }); });` },
+    { fx: 'pixel', title: 'Pixelation / Mosaic', param: '120.0',
+      controls: [{ id: 'btnPixFine', text: 'Fine' }, { id: 'btnPixChunky', text: 'Chunky' }, { id: 'btnPixMosaic', text: 'Mosaic' }, { id: 'btnPixCrt', text: 'CRT' }],
+      info: 'Snap uv to a coarse grid — pixel-art / mosaic downscale.',
+      init: "{ mode: 'pixel' }",
+      wire: `[['btnPixFine','pixel',160.0],['btnPixChunky','pixel',56.0],['btnPixMosaic','mosaic',56.0],['btnPixCrt','crt',90.0]].forEach(function (e) { var b = document.getElementById(e[0]); if (b) b.addEventListener('click', function () { st.mode = e[1]; toy.rebuild(SCENE, chainFor('pixel', st)); toy.setParam(e[2]); info.textContent = e[1] + ' — ' + e[2] + ' cells across.'; }); });` }
 ];
 
 DEFS.forEach(function (d) {
@@ -363,7 +440,7 @@ DEFS.forEach(function (d) {
     var canvas = document.getElementById('canvas');
     var info = document.getElementById('info');
     var st = ${d.init};
-    var toy = makeFXChain(canvas, SCENE, chainFor('${d.fx}', st), { info: info, param: 1.4 });
+    var toy = makeFXChain(canvas, SCENE, chainFor('${d.fx}', st), { info: info, param: ${d.param == null ? '1.4' : d.param} });
     ${d.wire}
 })();`;
         DEMO_CODE[key] = body;

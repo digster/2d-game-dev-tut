@@ -70,6 +70,9 @@
                 <li><a href="#blur">Separable Blur</a></li>
                 <li><a href="#bloom">Bloom</a></li>
                 <li><a href="#grade">Colour Grade + CRT</a></li>
+                <li><a href="#transition">Scene Transitions</a></li>
+                <li><a href="#radial">Radial Blur &amp; God Rays</a></li>
+                <li><a href="#pixelate">Pixelation / Mosaic</a></li>
                 <li><a href="#stack">Mini-Project: Post-Process Stack</a></li>
             </ul>
         </div>
@@ -449,6 +452,207 @@ const toy = makeFXChainGL2(canvas, SCENE_GL2, chainFor2('grade', st), { info: in
                     <button id="btnGradeGL2Noir">Noir</button>
                 </div>
                 <div id="gradeGL2Info" class="info-display">exposure/contrast/sat/tint + scanline/vignette/chroma.</div>
+            </div>
+        </div>
+
+        <!-- ============================================ TRANSITIONS -->
+        <div id="transition" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🎬 Scene Transitions</h2>
+            <p>
+                A level wipe, a death iris-out, a dissolve into the next room — every scene transition is a
+                single full-screen post pass that <strong>masks the rendered scene</strong> by a
+                time-driven progress value. Same chain as bloom/grade; only the mask shape changes.
+            </p>
+            <div class="concept-box">
+                <h4>One pass, four masks</h4>
+                <ul>
+                    <li><strong>Wipe:</strong> <code>smoothstep(t, t+ε, uv.x)</code> — a moving edge.</li>
+                    <li><strong>Iris:</strong> a growing/shrinking circle (radius = <code>t</code>).</li>
+                    <li><strong>Dissolve:</strong> per-pixel hash thresholded by <code>t</code>.</li>
+                    <li><strong>Bars:</strong> <code>step(fract(uv.y·n), t)</code> — venetian blinds.</li>
+                </ul>
+                <p>Progress here ping-pongs via <code>0.5 - 0.5·cos(u_time)</code> so it plays in and out.</p>
+            </div>
+            <div class="api-tabs" role="tablist">
+                <button class="api-tab active" data-api="gl1">WebGL1 · GLSL ES 1.00</button>
+                <button class="api-tab" data-api="gl2">WebGL2 · GLSL ES 3.00</button>
+            </div>
+            <div class="api-pane" data-api="gl1">
+                <details data-demo-id="sh_transitionGL1" data-deps="sh_compileShader,sh_createProgram,sh_fxChainGL1,sh_kitGL1">
+                    <summary>📝 Click to see: scene transition (WebGL1)</summary>
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">// chainFor('transition', st) → [one post pass]. The mask multiplies the
+// scene; progress t comes from u_time so it loops in/out automatically.
+const st = { mode: 'wipe' };
+const toy = makeFXChainGL1(canvas, SCENE_GL1, chainFor('transition', st), { info: info });
+// btnTransGL1Iris → st.mode='iris'; toy.rebuild(SCENE_GL1, chainFor('transition', st));</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">const st = { mode: 'wipe' };
+const toy = makeFXChainGL1(canvas, SCENE_GL1, chainFor('transition', st), { info: info });</code></pre>
+                    </div>
+                </details>
+                <div class="diagram"><canvas id="transitionGL1" width="800" height="450"></canvas></div>
+                <div class="controls">
+                    <button id="btnTransGL1Wipe">Wipe</button>
+                    <button id="btnTransGL1Iris">Iris</button>
+                    <button id="btnTransGL1Dissolve">Dissolve</button>
+                    <button id="btnTransGL1Bars">Bars</button>
+                </div>
+                <div id="transitionGL1Info" class="info-display">A scene-change wipe as one post pass, driven by u_time.</div>
+            </div>
+            <div class="api-pane" data-api="gl2" hidden>
+                <details data-demo-id="sh_transitionGL2" data-deps="sh_compileShader,sh_createProgram,sh_fxChainGL2,sh_kitGL2">
+                    <summary>📝 Click to see: scene transition (WebGL2)</summary>
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Identical control flow, GLSL ES 3.00 dialect (#version, texture(), out).
+const st = { mode: 'wipe' };
+const toy = makeFXChainGL2(canvas, SCENE_GL2, chainFor('transition', st), { info: info });</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">const st = { mode: 'wipe' };
+const toy = makeFXChainGL2(canvas, SCENE_GL2, chainFor('transition', st), { info: info });</code></pre>
+                    </div>
+                </details>
+                <div class="diagram"><canvas id="transitionGL2" width="800" height="450"></canvas></div>
+                <div class="controls">
+                    <button id="btnTransGL2Wipe">Wipe</button>
+                    <button id="btnTransGL2Iris">Iris</button>
+                    <button id="btnTransGL2Dissolve">Dissolve</button>
+                    <button id="btnTransGL2Bars">Bars</button>
+                </div>
+                <div id="transitionGL2Info" class="info-display">A scene-change wipe as one post pass, driven by u_time.</div>
+            </div>
+        </div>
+
+        <!-- ============================================ RADIAL BLUR -->
+        <div id="radial" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>☀️ Radial Blur &amp; God Rays</h2>
+            <p>
+                Sample the scene repeatedly along the line toward a centre point and average: that's a
+                <strong>radial (zoom) blur</strong> — speed lines, hit-impact punch, warp. Add a decay
+                weight and a brighten and the same loop becomes <strong>god rays / light shafts</strong>.
+            </p>
+            <div class="api-tabs" role="tablist">
+                <button class="api-tab active" data-api="gl1">WebGL1 · GLSL ES 1.00</button>
+                <button class="api-tab" data-api="gl2">WebGL2 · GLSL ES 3.00</button>
+            </div>
+            <div class="api-pane" data-api="gl1">
+                <details data-demo-id="sh_radialGL1" data-deps="sh_compileShader,sh_createProgram,sh_fxChainGL1,sh_kitGL1">
+                    <summary>📝 Click to see: radial blur / god rays (WebGL1)</summary>
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">// 16 taps marching from each pixel toward the centre; u_param = strength
+// (0 = identity). 'rays' mode adds per-tap decay + a brighten.
+const st = { mode: 'blur' };
+const toy = makeFXChainGL1(canvas, SCENE_GL1, chainFor('radial', st), { info: info, param: 1.0 });</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">const st = { mode: 'blur' };
+const toy = makeFXChainGL1(canvas, SCENE_GL1, chainFor('radial', st), { info: info, param: 1.0 });</code></pre>
+                    </div>
+                </details>
+                <div class="diagram"><canvas id="radialGL1" width="800" height="450"></canvas></div>
+                <div class="controls">
+                    <button id="btnRadGL1Off">Off</button>
+                    <button id="btnRadGL1Blur">Blur</button>
+                    <button id="btnRadGL1Rays">God rays</button>
+                    <button id="btnRadGL1Strong">Strong</button>
+                </div>
+                <div id="radialGL1Info" class="info-display">Sample toward the centre — zoom blur / light shafts.</div>
+            </div>
+            <div class="api-pane" data-api="gl2" hidden>
+                <details data-demo-id="sh_radialGL2" data-deps="sh_compileShader,sh_createProgram,sh_fxChainGL2,sh_kitGL2">
+                    <summary>📝 Click to see: radial blur / god rays (WebGL2)</summary>
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">const st = { mode: 'blur' };
+const toy = makeFXChainGL2(canvas, SCENE_GL2, chainFor('radial', st), { info: info, param: 1.0 });</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">const st = { mode: 'blur' };
+const toy = makeFXChainGL2(canvas, SCENE_GL2, chainFor('radial', st), { info: info, param: 1.0 });</code></pre>
+                    </div>
+                </details>
+                <div class="diagram"><canvas id="radialGL2" width="800" height="450"></canvas></div>
+                <div class="controls">
+                    <button id="btnRadGL2Off">Off</button>
+                    <button id="btnRadGL2Blur">Blur</button>
+                    <button id="btnRadGL2Rays">God rays</button>
+                    <button id="btnRadGL2Strong">Strong</button>
+                </div>
+                <div id="radialGL2Info" class="info-display">Sample toward the centre — zoom blur / light shafts.</div>
+            </div>
+        </div>
+
+        <!-- ============================================ PIXELATE -->
+        <div id="pixelate" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🟪 Pixelation / Mosaic</h2>
+            <p>
+                Snapping <code>uv</code> to a coarse grid before sampling downscales the whole scene into
+                chunky pixels — retro pixelation, a censorship mosaic, or a stylised low-res look. A bevel
+                term makes a tile mosaic; a per-row sine makes a CRT-ish low-res screen.
+            </p>
+            <div class="api-tabs" role="tablist">
+                <button class="api-tab active" data-api="gl1">WebGL1 · GLSL ES 1.00</button>
+                <button class="api-tab" data-api="gl2">WebGL2 · GLSL ES 3.00</button>
+            </div>
+            <div class="api-pane" data-api="gl1">
+                <details data-demo-id="sh_pixelGL1" data-deps="sh_compileShader,sh_createProgram,sh_fxChainGL1,sh_kitGL1">
+                    <summary>📝 Click to see: pixelation (WebGL1)</summary>
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">// q = (floor(uv * n) + 0.5) / n  → every pixel in a cell reads one texel.
+// u_param = cells across; modes add a bevel (mosaic) or scanline (crt).
+const st = { mode: 'pixel' };
+const toy = makeFXChainGL1(canvas, SCENE_GL1, chainFor('pixel', st), { info: info, param: 120.0 });</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">const st = { mode: 'pixel' };
+const toy = makeFXChainGL1(canvas, SCENE_GL1, chainFor('pixel', st), { info: info, param: 120.0 });</code></pre>
+                    </div>
+                </details>
+                <div class="diagram"><canvas id="pixelateGL1" width="800" height="450"></canvas></div>
+                <div class="controls">
+                    <button id="btnPixGL1Fine">Fine</button>
+                    <button id="btnPixGL1Chunky">Chunky</button>
+                    <button id="btnPixGL1Mosaic">Mosaic</button>
+                    <button id="btnPixGL1CRT">CRT</button>
+                </div>
+                <div id="pixelateGL1Info" class="info-display">Snap uv to a grid — pixel-art / mosaic downscale.</div>
+            </div>
+            <div class="api-pane" data-api="gl2" hidden>
+                <details data-demo-id="sh_pixelGL2" data-deps="sh_compileShader,sh_createProgram,sh_fxChainGL2,sh_kitGL2">
+                    <summary>📝 Click to see: pixelation (WebGL2)</summary>
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">const st = { mode: 'pixel' };
+const toy = makeFXChainGL2(canvas, SCENE_GL2, chainFor('pixel', st), { info: info, param: 120.0 });</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">const st = { mode: 'pixel' };
+const toy = makeFXChainGL2(canvas, SCENE_GL2, chainFor('pixel', st), { info: info, param: 120.0 });</code></pre>
+                    </div>
+                </details>
+                <div class="diagram"><canvas id="pixelateGL2" width="800" height="450"></canvas></div>
+                <div class="controls">
+                    <button id="btnPixGL2Fine">Fine</button>
+                    <button id="btnPixGL2Chunky">Chunky</button>
+                    <button id="btnPixGL2Mosaic">Mosaic</button>
+                    <button id="btnPixGL2CRT">CRT</button>
+                </div>
+                <div id="pixelateGL2Info" class="info-display">Snap uv to a grid — pixel-art / mosaic downscale.</div>
             </div>
         </div>
 

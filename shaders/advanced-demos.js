@@ -325,6 +325,74 @@ const GRADE_PRESETS = {
     noir:    { exposure: '1.0', contrast: '1.3', sat: '0.0', tint: 'vec3(1.0)', scan: '0.0', vignette: '1.0', chroma: 'vec2(0.0)' }
 };
 
+// Scene transition as a single post pass. Progress ping-pongs via u_time so
+// the wipe plays in and out continuously. mode = wipe | iris | dissolve | bars.
+function transitionBody(mode) {
+    const mask = mode === 'iris'
+        ? 'vec2 q = uv - 0.5; q.x *= u_resolution.x / u_resolution.y; float m = 1.0 - smoothstep(t, t + 0.03, length(q) * 1.7);'
+        : mode === 'dissolve'
+        ? 'float n = fract(sin(dot(floor(uv * u_resolution / 4.0), vec2(127.1, 311.7))) * 43758.5453); float m = step(n, t);'
+        : mode === 'bars'
+        ? 'float m = step(fract(uv.y * 9.0), t);'
+        : 'float m = 1.0 - smoothstep(t, t + 0.05, uv.x);';
+    return `void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  float t = 0.5 - 0.5 * cos(u_time * 0.8);
+  ` + mask + `
+  OUT = vec4(TEX(u_prev, uv).rgb * m, 1.0);
+}`;
+}
+
+// Radial/zoom blur toward the centre. mode='rays' adds decay + a brighten so
+// it reads as light shafts; u_param is the strength (0 = identity).
+function radialBody(mode) {
+    const rays = mode === 'rays';
+    const acc = rays
+        ? 'w *= 0.92; s += TEX(u_prev, uv + dir * (float(i) / 15.0) * u_param * 0.5) * w;'
+        : 's += TEX(u_prev, uv + dir * (float(i) / 15.0) * u_param * 0.5);';
+    const fin = rays
+        ? 'OUT = vec4(s.rgb * (2.4 / 16.0) + TEX(u_prev, uv).rgb * 0.15, 1.0);'
+        : 'OUT = s / 16.0;';
+    return `void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec2 dir = vec2(0.5) - uv;
+  vec4 s = vec4(0.0);
+  float w = 1.0;
+  for (int i = 0; i < 16; i++) {
+    ` + acc + `
+  }
+  ` + fin + `
+}`;
+}
+
+// Pixelation: snap uv to a coarse grid (u_param = cells across). Variants add
+// a bevel (mosaic) or a per-row scanline (crt).
+function pixelBody(mode) {
+    if (mode === 'mosaic') return `void main() {
+  float n = u_param;
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec2 q = (floor(uv * n) + 0.5) / n;
+  vec3 c = TEX(u_prev, q).rgb;
+  vec2 f = fract(uv * n);
+  c *= 0.6 + 6.0 * (f.x * f.y * (1.0 - f.x) * (1.0 - f.y));
+  OUT = vec4(c, 1.0);
+}`;
+    if (mode === 'crt') return `void main() {
+  float n = u_param;
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec2 q = (floor(uv * n) + 0.5) / n;
+  vec3 c = TEX(u_prev, q).rgb;
+  c *= 0.72 + 0.28 * sin(uv.y * n * 3.14159);
+  OUT = vec4(c, 1.0);
+}`;
+    return `void main() {
+  float n = u_param;
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec2 q = (floor(uv * n) + 0.5) / n;
+  OUT = TEX(u_prev, q);
+}`;
+}
+
 // =============================================================================
 // Effect → post-chain definitions (shared by the GL1 and GL2 demo pairs).
 // =============================================================================
@@ -334,6 +402,9 @@ function chainFor(effect, state) {
     if (effect === 'blur') return [B.blurH, B.blurV];
     if (effect === 'bloom') return [B.bright, B.bbH, B.bbV, B.composite];
     if (effect === 'grade') return [gradeBody(GRADE_PRESETS[state.preset])];
+    if (effect === 'transition') return [transitionBody(state.mode)];
+    if (effect === 'radial') return [radialBody(state.mode)];
+    if (effect === 'pixel') return [pixelBody(state.mode)];
     if (effect === 'stack') {
         const post = [];
         if (state.bloom) post.push(B.bright, B.bbH, B.bbV, B.composite);
@@ -437,6 +508,45 @@ function mountFX(canvasId, infoId, api, effect, initState, wireButtons) {
             document.getElementById('btnStack' + A + label)?.addEventListener('click', () => {
                 st.preset = p; toy.rebuildChain();
                 info.textContent = 'Stack: scene → ' + (st.bloom ? 'bloom → ' : '') + p + ' grade.';
+            });
+        });
+    });
+});
+
+// 7 — Scene Transitions
+['gl1', 'gl2'].forEach(api => {
+    const A = api.toUpperCase();
+    mountFX('transition' + A, 'transition' + A + 'Info', api, 'transition', { mode: 'wipe' }, (toy, st, info) => {
+        [['Wipe', 'wipe'], ['Iris', 'iris'], ['Dissolve', 'dissolve'], ['Bars', 'bars']].forEach(([label, m]) => {
+            document.getElementById('btnTrans' + A + label)?.addEventListener('click', () => {
+                st.mode = m; toy.rebuildChain();
+                info.textContent = m + ' transition — one post pass, progress driven by u_time.';
+            });
+        });
+    });
+});
+
+// 8 — Radial Blur & God Rays
+['gl1', 'gl2'].forEach(api => {
+    const A = api.toUpperCase();
+    mountFX('radial' + A, 'radial' + A + 'Info', api, 'radial', { mode: 'blur', _param: 0.0 }, (toy, st, info) => {
+        [['Off', 'blur', 0.0], ['Blur', 'blur', 1.0], ['Rays', 'rays', 1.0], ['Strong', 'rays', 1.8]].forEach(([label, m, p]) => {
+            document.getElementById('btnRad' + A + label)?.addEventListener('click', () => {
+                st.mode = m; toy.rebuildChain(); toy.setParam(p);
+                info.textContent = (m === 'rays' ? 'God rays' : 'Radial blur') + (p > 0.0 ? ' — strength ' + p : ' — off (identity)') + '.';
+            });
+        });
+    });
+});
+
+// 9 — Pixelation / Mosaic
+['gl1', 'gl2'].forEach(api => {
+    const A = api.toUpperCase();
+    mountFX('pixelate' + A, 'pixelate' + A + 'Info', api, 'pixel', { mode: 'pixel', _param: 120.0 }, (toy, st, info) => {
+        [['Fine', 'pixel', 160.0], ['Chunky', 'pixel', 56.0], ['Mosaic', 'mosaic', 56.0], ['CRT', 'crt', 90.0]].forEach(([label, m, p]) => {
+            document.getElementById('btnPix' + A + label)?.addEventListener('click', () => {
+                st.mode = m; toy.rebuildChain(); toy.setParam(p);
+                info.textContent = m + ' — ' + p + ' cells across (snap uv to a grid).';
             });
         });
     });

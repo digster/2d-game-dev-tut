@@ -39,6 +39,9 @@
                 <li><a href="#dissolve">Dissolve &amp; Burn</a></li>
                 <li><a href="#outline">Outline / Rim</a></li>
                 <li><a href="#hitflash">Hit-Flash &amp; Invincibility Blink</a></li>
+                <li><a href="#normalmap">2D Normal-Map Lighting</a></li>
+                <li><a href="#spritesheet">Sprite-Sheet Animation</a></li>
+                <li><a href="#dither">Dither / Posterize / 1-bit</a></li>
                 <li><a href="#shaded-sprite">Mini-Project: Fully Shaded Sprite</a></li>
             </ul>
         </div>
@@ -481,6 +484,296 @@ canvas.addEventListener('click', (): void =&gt; toy.setFrag(FLASH));</code></pre
                 <button id="btnHitNormal">Normal</button>
             </div>
             <div id="hitflashGLInfo" class="info-display">mix(sprite, white, pulse) + alpha blink. Click to re-trigger.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- NORMAL-MAP LIGHTING -->
+        <!-- ============================================ -->
+        <div id="normalmap" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>💡 2D Normal-Map Lighting</h2>
+
+            <p>
+                This is what makes 2D games look 3D: a moving light that actually <em>wraps</em> the art.
+                You don't need a hand-painted normal map — for a single sprite you can treat its
+                <strong>luminance as a height field</strong>, finite-difference it into a surface normal,
+                and shade it with Lambert <code>N·L</code> from a point light. Move the mouse: it's the light.
+            </p>
+
+            <div class="concept-box">
+                <h4>Heightmap → normal → light</h4>
+                <ul>
+                    <li><strong>Height</strong> <code>h = luminance(sprite)</code> — bright = raised.</li>
+                    <li><strong>Normal</strong> from neighbour texels: <code>N = normalize(vec3(hL-hR, hD-hU, k))</code>.</li>
+                    <li><strong>Light</strong> <code>diff = max(dot(N, L), 0.0)</code> with <code>L</code> toward the mouse.</li>
+                </ul>
+            </div>
+
+            <details data-demo-id="sh_normalmapGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy,sh_drawSprite,sh_glslKit">
+                <summary>📝 Click to see: lit / normals / diffuse / flat</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// GLSL_HEAD gives u_tex / u_texResolution / toSpriteUV / backdrop.
+// We add u_mouse ourselves (the runner fills it if the shader declares it).
+function buildFrag(out) {
+    return GLSL_HEAD + `
+uniform vec2 u_mouse;
+float lum(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
+float H(vec2 uv) { vec4 t = texture2D(u_tex, uv); return lum(t.rgb) * t.a; }
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec2 s  = toSpriteUV(uv);
+  vec4 tex = texture2D(u_tex, s);
+  vec2 px = 1.5 / u_texResolution;
+  vec3 N = normalize(vec3(H(s - vec2(px.x,0.0)) - H(s + vec2(px.x,0.0)),
+                          H(s - vec2(0.0,px.y)) - H(s + vec2(0.0,px.y)), 0.6));
+  vec2 lp = u_mouse / u_resolution;
+  vec3 L = normalize(vec3((lp - uv) * vec2(u_resolution.x/u_resolution.y, 1.0), 0.35));
+  float diff = max(dot(N, L), 0.0);
+  float spec = pow(max(dot(reflect(-L, N), vec3(0.0,0.0,1.0)), 0.0), 24.0);
+  vec3 c = ${out};
+  gl_FragColor = vec4(mix(backdrop(uv), c, tex.a), 1.0);
+}`;
+}
+
+const toy = makeShaderToy(canvas,
+    buildFrag('tex.rgb * (0.15 + diff) + spec * 0.6'),
+    { info: info, sprite: drawSprite });</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function buildFrag(out: string): string {
+    return GLSL_HEAD + `
+uniform vec2 u_mouse;
+float lum(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
+float H(vec2 uv) { vec4 t = texture2D(u_tex, uv); return lum(t.rgb) * t.a; }
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec2 s  = toSpriteUV(uv);
+  vec4 tex = texture2D(u_tex, s);
+  vec2 px = 1.5 / u_texResolution;
+  vec3 N = normalize(vec3(H(s - vec2(px.x,0.0)) - H(s + vec2(px.x,0.0)),
+                          H(s - vec2(0.0,px.y)) - H(s + vec2(0.0,px.y)), 0.6));
+  vec2 lp = u_mouse / u_resolution;
+  vec3 L = normalize(vec3((lp - uv) * vec2(u_resolution.x/u_resolution.y, 1.0), 0.35));
+  float diff = max(dot(N, L), 0.0);
+  float spec = pow(max(dot(reflect(-L, N), vec3(0.0,0.0,1.0)), 0.0), 24.0);
+  vec3 c = ${out};
+  gl_FragColor = vec4(mix(backdrop(uv), c, tex.a), 1.0);
+}`;
+}</code></pre>
+                </div>
+            </details>
+
+            <div class="diagram">
+                <canvas id="normalmapGL" width="800" height="450"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnNmLit">Lit</button>
+                <button id="btnNmNormals">Show normals</button>
+                <button id="btnNmDiffuse">Diffuse only</button>
+                <button id="btnNmFlat">Flat (no light)</button>
+            </div>
+            <div id="normalmapGLInfo" class="info-display">Move the mouse — it's the light. No painted normal map needed.</div>
+
+            <div class="challenge-box">
+                <h4>🎯 Try this</h4>
+                <p>Switch to "Show normals" and move the mouse: the colors don't change (a normal map is
+                view-independent) but in "Lit" the highlight chases your cursor. That's the entire trick
+                behind dynamic 2D lighting.</p>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- SPRITE-SHEET ANIMATION -->
+        <!-- ============================================ -->
+        <div id="spritesheet" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🎞️ Sprite-Sheet Animation</h2>
+
+            <p>
+                Every animated 2D character is one image — a <strong>sprite sheet</strong> — sampled one
+                cell at a time. The shader picks the current frame from a time-driven index and remaps
+                <code>uv</code> into that cell. Here the "art" is a procedurally painted 4×4 sheet of a
+                spinning gem.
+            </p>
+
+            <div class="concept-box">
+                <h4>The atlas UV remap</h4>
+                <div class="formula">
+                    frame = mod(floor(time · fps), 16);<br>
+                    cell&nbsp;= vec2(mod(frame,4), floor(frame/4));<br>
+                    uv&nbsp;&nbsp;&nbsp;= (localUV + cell) / 4;
+                </div>
+                <p>One texture, a tiny bit of <code>mod</code>/<code>floor</code> math, zero extra draw calls.</p>
+            </div>
+
+            <details data-demo-id="sh_spritesheetGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy,sh_drawSprite,sh_glslKit">
+                <summary>📝 Click to see: the sheet painter + frame-picker shader</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Custom sprite painter: a 4x4 grid of frames (gem rotating per cell).
+function drawSheet(ctx, n) {
+    ctx.clearRect(0, 0, n, n);
+    const cs = n / 4;
+    for (let f = 0; f < 16; f++) {
+        const cx = (f % 4) * cs + cs / 2;
+        const cy = Math.floor(f / 4) * cs + cs / 2;
+        const ang = f / 16 * Math.PI * 2, R = cs * 0.32;
+        ctx.save(); ctx.translate(cx, cy); ctx.rotate(ang);
+        ctx.beginPath();
+        ctx.moveTo(0, -R); ctx.lineTo(R * 0.7, 0);
+        ctx.lineTo(0, R);  ctx.lineTo(-R * 0.7, 0);
+        ctx.closePath(); ctx.fillStyle = '#4fc3f7'; ctx.fill();
+        ctx.restore();
+    }
+}
+
+// fps injected as a GLSL constant; UNPACK_FLIP_Y means row 0 is the TOP.
+function buildFrag(fps) {
+    return GLSL_HEAD + `
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec2 s  = clamp(toSpriteUV(uv), 0.0, 1.0);
+  float frame = mod(floor(u_time * ${fps}), 16.0);
+  vec2 cell = vec2(mod(frame, 4.0), floor(frame / 4.0));
+  vec2 fuv = (s + vec2(cell.x, 3.0 - cell.y)) / 4.0;
+  vec4 tex = texture2D(u_tex, fuv);
+  gl_FragColor = vec4(mix(backdrop(uv), tex.rgb, tex.a), 1.0);
+}`;
+}
+
+const toy = makeShaderToy(canvas, buildFrag('8.0'),
+    { info: info, sprite: drawSheet });</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function drawSheet(ctx: CanvasRenderingContext2D, n: number): void {
+    ctx.clearRect(0, 0, n, n);
+    const cs = n / 4;
+    for (let f = 0; f < 16; f++) {
+        const cx = (f % 4) * cs + cs / 2;
+        const cy = Math.floor(f / 4) * cs + cs / 2;
+        const ang = f / 16 * Math.PI * 2, R = cs * 0.32;
+        ctx.save(); ctx.translate(cx, cy); ctx.rotate(ang);
+        ctx.beginPath();
+        ctx.moveTo(0, -R); ctx.lineTo(R * 0.7, 0);
+        ctx.lineTo(0, R);  ctx.lineTo(-R * 0.7, 0);
+        ctx.closePath(); ctx.fillStyle = '#4fc3f7'; ctx.fill();
+        ctx.restore();
+    }
+}
+
+function buildFrag(fps: string): string {
+    return GLSL_HEAD + `
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec2 s  = clamp(toSpriteUV(uv), 0.0, 1.0);
+  float frame = mod(floor(u_time * ${fps}), 16.0);
+  vec2 cell = vec2(mod(frame, 4.0), floor(frame / 4.0));
+  vec2 fuv = (s + vec2(cell.x, 3.0 - cell.y)) / 4.0;
+  vec4 tex = texture2D(u_tex, fuv);
+  gl_FragColor = vec4(mix(backdrop(uv), tex.rgb, tex.a), 1.0);
+}`;
+}
+
+const toy = makeShaderToy(canvas, buildFrag('8.0'),
+    { info: info, sprite: drawSheet });</code></pre>
+                </div>
+            </details>
+
+            <div class="diagram">
+                <canvas id="spritesheetGL" width="800" height="450"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnSheetSlow">Slow (4 fps)</button>
+                <button id="btnSheetNormal">Normal (8 fps)</button>
+                <button id="btnSheetFast">Fast (16 fps)</button>
+                <button id="btnSheetAtlas">Show full sheet</button>
+            </div>
+            <div id="spritesheetGLInfo" class="info-display">One image, sampled one cell per frame — that's 2D animation.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- DITHER / POSTERIZE / 1-BIT -->
+        <!-- ============================================ -->
+        <div id="dither" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🟦 Dither / Posterize / 1-bit</h2>
+
+            <p>
+                The retro look — Game Boy, Obra Dinn, 1-bit jams — is <strong>color quantization</strong>.
+                Snap colors to a few levels (posterize), threshold to two (1-bit), and add an
+                <strong>ordered Bayer dither</strong> so the eye reads more shades than are really there.
+            </p>
+
+            <div class="concept-box">
+                <h4>Quantize, then dither</h4>
+                <ul>
+                    <li><strong>Posterize:</strong> <code>floor(col * n) / n</code> → visible bands.</li>
+                    <li><strong>Dither:</strong> add a 4×4 Bayer threshold <em>before</em> the floor → bands dissolve into a pattern.</li>
+                    <li><strong>1-bit:</strong> compare luminance against the Bayer value → pure two-tone.</li>
+                </ul>
+            </div>
+
+            <details data-demo-id="sh_ditherGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy,sh_drawSprite,sh_glslKit">
+                <summary>📝 Click to see: posterize / dither / 1-bit / palette</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// 4x4 Bayer built recursively from the 2x2 base [[0,2],[3,1]].
+const LIB = GLSL_HEAD + `
+float lum(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
+float B2(vec2 c) { return mix(mix(0.0,2.0,c.x), mix(3.0,1.0,c.x), c.y); }
+float bayer4(vec2 P) {
+  vec2 hi = mod(floor(P * 0.5), 2.0);
+  vec2 lo = mod(P, 2.0);
+  return (4.0 * B2(hi) + B2(lo)) / 16.0;
+}`;
+
+function buildFrag(mode) {
+    return LIB + `
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec4 tx = texture2D(u_tex, toSpriteUV(uv));
+  vec3 col = mix(backdrop(uv), tx.rgb, tx.a);
+  vec2 P = floor(gl_FragCoord.xy);
+  vec3 outc;
+  ${mode}
+  gl_FragColor = vec4(outc, 1.0);
+}`;
+}
+
+const toy = makeShaderToy(canvas,
+    buildFrag('outc = floor(col * 4.0 + bayer4(P)) / 4.0;'),
+    { info: info, sprite: drawSprite });</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function buildFrag(mode: string): string {
+    return LIB + `
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec4 tx = texture2D(u_tex, toSpriteUV(uv));
+  vec3 col = mix(backdrop(uv), tx.rgb, tx.a);
+  vec2 P = floor(gl_FragCoord.xy);
+  vec3 outc;
+  ${mode}
+  gl_FragColor = vec4(outc, 1.0);
+}`;
+}</code></pre>
+                </div>
+            </details>
+
+            <div class="diagram">
+                <canvas id="ditherGL" width="800" height="450"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnDitPosterize">Posterize</button>
+                <button id="btnDitDither">Bayer dither</button>
+                <button id="btnDitOneBit">1-bit</button>
+                <button id="btnDitPalette">Game Boy palette</button>
+            </div>
+            <div id="ditherGLInfo" class="info-display">Quantize colors; dither so the eye sees more shades than exist.</div>
         </div>
 
         <!-- ============================================ -->

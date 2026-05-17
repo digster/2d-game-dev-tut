@@ -48,3 +48,21 @@ Gray-Scott reaction-diffusion, GPU particles, 2D fluid/ink, interactive
 fluid playground. User chose WebGL2-only + RGBA16F float textures; new
 makeSim persistent double-buffer runner; flip card → all 5 tiers shipped,
 shaders track complete.
+(6) "See what more examples can be added across the phases in the shaders
+track." User chose: all five tiers, comprehensive 3–4 new lessons each, one
+plan up front then build. Added 15 lessons (additive only, no removals),
+each as the full 5-file transaction (tier .html section + TOC, {tier}-demos.js
+IIFE, bundles-{tier}.js DEMO_HTML/CODE[/TS], shaders/index.html roadmap card):
+Beginner — 2D transforms, polar coords, SDF boolean combine; Intermediate —
+gradient/Perlin noise, Voronoi/cellular, flow & scrolling; Expert — 2D
+normal-map lighting, sprite-sheet animation, dither/posterize/1-bit; Advanced
+— scene transitions, radial blur & god rays, pixelation/mosaic (each a
+WebGL1+WebGL2 pair via the kit/chainFor extension); Simulations — falling
+sand (conservative Margolus 1×2 CA), boids/flocking (16-sample agents),
+2D wave equation. Slime-mold was swapped for the wave equation because
+makeSim is single-buffer (Physarum needs agents that sense a separately
+diffused trail — two coupled fields the harness can't feed back). Every
+tier verified in a real browser: zero GLSL console errors, all controls
+exercised, and the 📋 Export standalone HTML run for the riskiest demos
+(JS path; TS path proven via byte-identical GLSL parity since the sandbox
+blocks the Sucrase CDN for all repo exports).

@@ -33,6 +33,9 @@
                 <li><a href="#reaction">Reaction-Diffusion (Gray-Scott)</a></li>
                 <li><a href="#particles">GPU Particles</a></li>
                 <li><a href="#fluid">2D Fluid / Ink</a></li>
+                <li><a href="#sand">Falling Sand (Margolus CA)</a></li>
+                <li><a href="#boids">Boids / Flocking</a></li>
+                <li><a href="#wave">Wave Propagation</a></li>
                 <li><a href="#playground">Mini-Project: Interactive Fluid Playground</a></li>
             </ul>
         </div>
@@ -270,6 +273,144 @@ void main() {
             </details>
             <div class="diagram"><canvas id="fluidGL" width="800" height="450"></canvas></div>
             <div id="fluidGLInfo" class="info-display">Advect velocity + dye, mouse adds force. Drag to stir.</div>
+        </div>
+
+        <!-- ============================================ FALLING SAND -->
+        <div id="sand" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>⏳ Falling Sand (Margolus CA)</h2>
+            <p>
+                Noita-style granular physics. Naive cellular gravity (read self + below)
+                <em>flickers and loses mass</em> — synchronous CA can't move a grain without a
+                partner agreeing. The fix is a <strong>Margolus neighbourhood</strong>: pair each cell
+                with the one above/below (the pairing flips every frame via <code>u_frame</code>) and
+                swap a <em>sand-over-empty</em> pair. That's perfectly mass-conserving and gap-free.
+            </p>
+            <div class="concept-box">
+                <h4>Why Margolus</h4>
+                <ul>
+                    <li>Cells update in independent 1×2 blocks → a move is one atomic swap.</li>
+                    <li><code>(u_frame &amp; 1)</code> alternates the block boundary so grains keep falling.</li>
+                    <li>Walls (state 2) never swap; the floor is the texture's bottom row.</li>
+                </ul>
+            </div>
+            <details data-demo-id="sh_sand" data-deps="sh_compileShader,sh_createProgram,sh_simKit,sh_makeSim">
+                <summary>📝 Click to see: the Margolus gravity swap</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">step: SIM_HEAD + SIM_LIB + `void main() {
+  float me = cell(ivec2(0)).r;                 // 0 empty, 1 sand, 2 wall
+  int y  = int(gl_FragCoord.y);
+  bool top = ((y + (u_frame &amp; 1)) &amp; 1) == 1;   // top of a vertical pair?
+  float ot = cell(top ? ivec2(0,-1) : ivec2(0,1)).r;
+  float res = me;
+  if (me &lt; 1.5 &amp;&amp; ot &lt; 1.5) {                   // neither is a wall
+    if (top  &amp;&amp; me == 1.0 &amp;&amp; ot == 0.0) res = 0.0;   // sand falls out
+    if (!top &amp;&amp; me == 0.0 &amp;&amp; ot == 1.0) res = 1.0;   // sand falls in
+  }
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  if (u_mouseDown &gt; 0.5 &amp;&amp; distance(uv, u_mouse) &lt; 0.03)
+    res = (u_param &gt; 1.5) ? 2.0 : 1.0;          // paint sand / wall
+  outColor = vec4(res, 0.0, 0.0, 1.0);
+}`</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Margolus 1×2 block: an atomic, conservative, flicker-free CA gravity.</code></pre>
+                </div>
+            </details>
+            <div class="diagram"><canvas id="sandGL" width="800" height="450"></canvas></div>
+            <div class="controls">
+                <button id="btnSandSand">Paint sand</button>
+                <button id="btnSandWall">Paint wall</button>
+                <button id="btnSandClear">Clear</button>
+                <button id="btnSandPause">Pause</button>
+            </div>
+            <div id="sandGLInfo" class="info-display">Drag to pour sand. Conservative Margolus gravity.</div>
+        </div>
+
+        <!-- ============================================ BOIDS -->
+        <div id="boids" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>🐦 Boids / Flocking</h2>
+            <p>
+                Reynolds' three rules — <strong>separation</strong>, <strong>alignment</strong>,
+                <strong>cohesion</strong> — on the GPU. Each boid is a texel (<code>.xy</code> position,
+                <code>.zw</code> velocity). Sampling all neighbours is O(n²); instead each boid checks
+                <strong>16 randomly-chosen others</strong> per frame — cheap, and statistically it still
+                flocks. Drawn with the same <code>gl_VertexID</code> point trick as the particle demo.
+            </p>
+            <details data-demo-id="sh_boids" data-deps="sh_compileShader,sh_createProgram,sh_simKit,sh_makeSim">
+                <summary>📝 Click to see: the three-rule steering</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// 16 random samples → separation + alignment + cohesion; u_param scales
+// cohesion (Loose / Tight / Scatter). Wrap toroidally with fract().
+step: SIM_HEAD + SIM_LIB + `void main() {
+  vec4 s = cell(ivec2(0));
+  vec2 p = s.xy, v = s.zw;
+  /* sample 16 others, accumulate sep/ali/coh, integrate, fract-wrap */
+  outColor = vec4(p, v);
+}`</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// state texture is the boid buffer; POINT_VERT renders each texel.</code></pre>
+                </div>
+            </details>
+            <div class="diagram"><canvas id="boidsGL" width="800" height="450"></canvas></div>
+            <div class="controls">
+                <button id="btnBoidLoose">Loose</button>
+                <button id="btnBoidTight">Tight</button>
+                <button id="btnBoidScatter">Scatter</button>
+                <button id="btnBoidReset">Reset</button>
+            </div>
+            <div id="boidsGLInfo" class="info-display">9,216 boids, 16 samples each. Drag to herd them.</div>
+        </div>
+
+        <!-- ============================================ WAVE -->
+        <div id="wave" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>🌊 Wave Propagation</h2>
+            <p>
+                The discrete 2D wave equation: state packs <strong>height</strong> (<code>.r</code>) and
+                <strong>velocity</strong> (<code>.g</code>). Each step, the Laplacian (4-neighbour sum −
+                4·h) accelerates the velocity, velocity integrates the height. Click to drop a pulse and
+                watch ripples interfere and reflect — water surfaces, shock rings, force-field shimmer.
+            </p>
+            <div class="concept-box">
+                <h4>Stability (the CFL condition)</h4>
+                <p>Explicit integration is only stable while <code>c²·Δt² &lt; 0.5</code> in 2D — we use
+                <code>0.20</code> and a mild <code>0.999</code> damping so energy stays bounded.</p>
+            </div>
+            <details data-demo-id="sh_wave" data-deps="sh_compileShader,sh_createProgram,sh_simKit,sh_makeSim">
+                <summary>📝 Click to see: the wave step + lit display</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">step: SIM_HEAD + SIM_LIB + `void main() {
+  vec2 s = cell(ivec2(0)).rg;                  // .r height, .g velocity
+  float lap = cell(ivec2(1,0)).r + cell(ivec2(-1,0)).r
+            + cell(ivec2(0,1)).r + cell(ivec2(0,-1)).r - 4.0 * s.r;
+  float vel = (s.g + (0.18 + 0.06 * u_param) * lap) * 0.999;
+  float h   = s.r + vel;
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  if (u_mouseDown > 0.5 && distance(uv, u_mouse) < 0.02) h += 0.6;
+  outColor = vec4(h * 0.9995, vel, 0.0, 1.0);
+}`</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// display shades by the height gradient → a moving water-like sheen.</code></pre>
+                </div>
+            </details>
+            <div class="diagram"><canvas id="waveGL" width="800" height="450"></canvas></div>
+            <div class="controls">
+                <button id="btnWaveSlow">Slow</button>
+                <button id="btnWaveFast">Fast</button>
+                <button id="btnWaveReset">Reset</button>
+                <button id="btnWavePause">Pause</button>
+            </div>
+            <div id="waveGLInfo" class="info-display">Click / drag to make waves. Watch them interfere &amp; reflect.</div>
         </div>
 
         <!-- ============================================ PLAYGROUND -->

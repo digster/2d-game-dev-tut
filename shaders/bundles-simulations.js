@@ -446,6 +446,180 @@ DEMO_CODE.sh_fluid = `(function () {
 })();`;
 DEMO_CODE_TS.sh_fluid = DEMO_CODE.sh_fluid;
 
+DEMO_HTML.sh_sand = {
+    title: 'Shaders — Falling Sand (Margolus CA)',
+    canvas: { width: 800, height: 450 },
+    controls: [
+        { id: 'btnSandSand', text: 'Paint sand' }, { id: 'btnSandWall', text: 'Paint wall' },
+        { id: 'btnSandClear', text: 'Clear' }, { id: 'btnSandPause', text: 'Pause' }
+    ],
+    info: 'Drag to pour sand. Conservative Margolus gravity.'
+};
+DEMO_CODE.sh_sand = `(function () {
+    var canvas = document.getElementById('canvas');
+    var info = document.getElementById('info');
+    var sim = makeSim(canvas, {
+        seed: SIM_HEAD + \`void main() { outColor = vec4(0.0); }\`,
+        step: SIM_HEAD + SIM_LIB + \`void main() {
+  float me = cell(ivec2(0)).r;
+  int y = int(gl_FragCoord.y);
+  bool top = ((y + (u_frame & 1)) & 1) == 1;
+  float ot = cell(top ? ivec2(0, -1) : ivec2(0, 1)).r;
+  float res = me;
+  if (me < 1.5 && ot < 1.5) {
+    if (top  && me == 1.0 && ot == 0.0) res = 0.0;
+    if (!top && me == 0.0 && ot == 1.0) res = 1.0;
+  }
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  if (u_mouseDown > 0.5 && distance(uv, u_mouse) < 0.03)
+    res = (u_param > 1.5) ? 2.0 : 1.0;
+  outColor = vec4(res, 0.0, 0.0, 1.0);
+}\`,
+        display: DISP_HEAD + \`void main() {
+  float m = texture(u_state, gl_FragCoord.xy / u_resolution).r;
+  vec3 c = vec3(0.03, 0.04, 0.07);
+  c = mix(c, vec3(0.85, 0.68, 0.34), step(0.5, m) * step(m, 1.5));
+  c = mix(c, vec3(0.45, 0.47, 0.55), step(1.5, m));
+  outColor = vec4(c, 1.0);
+}\`
+    }, { info: info, param: 1.0 });
+    var paused = false;
+    document.getElementById('btnSandSand') && document.getElementById('btnSandSand').addEventListener('click', function () {
+        sim.setParam(1.0); info.textContent = 'Painting SAND — drag on the canvas to pour.';
+    });
+    document.getElementById('btnSandWall') && document.getElementById('btnSandWall').addEventListener('click', function () {
+        sim.setParam(2.0); info.textContent = 'Painting WALL — build ledges for the sand.';
+    });
+    document.getElementById('btnSandClear') && document.getElementById('btnSandClear').addEventListener('click', function () {
+        sim.reset(); info.textContent = 'Cleared. Drag to pour sand again.';
+    });
+    document.getElementById('btnSandPause') && document.getElementById('btnSandPause').addEventListener('click', function () {
+        paused = !paused; sim.setPaused(paused);
+        info.textContent = paused ? 'Paused.' : 'Running — conservative Margolus gravity.';
+    });
+})();`;
+DEMO_CODE_TS.sh_sand = DEMO_CODE.sh_sand;
+
+DEMO_HTML.sh_boids = {
+    title: 'Shaders — Boids / Flocking',
+    canvas: { width: 800, height: 450 },
+    controls: [
+        { id: 'btnBoidLoose', text: 'Loose' }, { id: 'btnBoidTight', text: 'Tight' },
+        { id: 'btnBoidScatter', text: 'Scatter' }, { id: 'btnBoidReset', text: 'Reset' }
+    ],
+    info: '9,216 boids, 16 samples each. Drag to herd them.'
+};
+DEMO_CODE.sh_boids = `(function () {
+    var canvas = document.getElementById('canvas');
+    var info = document.getElementById('info');
+    var N = 96;
+    var sim = makeSim(canvas, {
+        stateW: N, stateH: N,
+        points: { vert: POINT_VERT, frag: POINT_FRAG, count: N * N },
+        seed: SIM_HEAD + SIM_LIB + \`void main() {
+  vec2 t = gl_FragCoord.xy;
+  outColor = vec4(hash(t), hash(t + 19.0),
+                  (hash(t + 3.0) - 0.5) * 0.01, (hash(t + 7.0) - 0.5) * 0.01);
+}\`,
+        step: SIM_HEAD + SIM_LIB + \`void main() {
+  vec4 s = cell(ivec2(0));
+  vec2 p = s.xy, v = s.zw;
+  vec2 sep = vec2(0.0), ali = vec2(0.0), coh = vec2(0.0);
+  float cnt = 0.0;
+  ivec2 sz = textureSize(u_state, 0);
+  for (int i = 0; i < 16; i++) {
+    vec2 rnd = vec2(
+      hash(gl_FragCoord.xy + float(i) * 1.7 + float(u_frame) * 0.013),
+      hash(gl_FragCoord.xy - float(i) * 3.1 + float(u_frame) * 0.017));
+    vec4 o = texelFetch(u_state, ivec2(rnd * vec2(sz)), 0);
+    vec2 d = o.xy - p;
+    float dist = length(d) + 1e-5;
+    if (dist < 0.10) {
+      coh += o.xy; ali += o.zw; cnt += 1.0;
+      if (dist < 0.03) sep -= d / dist * (0.03 - dist);
+    }
+  }
+  if (cnt > 0.0) { coh = coh / cnt - p; ali = ali / cnt; }
+  v += sep * 0.6 + ali * 0.05 + coh * 0.02 * u_param;
+  if (u_mouseDown > 0.5) v += normalize(u_mouse - p + 1e-4) * 0.0010;
+  v += (vec2(hash(p + float(u_frame) * 0.01),
+             hash(p + 5.0 + float(u_frame) * 0.01)) - 0.5) * 0.0006;
+  float sp = length(v) + 1e-6;
+  v = v / sp * clamp(sp, 0.0025, 0.011);
+  p = fract(p + v + 1.0);
+  outColor = vec4(p, v);
+}\`,
+        display: DISP_HEAD + \`void main() { outColor = vec4(0.0); }\`
+    }, { info: info, param: 1.0 });
+    document.getElementById('btnBoidLoose') && document.getElementById('btnBoidLoose').addEventListener('click', function () {
+        sim.setParam(1.0); info.textContent = 'Loose flock — light cohesion.';
+    });
+    document.getElementById('btnBoidTight') && document.getElementById('btnBoidTight').addEventListener('click', function () {
+        sim.setParam(2.6); info.textContent = 'Tight flock — strong cohesion, dense swirls.';
+    });
+    document.getElementById('btnBoidScatter') && document.getElementById('btnBoidScatter').addEventListener('click', function () {
+        sim.setParam(-1.5); info.textContent = 'Scatter — negative cohesion pushes them apart.';
+    });
+    document.getElementById('btnBoidReset') && document.getElementById('btnBoidReset').addEventListener('click', function () {
+        sim.reset(); info.textContent = 'Reset — fresh random swarm.';
+    });
+})();`;
+DEMO_CODE_TS.sh_boids = DEMO_CODE.sh_boids;
+
+DEMO_HTML.sh_wave = {
+    title: 'Shaders — Wave Propagation',
+    canvas: { width: 800, height: 450 },
+    controls: [
+        { id: 'btnWaveSlow', text: 'Slow' }, { id: 'btnWaveFast', text: 'Fast' },
+        { id: 'btnWaveReset', text: 'Reset' }, { id: 'btnWavePause', text: 'Pause' }
+    ],
+    info: 'Click / drag to make waves. Watch them interfere & reflect.'
+};
+DEMO_CODE.sh_wave = `(function () {
+    var canvas = document.getElementById('canvas');
+    var info = document.getElementById('info');
+    var sim = makeSim(canvas, {
+        substeps: 2,
+        seed: SIM_HEAD + \`void main() { outColor = vec4(0.0); }\`,
+        step: SIM_HEAD + SIM_LIB + \`void main() {
+  vec2 s = cell(ivec2(0)).rg;
+  float lap = cell(ivec2(1, 0)).r + cell(ivec2(-1, 0)).r
+            + cell(ivec2(0, 1)).r + cell(ivec2(0, -1)).r - 4.0 * s.r;
+  float vel = (s.g + (0.18 + 0.06 * u_param) * lap) * 0.999;
+  float h = s.r + vel;
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  if (u_mouseDown > 0.5 && distance(uv, u_mouse) < 0.02) h += 0.6;
+  outColor = vec4(h * 0.9995, vel, 0.0, 1.0);
+}\`,
+        display: DISP_HEAD + \`void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec2 px = 1.0 / u_resolution;
+  float h  = texture(u_state, uv).r;
+  float hx = texture(u_state, uv + vec2(px.x, 0.0)).r - h;
+  float hy = texture(u_state, uv + vec2(0.0, px.y)).r - h;
+  vec3 n = normalize(vec3(-hx * 6.0, -hy * 6.0, 1.0));
+  float light = clamp(dot(n, normalize(vec3(0.4, 0.5, 1.0))), 0.0, 1.0);
+  vec3 col = mix(vec3(0.02, 0.06, 0.16), vec3(0.40, 0.78, 1.0), 0.5 + 0.5 * h);
+  outColor = vec4(col * (0.35 + 0.85 * light), 1.0);
+}\`
+    }, { info: info, param: 1.0 });
+    var paused = false;
+    document.getElementById('btnWaveSlow') && document.getElementById('btnWaveSlow').addEventListener('click', function () {
+        sim.setParam(0.0); info.textContent = 'Slow waves — lower propagation speed.';
+    });
+    document.getElementById('btnWaveFast') && document.getElementById('btnWaveFast').addEventListener('click', function () {
+        sim.setParam(2.0); info.textContent = 'Fast waves — higher speed (still CFL-stable).';
+    });
+    document.getElementById('btnWaveReset') && document.getElementById('btnWaveReset').addEventListener('click', function () {
+        sim.reset(); info.textContent = 'Calm surface. Click / drag to make waves.';
+    });
+    document.getElementById('btnWavePause') && document.getElementById('btnWavePause').addEventListener('click', function () {
+        paused = !paused; sim.setPaused(paused);
+        info.textContent = paused ? 'Paused — the field is frozen.' : 'Running.';
+    });
+})();`;
+DEMO_CODE_TS.sh_wave = DEMO_CODE.sh_wave;
+
 DEMO_HTML.sh_playground = {
     title: 'Shaders — Mini-Project: Interactive Fluid Playground',
     canvas: { width: 800, height: 450 },

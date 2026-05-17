@@ -32,7 +32,13 @@ own subdirectory with a per-tier file structure mirroring the Fundamentals layou
   ES 1.00 through Expert; Advanced shows every effect in WebGL1 *and* WebGL2;
   Simulations is WebGL2 + GLSL ES 3.00 with `RGBA16F` float textures
   (`EXT_color_buffer_float`, with graceful degradation). Demo IDs and helper
-  bundles are prefixed `sh_`.
+  bundles are prefixed `sh_`. Each tier was later expanded with extra
+  examples: Beginner (2D transforms, polar coords, SDF boolean combine),
+  Intermediate (gradient/Perlin noise, Voronoi, flow & scrolling), Expert
+  (2D normal-map lighting, sprite-sheet animation, dither/posterize),
+  Advanced (scene transitions, radial blur & god rays, pixelation — each in
+  WebGL1 + WebGL2), Simulations (falling-sand Margolus CA, boids/flocking,
+  2D wave equation).
 
 ## Shared assets
 

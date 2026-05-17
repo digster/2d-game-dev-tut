@@ -380,6 +380,172 @@ void main() {
 })();
 
 // =============================================================================
+// DEMO 4b — transformsGL  (§ 2D Transforms)
+// Translate/scale/rotate happen to the SPACE (uv), not the shape. A 2x2
+// rotation matrix is the whole trick; one transform line is injected so the
+// buttons swap behaviour with no WebGL plumbing (same pattern as waterGL).
+// =============================================================================
+(function transformsShader() {
+    const canvas = document.getElementById('transformsGL');
+    if (!canvas) return;
+    const info = document.getElementById('transformsGLInfo');
+
+    function buildFrag(xform) {
+        return `precision mediump float;
+uniform vec2 u_resolution;
+uniform float u_time;
+mat2 rot(float a) { float s = sin(a), c = cos(a); return mat2(c, -s, s, c); }
+float sdBox(vec2 p, vec2 b) {
+  vec2 d = abs(p) - b;
+  return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0);
+}
+void main() {
+  vec2 uv = (gl_FragCoord.xy / u_resolution) * 2.0 - 1.0;
+  uv.x *= u_resolution.x / u_resolution.y;
+  vec2 p = uv;
+  ${xform}
+  float d = sdBox(p, vec2(0.42, 0.30));
+  float m = 1.0 - smoothstep(0.0, 0.02, d);
+  gl_FragColor = vec4(mix(vec3(0.05, 0.07, 0.15), vec3(0.31, 0.76, 0.97), m), 1.0);
+}`;
+    }
+
+    const MODES = {
+        translate: 'p -= vec2(0.45 * sin(u_time * 1.2), 0.0);',
+        scale:     'p /= (0.7 + 0.35 * sin(u_time * 1.5));',
+        rotate:    'p = rot(u_time * 0.9) * p;',
+        all:       'p = rot(u_time * 0.7) * p;\n  p /= (0.85 + 0.2 * sin(u_time));\n  p -= vec2(0.22 * sin(u_time * 1.3), 0.0);'
+    };
+
+    const toy = makeShaderToy(canvas, buildFrag(MODES.rotate), { info: info });
+    function set(mode, msg) { toy.setFrag(buildFrag(MODES[mode])); info.textContent = msg; }
+
+    document.getElementById('btnXfTranslate')?.addEventListener('click', () =>
+        set('translate', 'Translate: p -= offset re-centers the space; the box behaves as if at offset.'));
+    document.getElementById('btnXfScale')?.addEventListener('click', () =>
+        set('scale', 'Scale: dividing p zooms — a smaller divisor makes a bigger shape.'));
+    document.getElementById('btnXfRotate')?.addEventListener('click', () =>
+        set('rotate', 'Rotate: a 2x2 rotation matrix spins the whole plane around the origin.'));
+    document.getElementById('btnXfAll')?.addEventListener('click', () =>
+        set('all', 'All three composed — order matters: rotate, then scale, then translate.'));
+})();
+
+// =============================================================================
+// DEMO 4c — polarGL  (§ Polar Coordinates)
+// r = length(uv), a = atan(uv.y, uv.x). Radius + angle = every "round" effect.
+// =============================================================================
+(function polarShader() {
+    const canvas = document.getElementById('polarGL');
+    if (!canvas) return;
+    const info = document.getElementById('polarGLInfo');
+
+    const HEAD = `precision mediump float;
+uniform vec2 u_resolution;
+uniform float u_time;
+#define TAU 6.2831853
+void main() {
+  vec2 uv = (gl_FragCoord.xy / u_resolution) * 2.0 - 1.0;
+  uv.x *= u_resolution.x / u_resolution.y;
+  float r = length(uv);
+  float a = atan(uv.y, uv.x);
+`;
+
+    const RADIUS = HEAD + `  vec3 col = mix(vec3(0.31, 0.76, 0.97), vec3(0.04, 0.06, 0.12), clamp(r, 0.0, 1.0));
+  gl_FragColor = vec4(col, 1.0);
+}`;
+
+    const ANGLE = HEAD + `  float seg = step(0.5, fract((a / TAU + 0.5) * 6.0));
+  vec3 col = mix(vec3(0.10, 0.20, 0.35), vec3(1.0, 0.65, 0.30), seg);
+  gl_FragColor = vec4(col, 1.0);
+}`;
+
+    const COOLDOWN = HEAD + `  float ang = atan(uv.x, -uv.y) / TAU + 0.5;   // 0 at top, clockwise
+  float fill = fract(u_time * 0.25);
+  float ring = step(r, 0.72) * (1.0 - step(r, 0.48));
+  float ready = step(ang, fill);
+  vec3 col = mix(vec3(0.10, 0.12, 0.20), vec3(0.31, 0.76, 0.97),
+                 ring * mix(0.18, 1.0, ready));
+  gl_FragColor = vec4(col, 1.0);
+}`;
+
+    const SPIRAL = HEAD + `  float s = 0.5 + 0.5 * sin(a * 5.0 + r * 26.0 - u_time * 3.0);
+  vec3 col = mix(vec3(0.04, 0.06, 0.12), vec3(0.40, 0.85, 0.70), s * (1.0 - r));
+  gl_FragColor = vec4(col, 1.0);
+}`;
+
+    const toy = makeShaderToy(canvas, RADIUS, { info: info });
+    document.getElementById('btnPolarRadius')?.addEventListener('click', () => {
+        toy.setFrag(RADIUS); info.textContent = 'r = length(uv) → a radial gradient (glow / vignette).';
+    });
+    document.getElementById('btnPolarAngle')?.addEventListener('click', () => {
+        toy.setFrag(ANGLE); info.textContent = 'a = atan(uv.y, uv.x) → angular slices (pie wedges).';
+    });
+    document.getElementById('btnPolarCooldown')?.addEventListener('click', () => {
+        toy.setFrag(COOLDOWN); info.textContent = 'Angle + radius → an ability-cooldown swipe (real game UI).';
+    });
+    document.getElementById('btnPolarSpiral')?.addEventListener('click', () => {
+        toy.setFrag(SPIRAL); info.textContent = 'sin(angle * k + radius * k - time) → a spiral.';
+    });
+})();
+
+// =============================================================================
+// DEMO 4d — sdfCombineGL  (§ Combining Shapes with SDFs)
+// Signed distance fields combine with one-liners: min=union, max=intersect,
+// max(a,-b)=subtract, smin=smooth blend (metaballs). Op injected per button.
+// =============================================================================
+(function sdfCombineShader() {
+    const canvas = document.getElementById('sdfCombineGL');
+    if (!canvas) return;
+    const info = document.getElementById('sdfCombineGLInfo');
+
+    function buildFrag(op) {
+        return `precision mediump float;
+uniform vec2 u_resolution;
+uniform float u_time;
+float sdCircle(vec2 p, float r) { return length(p) - r; }
+float sdBox(vec2 p, vec2 b) {
+  vec2 d = abs(p) - b;
+  return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0);
+}
+float smin(float a, float b, float k) {
+  float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);
+  return mix(b, a, h) - k * h * (1.0 - h);
+}
+void main() {
+  vec2 uv = (gl_FragCoord.xy / u_resolution) * 2.0 - 1.0;
+  uv.x *= u_resolution.x / u_resolution.y;
+  float mv = 0.22 * sin(u_time * 1.3);
+  float c = sdCircle(uv - vec2(-0.28 + mv, 0.0), 0.40);
+  float b = sdBox(uv - vec2(0.28, 0.0), vec2(0.34, 0.34));
+  float d = ${op};
+  float fill = 1.0 - smoothstep(0.0, 0.012, d);
+  vec3 col = mix(vec3(0.05, 0.07, 0.15), vec3(0.31, 0.76, 0.97), fill);
+  col += 0.15 * exp(-8.0 * abs(d));
+  gl_FragColor = vec4(col, 1.0);
+}`;
+    }
+
+    const OPS = {
+        union:     'min(c, b)',
+        intersect: 'max(c, b)',
+        subtract:  'max(c, -b)',
+        smooth:    'smin(c, b, 0.18)'
+    };
+
+    const toy = makeShaderToy(canvas, buildFrag(OPS.union), { info: info });
+    function set(op, msg) { toy.setFrag(buildFrag(OPS[op])); info.textContent = msg; }
+
+    document.getElementById('btnSdfUnion')?.addEventListener('click', () =>
+        set('union', 'min(a, b) → UNION: both shapes, whichever edge is closer.'));
+    document.getElementById('btnSdfIntersect')?.addEventListener('click', () =>
+        set('intersect', 'max(a, b) → INTERSECTION: only where the two overlap.'));
+    document.getElementById('btnSdfSubtract')?.addEventListener('click', () =>
+        set('subtract', 'max(a, -b) → SUBTRACTION: the box carves the circle.'));
+    document.getElementById('btnSdfSmooth')?.addEventListener('click', () =>
+        set('smooth', 'smin(a, b, k) → SMOOTH union: a liquid / metaball blend.'));
+})();
+
+// =============================================================================
 // DEMO 5 — colorGL  (§ Color & Gradients)
 // =============================================================================
 (function colorShader() {

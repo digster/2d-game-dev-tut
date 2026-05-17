@@ -39,6 +39,9 @@
                 <li><a href="#fbm">fbm (Fractal Brownian Motion)</a></li>
                 <li><a href="#domain-warp">Domain Warping</a></li>
                 <li><a href="#distortion">UV Distortion</a></li>
+                <li><a href="#perlin">Gradient (Perlin) Noise</a></li>
+                <li><a href="#voronoi">Voronoi / Cellular Noise</a></li>
+                <li><a href="#flow">Flow &amp; Scrolling</a></li>
                 <li><a href="#fire">Mini-Project: Animated Fire / Smoke</a></li>
             </ul>
         </div>
@@ -544,6 +547,278 @@ void main() {
                 <button id="btnDistSubtler">Subtler</button>
             </div>
             <div id="distortGLInfo" class="info-display">Offset the sampling UV of a scene → heat/water effects.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- PERLIN (GRADIENT) NOISE -->
+        <!-- ============================================ -->
+        <div id="perlin" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🟣 Gradient (Perlin) Noise</h2>
+
+            <p>
+                Value noise interpolates <em>random values</em> at cell corners — cheap, but it has visible
+                axis-aligned blockiness. <strong>Gradient (Perlin) noise</strong> instead interpolates the
+                <em>dot product of a random gradient with the offset</em> to each corner. The result is
+                smoother and more organic — the noise most marble, cloud, and terrain shaders use.
+            </p>
+
+            <div class="concept-box">
+                <h4>Value vs gradient noise</h4>
+                <ul>
+                    <li><strong>Value:</strong> lerp random heights → can look grid-aligned.</li>
+                    <li><strong>Gradient:</strong> lerp <code>dot(grad, f - corner)</code> → zero at lattice points, slopes between → fewer artifacts.</li>
+                    <li>Stack it in <code>fbm()</code> exactly like before; warp it for marble veins.</li>
+                </ul>
+            </div>
+
+            <details data-demo-id="sh_perlinGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy">
+                <summary>📝 Click to see: single octave / fbm / marble / warp</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Gradient noise: a random gradient per lattice point, dotted with the
+// offset to the pixel, then smooth-interpolated. Lib stays fixed; the
+// final value expression is injected per button.
+const LIB = `precision mediump float;
+uniform vec2 u_resolution;
+uniform float u_time;
+vec2 hash2(vec2 p) {
+  p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
+  return -1.0 + 2.0 * fract(sin(p) * 43758.5453);
+}
+float perlin(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  float a = dot(hash2(i),                f);
+  float b = dot(hash2(i + vec2(1,0)), f - vec2(1.0, 0.0));
+  float c = dot(hash2(i + vec2(0,1)), f - vec2(0.0, 1.0));
+  float d = dot(hash2(i + vec2(1,1)), f - vec2(1.0, 1.0));
+  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+float fbm(vec2 p) {
+  float s = 0.0, a = 0.5;
+  for (int i = 0; i < 5; i++) { s += a * perlin(p); p *= 2.0; a *= 0.5; }
+  return s;
+}`;
+
+function buildFrag(expr) {
+    return LIB + `
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  uv.x *= u_resolution.x / u_resolution.y;
+  float v = ${expr};
+  gl_FragColor = vec4(mix(vec3(0.04,0.06,0.12), vec3(0.31,0.76,0.97), v), 1.0);
+}`;
+}
+
+const toy = makeShaderToy(canvas,
+    buildFrag('0.5 + 0.5 * perlin(uv * 6.0 + vec2(u_time * 0.25, 0.0))'),
+    { info: info });</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function buildFrag(expr: string): string {
+    return LIB + `
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  uv.x *= u_resolution.x / u_resolution.y;
+  float v = ${expr};
+  gl_FragColor = vec4(mix(vec3(0.04,0.06,0.12), vec3(0.31,0.76,0.97), v), 1.0);
+}`;
+}</code></pre>
+                </div>
+            </details>
+
+            <div class="diagram">
+                <canvas id="perlinGL" width="800" height="450"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnPerlinSingle">Single octave</button>
+                <button id="btnPerlinFbm">fbm</button>
+                <button id="btnPerlinMarble">Marble</button>
+                <button id="btnPerlinWarp">Domain warp</button>
+            </div>
+            <div id="perlinGLInfo" class="info-display">Smoother than value noise — the workhorse for clouds, marble, terrain.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- VORONOI / CELLULAR NOISE -->
+        <!-- ============================================ -->
+        <div id="voronoi" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🔷 Voronoi / Cellular Noise</h2>
+
+            <p>
+                Scatter one random point per grid cell, then for each pixel find the <strong>nearest</strong>
+                point (<code>F1</code>) and the <strong>second-nearest</strong> (<code>F2</code>). That single
+                idea gives cracked ground, reptile scales, stained glass, water caustics, and cell-shaded
+                blobs — depending only on what you display.
+            </p>
+
+            <div class="concept-box">
+                <h4>What F1 / F2 give you</h4>
+                <ul>
+                    <li><code>F1</code> — distance to nearest point → classic Voronoi blobs.</li>
+                    <li>cell id → flat colored cells (scales, mosaic, stained glass).</li>
+                    <li><code>F2 - F1</code> — small near borders → free cell <strong>edges</strong> (cracked earth).</li>
+                </ul>
+            </div>
+
+            <details data-demo-id="sh_voronoiGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy">
+                <summary>📝 Click to see: cells / distance / edges / cracked</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// vor() fills F1, F2 and the nearest cell id via an out-parameter. The
+// 3x3 neighbour loop has a CONSTANT bound (GLSL ES 1.00 requirement).
+const LIB = `precision mediump float;
+uniform vec2 u_resolution;
+uniform float u_time;
+vec2 hash2(vec2 p) {
+  p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
+  return fract(sin(p) * 43758.5453);
+}
+void vor(vec2 p, out float f1, out float f2, out vec2 cid) {
+  vec2 g = floor(p), f = fract(p);
+  f1 = 8.0; f2 = 8.0; cid = g;
+  for (int j = -1; j <= 1; j++)
+  for (int i = -1; i <= 1; i++) {
+    vec2 o = vec2(float(i), float(j));
+    vec2 pt = o + 0.5 + 0.45 * sin(u_time + 6.2831 * hash2(g + o));
+    float d = length(pt - f);
+    if (d < f1) { f2 = f1; f1 = d; cid = g + o; }
+    else if (d < f2) { f2 = d; }
+  }
+}`;
+
+function buildFrag(out) {
+    return LIB + `
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  uv.x *= u_resolution.x / u_resolution.y;
+  float f1, f2; vec2 cid;
+  vor(uv * 6.0, f1, f2, cid);
+  vec3 col = ${out};
+  gl_FragColor = vec4(col, 1.0);
+}`;
+}
+
+const toy = makeShaderToy(canvas, buildFrag('vec3(f1)'), { info: info });</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function buildFrag(out: string): string {
+    return LIB + `
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  uv.x *= u_resolution.x / u_resolution.y;
+  float f1, f2; vec2 cid;
+  vor(uv * 6.0, f1, f2, cid);
+  vec3 col = ${out};
+  gl_FragColor = vec4(col, 1.0);
+}`;
+}</code></pre>
+                </div>
+            </details>
+
+            <div class="diagram">
+                <canvas id="voronoiGL" width="800" height="450"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnVorDistance">Distance (F1)</button>
+                <button id="btnVorCells">Colored cells</button>
+                <button id="btnVorEdges">Edges (F2−F1)</button>
+                <button id="btnVorCracked">Cracked earth</button>
+            </div>
+            <div id="voronoiGLInfo" class="info-display">One scattered point per cell → scales, cracks, caustics.</div>
+
+            <div class="challenge-box">
+                <h4>🎯 Try this</h4>
+                <p>Switch to "Edges": the bright web is just <code>F2 − F1</code> being near zero on cell
+                borders. "Cracked earth" tints that same web — a whole dry-ground texture from two distances.</p>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- FLOW & SCROLLING -->
+        <!-- ============================================ -->
+        <div id="flow" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🌊 Flow &amp; Scrolling</h2>
+
+            <p>
+                Animating a texture by <strong>moving the UVs over time</strong> is how rivers, lava,
+                conveyor belts, waterfalls, and force fields are done. Scroll uv for a straight conveyor;
+                bend the scroll direction with a vector field for flowing water.
+            </p>
+
+            <div class="concept-box">
+                <ul>
+                    <li><strong>Scroll:</strong> <code>uv -= dir * u_time</code> — the pattern slides.</li>
+                    <li><strong>Flow field:</strong> a per-pixel direction; advect noise along it for curling water/lava.</li>
+                    <li>Layer two scroll speeds → parallax depth (classic for lava &amp; waterfalls).</li>
+                </ul>
+            </div>
+
+            <details data-demo-id="sh_flowGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy">
+                <summary>📝 Click to see: conveyor / river / lava / flow field</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">const LIB = `precision mediump float;
+uniform vec2 u_resolution;
+uniform float u_time;
+float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float vnoise(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash(i), hash(i + vec2(1,0)), f.x),
+             mix(hash(i + vec2(0,1)), hash(i + vec2(1,1)), f.x), f.y);
+}
+float fbm(vec2 p) {
+  float s = 0.0, a = 0.5;
+  for (int i = 0; i < 5; i++) { s += a * vnoise(p); p *= 2.0; a *= 0.5; }
+  return s;
+}`;
+
+function buildFrag(body) {
+    return LIB + `
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  uv.x *= u_resolution.x / u_resolution.y;
+  vec3 col;
+  ${body}
+  gl_FragColor = vec4(col, 1.0);
+}`;
+}
+
+const toy = makeShaderToy(canvas, buildFrag(
+    'float s = fract(uv.x * 7.0 - u_time * 0.5);\n  col = mix(vec3(0.10,0.20,0.35), vec3(0.31,0.76,0.97), step(0.5, s));'
+), { info: info });</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function buildFrag(body: string): string {
+    return LIB + `
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  uv.x *= u_resolution.x / u_resolution.y;
+  vec3 col;
+  ${body}
+  gl_FragColor = vec4(col, 1.0);
+}`;
+}</code></pre>
+                </div>
+            </details>
+
+            <div class="diagram">
+                <canvas id="flowGL" width="800" height="450"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnFlowConveyor">Conveyor</button>
+                <button id="btnFlowRiver">River</button>
+                <button id="btnFlowLava">Lava</button>
+                <button id="btnFlowField">Flow field</button>
+            </div>
+            <div id="flowGLInfo" class="info-display">Move the UVs over time — rivers, lava, belts, force fields.</div>
         </div>
 
         <!-- ============================================ -->

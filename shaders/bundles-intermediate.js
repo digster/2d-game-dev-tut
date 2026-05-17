@@ -1024,6 +1024,377 @@ void main() {
 })();`;
 
 // =============================================================================
+// DEMO 6b — sh_perlinGL  (§ Gradient (Perlin) Noise)
+// =============================================================================
+DEMO_HTML.sh_perlinGL = {
+    title: 'Shaders — Gradient (Perlin) Noise',
+    canvas: { width: 800, height: 450 },
+    controls: [
+        { id: 'btnPerlinSingle', text: 'Single octave' },
+        { id: 'btnPerlinFbm',    text: 'fbm' },
+        { id: 'btnPerlinMarble', text: 'Marble' },
+        { id: 'btnPerlinWarp',   text: 'Domain warp' }
+    ],
+    info: 'Smoother than value noise — clouds, marble, terrain.'
+};
+
+DEMO_CODE.sh_perlinGL = `(function perlinShader() {
+    const canvas = document.getElementById('canvas');
+    const info = document.getElementById('info');
+
+    const LIB = \`precision mediump float;
+uniform vec2 u_resolution;
+uniform float u_time;
+vec2 hash2(vec2 p) {
+  p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
+  return -1.0 + 2.0 * fract(sin(p) * 43758.5453);
+}
+float perlin(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  float a = dot(hash2(i),                f);
+  float b = dot(hash2(i + vec2(1, 0)), f - vec2(1.0, 0.0));
+  float c = dot(hash2(i + vec2(0, 1)), f - vec2(0.0, 1.0));
+  float d = dot(hash2(i + vec2(1, 1)), f - vec2(1.0, 1.0));
+  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+float fbm(vec2 p) {
+  float s = 0.0, a = 0.5;
+  for (int i = 0; i < 5; i++) { s += a * perlin(p); p *= 2.0; a *= 0.5; }
+  return s;
+}\`;
+
+    function buildFrag(expr) {
+        return LIB + \`
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  uv.x *= u_resolution.x / u_resolution.y;
+  float v = \${expr};
+  gl_FragColor = vec4(mix(vec3(0.04, 0.06, 0.12), vec3(0.31, 0.76, 0.97), v), 1.0);
+}\`;
+    }
+
+    const EXPR = {
+        single: '0.5 + 0.5 * perlin(uv * 6.0 + vec2(u_time * 0.25, 0.0))',
+        fbm:    '0.5 + 0.5 * fbm(uv * 4.0 + vec2(0.0, u_time * 0.2))',
+        marble: '0.5 + 0.5 * sin((uv.x * 7.0 + fbm(uv * 3.0) * 5.0) * 3.14159)',
+        warp:   '0.5 + 0.5 * fbm(uv * 4.0 + vec2(fbm(uv * 4.0 + u_time * 0.15), fbm(uv * 4.0 - u_time * 0.1)))'
+    };
+
+    const toy = makeShaderToy(canvas, buildFrag(EXPR.single), { info: info });
+    function set(k, msg) { toy.setFrag(buildFrag(EXPR[k])); info.textContent = msg; }
+
+    document.getElementById('btnPerlinSingle')?.addEventListener('click', () =>
+        set('single', 'One octave of gradient noise — smooth, no grid blockiness.'));
+    document.getElementById('btnPerlinFbm')?.addEventListener('click', () =>
+        set('fbm', 'fbm: 5 octaves of Perlin stacked — cloud / terrain look.'));
+    document.getElementById('btnPerlinMarble')?.addEventListener('click', () =>
+        set('marble', 'Marble: sin(x + fbm) bends straight bands into veins.'));
+    document.getElementById('btnPerlinWarp')?.addEventListener('click', () =>
+        set('warp', 'Domain warp: feed fbm into fbm — swirling smoke/marble.'));
+})();`;
+
+DEMO_CODE_TS.sh_perlinGL = `(function perlinShader(): void {
+    const canvas = document.getElementById('canvas') as HTMLCanvasElement;
+    const info = document.getElementById('info') as HTMLDivElement;
+
+    const LIB: string = \`precision mediump float;
+uniform vec2 u_resolution;
+uniform float u_time;
+vec2 hash2(vec2 p) {
+  p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
+  return -1.0 + 2.0 * fract(sin(p) * 43758.5453);
+}
+float perlin(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  float a = dot(hash2(i),                f);
+  float b = dot(hash2(i + vec2(1, 0)), f - vec2(1.0, 0.0));
+  float c = dot(hash2(i + vec2(0, 1)), f - vec2(0.0, 1.0));
+  float d = dot(hash2(i + vec2(1, 1)), f - vec2(1.0, 1.0));
+  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+float fbm(vec2 p) {
+  float s = 0.0, a = 0.5;
+  for (int i = 0; i < 5; i++) { s += a * perlin(p); p *= 2.0; a *= 0.5; }
+  return s;
+}\`;
+
+    function buildFrag(expr: string): string {
+        return LIB + \`
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  uv.x *= u_resolution.x / u_resolution.y;
+  float v = \${expr};
+  gl_FragColor = vec4(mix(vec3(0.04, 0.06, 0.12), vec3(0.31, 0.76, 0.97), v), 1.0);
+}\`;
+    }
+
+    const EXPR: Record<string, string> = {
+        single: '0.5 + 0.5 * perlin(uv * 6.0 + vec2(u_time * 0.25, 0.0))',
+        fbm:    '0.5 + 0.5 * fbm(uv * 4.0 + vec2(0.0, u_time * 0.2))',
+        marble: '0.5 + 0.5 * sin((uv.x * 7.0 + fbm(uv * 3.0) * 5.0) * 3.14159)',
+        warp:   '0.5 + 0.5 * fbm(uv * 4.0 + vec2(fbm(uv * 4.0 + u_time * 0.15), fbm(uv * 4.0 - u_time * 0.1)))'
+    };
+
+    const toy = makeShaderToy(canvas, buildFrag(EXPR.single), { info: info });
+    function set(k: string, msg: string): void { toy.setFrag(buildFrag(EXPR[k])); info.textContent = msg; }
+
+    document.getElementById('btnPerlinSingle')?.addEventListener('click', (): void =>
+        set('single', 'One octave of gradient noise — smooth, no grid blockiness.'));
+    document.getElementById('btnPerlinFbm')?.addEventListener('click', (): void =>
+        set('fbm', 'fbm: 5 octaves of Perlin stacked — cloud / terrain look.'));
+    document.getElementById('btnPerlinMarble')?.addEventListener('click', (): void =>
+        set('marble', 'Marble: sin(x + fbm) bends straight bands into veins.'));
+    document.getElementById('btnPerlinWarp')?.addEventListener('click', (): void =>
+        set('warp', 'Domain warp: feed fbm into fbm — swirling smoke/marble.'));
+})();`;
+
+// =============================================================================
+// DEMO 6c — sh_voronoiGL  (§ Voronoi / Cellular Noise)
+// =============================================================================
+DEMO_HTML.sh_voronoiGL = {
+    title: 'Shaders — Voronoi / Cellular Noise',
+    canvas: { width: 800, height: 450 },
+    controls: [
+        { id: 'btnVorDistance', text: 'Distance (F1)' },
+        { id: 'btnVorCells',    text: 'Colored cells' },
+        { id: 'btnVorEdges',    text: 'Edges (F2−F1)' },
+        { id: 'btnVorCracked',  text: 'Cracked earth' }
+    ],
+    info: 'One scattered point per cell → scales, cracks, caustics.'
+};
+
+DEMO_CODE.sh_voronoiGL = `(function voronoiShader() {
+    const canvas = document.getElementById('canvas');
+    const info = document.getElementById('info');
+
+    const LIB = \`precision mediump float;
+uniform vec2 u_resolution;
+uniform float u_time;
+vec2 hash2(vec2 p) {
+  p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
+  return fract(sin(p) * 43758.5453);
+}
+void vor(vec2 p, out float f1, out float f2, out vec2 cid) {
+  vec2 g = floor(p), f = fract(p);
+  f1 = 8.0; f2 = 8.0; cid = g;
+  for (int j = -1; j <= 1; j++)
+  for (int i = -1; i <= 1; i++) {
+    vec2 o = vec2(float(i), float(j));
+    vec2 pt = o + 0.5 + 0.45 * sin(u_time + 6.2831 * hash2(g + o));
+    float d = length(pt - f);
+    if (d < f1) { f2 = f1; f1 = d; cid = g + o; }
+    else if (d < f2) { f2 = d; }
+  }
+}\`;
+
+    function buildFrag(out) {
+        return LIB + \`
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  uv.x *= u_resolution.x / u_resolution.y;
+  float f1, f2; vec2 cid;
+  vor(uv * 6.0, f1, f2, cid);
+  vec3 col = \${out};
+  gl_FragColor = vec4(col, 1.0);
+}\`;
+    }
+
+    const OUT = {
+        distance: 'vec3(f1)',
+        cells:    '0.45 + 0.45 * cos(6.2831 * hash2(cid).x + vec3(0.0, 2.0, 4.0))',
+        edges:    'vec3(smoothstep(0.0, 0.06, f2 - f1))',
+        cracked:  'mix(vec3(0.05, 0.03, 0.02), vec3(0.34, 0.24, 0.15), smoothstep(0.0, 0.10, f2 - f1))'
+    };
+
+    const toy = makeShaderToy(canvas, buildFrag(OUT.distance), { info: info });
+    function set(k, msg) { toy.setFrag(buildFrag(OUT[k])); info.textContent = msg; }
+
+    document.getElementById('btnVorDistance')?.addEventListener('click', () =>
+        set('distance', 'F1 = distance to nearest point → classic Voronoi blobs.'));
+    document.getElementById('btnVorCells')?.addEventListener('click', () =>
+        set('cells', 'Color by cell id → flat cells: scales, mosaic, stained glass.'));
+    document.getElementById('btnVorEdges')?.addEventListener('click', () =>
+        set('edges', 'F2 - F1 near zero on borders → free cell edges.'));
+    document.getElementById('btnVorCracked')?.addEventListener('click', () =>
+        set('cracked', 'Tint the edge web → a dry cracked-earth texture.'));
+})();`;
+
+DEMO_CODE_TS.sh_voronoiGL = `(function voronoiShader(): void {
+    const canvas = document.getElementById('canvas') as HTMLCanvasElement;
+    const info = document.getElementById('info') as HTMLDivElement;
+
+    const LIB: string = \`precision mediump float;
+uniform vec2 u_resolution;
+uniform float u_time;
+vec2 hash2(vec2 p) {
+  p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
+  return fract(sin(p) * 43758.5453);
+}
+void vor(vec2 p, out float f1, out float f2, out vec2 cid) {
+  vec2 g = floor(p), f = fract(p);
+  f1 = 8.0; f2 = 8.0; cid = g;
+  for (int j = -1; j <= 1; j++)
+  for (int i = -1; i <= 1; i++) {
+    vec2 o = vec2(float(i), float(j));
+    vec2 pt = o + 0.5 + 0.45 * sin(u_time + 6.2831 * hash2(g + o));
+    float d = length(pt - f);
+    if (d < f1) { f2 = f1; f1 = d; cid = g + o; }
+    else if (d < f2) { f2 = d; }
+  }
+}\`;
+
+    function buildFrag(out: string): string {
+        return LIB + \`
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  uv.x *= u_resolution.x / u_resolution.y;
+  float f1, f2; vec2 cid;
+  vor(uv * 6.0, f1, f2, cid);
+  vec3 col = \${out};
+  gl_FragColor = vec4(col, 1.0);
+}\`;
+    }
+
+    const OUT: Record<string, string> = {
+        distance: 'vec3(f1)',
+        cells:    '0.45 + 0.45 * cos(6.2831 * hash2(cid).x + vec3(0.0, 2.0, 4.0))',
+        edges:    'vec3(smoothstep(0.0, 0.06, f2 - f1))',
+        cracked:  'mix(vec3(0.05, 0.03, 0.02), vec3(0.34, 0.24, 0.15), smoothstep(0.0, 0.10, f2 - f1))'
+    };
+
+    const toy = makeShaderToy(canvas, buildFrag(OUT.distance), { info: info });
+    function set(k: string, msg: string): void { toy.setFrag(buildFrag(OUT[k])); info.textContent = msg; }
+
+    document.getElementById('btnVorDistance')?.addEventListener('click', (): void =>
+        set('distance', 'F1 = distance to nearest point → classic Voronoi blobs.'));
+    document.getElementById('btnVorCells')?.addEventListener('click', (): void =>
+        set('cells', 'Color by cell id → flat cells: scales, mosaic, stained glass.'));
+    document.getElementById('btnVorEdges')?.addEventListener('click', (): void =>
+        set('edges', 'F2 - F1 near zero on borders → free cell edges.'));
+    document.getElementById('btnVorCracked')?.addEventListener('click', (): void =>
+        set('cracked', 'Tint the edge web → a dry cracked-earth texture.'));
+})();`;
+
+// =============================================================================
+// DEMO 6d — sh_flowGL  (§ Flow & Scrolling)
+// =============================================================================
+DEMO_HTML.sh_flowGL = {
+    title: 'Shaders — Flow & Scrolling',
+    canvas: { width: 800, height: 450 },
+    controls: [
+        { id: 'btnFlowConveyor', text: 'Conveyor' },
+        { id: 'btnFlowRiver',    text: 'River' },
+        { id: 'btnFlowLava',     text: 'Lava' },
+        { id: 'btnFlowField',    text: 'Flow field' }
+    ],
+    info: 'Move the UVs over time — rivers, lava, belts, force fields.'
+};
+
+DEMO_CODE.sh_flowGL = `(function flowShader() {
+    const canvas = document.getElementById('canvas');
+    const info = document.getElementById('info');
+
+    const LIB = \`precision mediump float;
+uniform vec2 u_resolution;
+uniform float u_time;
+float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float vnoise(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x),
+             mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y);
+}
+float fbm(vec2 p) {
+  float s = 0.0, a = 0.5;
+  for (int i = 0; i < 5; i++) { s += a * vnoise(p); p *= 2.0; a *= 0.5; }
+  return s;
+}\`;
+
+    function buildFrag(body) {
+        return LIB + \`
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  uv.x *= u_resolution.x / u_resolution.y;
+  vec3 col;
+  \${body}
+  gl_FragColor = vec4(col, 1.0);
+}\`;
+    }
+
+    const BODY = {
+        conveyor: 'float s = fract(uv.x * 7.0 - u_time * 0.5);\\n  col = mix(vec3(0.10,0.20,0.35), vec3(0.31,0.76,0.97), step(0.5, s));',
+        river:    'float n = fbm(vec2(uv.x * 4.0 - u_time * 0.6, uv.y * 5.0 + sin(uv.x * 6.0) * 0.4));\\n  col = mix(vec3(0.02,0.18,0.30), vec3(0.45,0.85,0.95), n);',
+        lava:     'float a = fbm(uv * 4.0 + vec2(u_time * 0.4, 0.0));\\n  float b = fbm(uv * 7.0 - vec2(u_time * 0.7, 0.0));\\n  float h = a * 0.6 + b * 0.4;\\n  col = mix(vec3(0.25,0.02,0.0), vec3(1.0,0.75,0.15), smoothstep(0.35, 0.75, h));',
+        field:    'vec2 fl = vec2(0.8, 0.5 * sin(uv.y * 6.2831 + u_time));\\n  float n = fbm(uv * 5.0 - fl * u_time * 0.6);\\n  col = mix(vec3(0.04,0.10,0.18), vec3(0.30,0.80,0.85), n);'
+    };
+
+    const toy = makeShaderToy(canvas, buildFrag(BODY.conveyor), { info: info });
+    function set(k, msg) { toy.setFrag(buildFrag(BODY[k])); info.textContent = msg; }
+
+    document.getElementById('btnFlowConveyor')?.addEventListener('click', () =>
+        set('conveyor', 'Conveyor: fract(uv.x - time) slides a hard pattern.'));
+    document.getElementById('btnFlowRiver')?.addEventListener('click', () =>
+        set('river', 'River: fbm advected along +x with a wavy centerline.'));
+    document.getElementById('btnFlowLava')?.addEventListener('click', () =>
+        set('lava', 'Lava: two fbm layers scrolling at different speeds.'));
+    document.getElementById('btnFlowField')?.addEventListener('click', () =>
+        set('field', 'Flow field: a per-row direction curls the sampled noise.'));
+})();`;
+
+DEMO_CODE_TS.sh_flowGL = `(function flowShader(): void {
+    const canvas = document.getElementById('canvas') as HTMLCanvasElement;
+    const info = document.getElementById('info') as HTMLDivElement;
+
+    const LIB: string = \`precision mediump float;
+uniform vec2 u_resolution;
+uniform float u_time;
+float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float vnoise(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x),
+             mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y);
+}
+float fbm(vec2 p) {
+  float s = 0.0, a = 0.5;
+  for (int i = 0; i < 5; i++) { s += a * vnoise(p); p *= 2.0; a *= 0.5; }
+  return s;
+}\`;
+
+    function buildFrag(body: string): string {
+        return LIB + \`
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  uv.x *= u_resolution.x / u_resolution.y;
+  vec3 col;
+  \${body}
+  gl_FragColor = vec4(col, 1.0);
+}\`;
+    }
+
+    const BODY: Record<string, string> = {
+        conveyor: 'float s = fract(uv.x * 7.0 - u_time * 0.5);\\n  col = mix(vec3(0.10,0.20,0.35), vec3(0.31,0.76,0.97), step(0.5, s));',
+        river:    'float n = fbm(vec2(uv.x * 4.0 - u_time * 0.6, uv.y * 5.0 + sin(uv.x * 6.0) * 0.4));\\n  col = mix(vec3(0.02,0.18,0.30), vec3(0.45,0.85,0.95), n);',
+        lava:     'float a = fbm(uv * 4.0 + vec2(u_time * 0.4, 0.0));\\n  float b = fbm(uv * 7.0 - vec2(u_time * 0.7, 0.0));\\n  float h = a * 0.6 + b * 0.4;\\n  col = mix(vec3(0.25,0.02,0.0), vec3(1.0,0.75,0.15), smoothstep(0.35, 0.75, h));',
+        field:    'vec2 fl = vec2(0.8, 0.5 * sin(uv.y * 6.2831 + u_time));\\n  float n = fbm(uv * 5.0 - fl * u_time * 0.6);\\n  col = mix(vec3(0.04,0.10,0.18), vec3(0.30,0.80,0.85), n);'
+    };
+
+    const toy = makeShaderToy(canvas, buildFrag(BODY.conveyor), { info: info });
+    function set(k: string, msg: string): void { toy.setFrag(buildFrag(BODY[k])); info.textContent = msg; }
+
+    document.getElementById('btnFlowConveyor')?.addEventListener('click', (): void =>
+        set('conveyor', 'Conveyor: fract(uv.x - time) slides a hard pattern.'));
+    document.getElementById('btnFlowRiver')?.addEventListener('click', (): void =>
+        set('river', 'River: fbm advected along +x with a wavy centerline.'));
+    document.getElementById('btnFlowLava')?.addEventListener('click', (): void =>
+        set('lava', 'Lava: two fbm layers scrolling at different speeds.'));
+    document.getElementById('btnFlowField')?.addEventListener('click', (): void =>
+        set('field', 'Flow field: a per-row direction curls the sampled noise.'));
+})();`;
+
+// =============================================================================
 // DEMO 7 — sh_fireGL  (§ Mini-Project: Animated Fire / Smoke)
 // =============================================================================
 DEMO_HTML.sh_fireGL = {

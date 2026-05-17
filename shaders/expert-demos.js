@@ -541,6 +541,177 @@ void main() {
 })();
 
 // =============================================================================
+// DEMO 6b — normalmapGL  (§ 2D Normal-Map Lighting)
+// Luminance → heightmap → finite-difference normal → Lambert from u_mouse.
+// No painted normal map needed for a single sprite. Output mode injected.
+// =============================================================================
+(function normalmapShader() {
+    const canvas = document.getElementById('normalmapGL');
+    if (!canvas) return;
+    const info = document.getElementById('normalmapGLInfo');
+
+    function buildFrag(out) {
+        return GLSL_HEAD + `
+uniform vec2 u_mouse;
+float lum(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
+float H(vec2 uv) { vec4 t = texture2D(u_tex, uv); return lum(t.rgb) * t.a; }
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec2 s  = toSpriteUV(uv);
+  vec4 tex = texture2D(u_tex, s);
+  vec2 px = 1.5 / u_texResolution;
+  vec3 N = normalize(vec3(H(s - vec2(px.x, 0.0)) - H(s + vec2(px.x, 0.0)),
+                          H(s - vec2(0.0, px.y)) - H(s + vec2(0.0, px.y)), 0.6));
+  vec2 lp = u_mouse / u_resolution;
+  vec3 L = normalize(vec3((lp - uv) * vec2(u_resolution.x / u_resolution.y, 1.0), 0.35));
+  float diff = max(dot(N, L), 0.0);
+  float spec = pow(max(dot(reflect(-L, N), vec3(0.0, 0.0, 1.0)), 0.0), 24.0);
+  vec3 c = ${out};
+  gl_FragColor = vec4(mix(backdrop(uv), c, tex.a), 1.0);
+}`;
+    }
+
+    const OUT = {
+        lit:     'tex.rgb * (0.15 + diff) + spec * 0.6',
+        normals: 'N * 0.5 + 0.5',
+        diffuse: 'vec3(0.15 + diff)',
+        flat:    'tex.rgb'
+    };
+
+    const toy = makeShaderToy(canvas, buildFrag(OUT.lit), { info: info, sprite: drawSprite });
+    function set(k, msg) { toy.setFrag(buildFrag(OUT[k])); info.textContent = msg; }
+
+    document.getElementById('btnNmLit')?.addEventListener('click', () =>
+        set('lit', 'Lit: albedo × (ambient + N·L) + a specular glint. Move the mouse.'));
+    document.getElementById('btnNmNormals')?.addEventListener('click', () =>
+        set('normals', 'The derived normal as RGB — bright = facing you.'));
+    document.getElementById('btnNmDiffuse')?.addEventListener('click', () =>
+        set('diffuse', 'Just the N·L term — the raw lighting that wraps the sprite.'));
+    document.getElementById('btnNmFlat')?.addEventListener('click', () =>
+        set('flat', 'No lighting — flat albedo, for comparison.'));
+})();
+
+// =============================================================================
+// DEMO 6c — spritesheetGL  (§ Sprite-Sheet Animation)
+// Custom 4x4 sheet painter + a time-driven frame-picker that remaps uv into
+// the current cell. UNPACK_FLIP_Y → row 0 is the TOP of the sheet.
+// =============================================================================
+(function spritesheetShader() {
+    const canvas = document.getElementById('spritesheetGL');
+    if (!canvas) return;
+    const info = document.getElementById('spritesheetGLInfo');
+
+    // Paint a 4x4 grid of frames: a gem rotating one notch per cell.
+    function drawSheet(ctx, n) {
+        ctx.clearRect(0, 0, n, n);
+        const cs = n / 4;
+        for (let f = 0; f < 16; f++) {
+            const cx = (f % 4) * cs + cs / 2;
+            const cy = Math.floor(f / 4) * cs + cs / 2;
+            const ang = f / 16 * Math.PI * 2, R = cs * 0.32;
+            ctx.save(); ctx.translate(cx, cy); ctx.rotate(ang);
+            ctx.beginPath();
+            ctx.moveTo(0, -R); ctx.lineTo(R * 0.7, 0);
+            ctx.lineTo(0, R);  ctx.lineTo(-R * 0.7, 0);
+            ctx.closePath(); ctx.fillStyle = '#4fc3f7'; ctx.fill();
+            ctx.beginPath();
+            ctx.arc(R * 0.3 * Math.cos(ang * 3.0), R * 0.3 * Math.sin(ang * 3.0),
+                    cs * 0.06, 0, Math.PI * 2);
+            ctx.fillStyle = '#ffffff'; ctx.fill();
+            ctx.restore();
+        }
+    }
+
+    function buildFrag(fps) {
+        return GLSL_HEAD + `
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec2 s  = clamp(toSpriteUV(uv), 0.0, 1.0);
+  float frame = mod(floor(u_time * ${fps}), 16.0);
+  vec2 cell = vec2(mod(frame, 4.0), floor(frame / 4.0));
+  vec2 fuv = (s + vec2(cell.x, 3.0 - cell.y)) / 4.0;
+  vec4 tex = texture2D(u_tex, fuv);
+  gl_FragColor = vec4(mix(backdrop(uv), tex.rgb, tex.a), 1.0);
+}`;
+    }
+
+    // "Show full sheet" samples the whole atlas (no cell remap).
+    const ATLAS = GLSL_HEAD + `
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec2 s  = clamp(toSpriteUV(uv), 0.0, 1.0);
+  vec4 tex = texture2D(u_tex, s);
+  gl_FragColor = vec4(mix(backdrop(uv), tex.rgb, tex.a), 1.0);
+}`;
+
+    const toy = makeShaderToy(canvas, buildFrag('8.0'), { info: info, sprite: drawSheet });
+
+    document.getElementById('btnSheetSlow')?.addEventListener('click', () => {
+        toy.setFrag(buildFrag('4.0')); info.textContent = '4 fps — you can see each of the 16 frames.';
+    });
+    document.getElementById('btnSheetNormal')?.addEventListener('click', () => {
+        toy.setFrag(buildFrag('8.0')); info.textContent = '8 fps — a typical 2D animation rate.';
+    });
+    document.getElementById('btnSheetFast')?.addEventListener('click', () => {
+        toy.setFrag(buildFrag('16.0')); info.textContent = '16 fps — smooth spin, same 16-cell sheet.';
+    });
+    document.getElementById('btnSheetAtlas')?.addEventListener('click', () => {
+        toy.setFrag(ATLAS); info.textContent = 'The raw 4×4 atlas — animation just samples one cell.';
+    });
+})();
+
+// =============================================================================
+// DEMO 6d — ditherGL  (§ Dither / Posterize / 1-bit)
+// Color quantization + a recursively-built 4x4 Bayer matrix. Mode injected.
+// =============================================================================
+(function ditherShader() {
+    const canvas = document.getElementById('ditherGL');
+    if (!canvas) return;
+    const info = document.getElementById('ditherGLInfo');
+
+    const LIB = GLSL_HEAD + `
+float lum(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
+float B2(vec2 c) { return mix(mix(0.0, 2.0, c.x), mix(3.0, 1.0, c.x), c.y); }
+float bayer4(vec2 P) {
+  vec2 hi = mod(floor(P * 0.5), 2.0);
+  vec2 lo = mod(P, 2.0);
+  return (4.0 * B2(hi) + B2(lo)) / 16.0;
+}`;
+
+    function buildFrag(mode) {
+        return LIB + `
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec4 tx = texture2D(u_tex, toSpriteUV(uv));
+  vec3 col = mix(backdrop(uv), tx.rgb, tx.a);
+  vec2 P = floor(gl_FragCoord.xy);
+  vec3 outc;
+  ${mode}
+  gl_FragColor = vec4(outc, 1.0);
+}`;
+    }
+
+    const MODE = {
+        posterize: 'outc = floor(col * 4.0) / 4.0;',
+        dither:    'outc = floor(col * 4.0 + bayer4(P)) / 4.0;',
+        onebit:    'float L = step(bayer4(P), lum(col));\n  outc = mix(vec3(0.06,0.10,0.06), vec3(0.55,0.80,0.30), L);',
+        palette:   'float g = lum(col);\n  g = floor(g * 4.0 + bayer4(P)) / 4.0;\n  outc = mix(vec3(0.06,0.22,0.06), vec3(0.61,0.74,0.06), g);'
+    };
+
+    const toy = makeShaderToy(canvas, buildFrag(MODE.dither), { info: info, sprite: drawSprite });
+    function set(k, msg) { toy.setFrag(buildFrag(MODE[k])); info.textContent = msg; }
+
+    document.getElementById('btnDitPosterize')?.addEventListener('click', () =>
+        set('posterize', 'Posterize: floor(col * 4) / 4 — hard color bands.'));
+    document.getElementById('btnDitDither')?.addEventListener('click', () =>
+        set('dither', 'Bayer dither: add the 4×4 threshold first — bands dissolve.'));
+    document.getElementById('btnDitOneBit')?.addEventListener('click', () =>
+        set('onebit', '1-bit: luminance vs Bayer → two-tone, ordered dither.'));
+    document.getElementById('btnDitPalette')?.addEventListener('click', () =>
+        set('palette', 'Game Boy: 4 luminance steps mapped to the DMG green ramp.'));
+})();
+
+// =============================================================================
 // DEMO 7 — spriteGL  (§ Mini-Project: Fully Shaded Sprite)
 // =============================================================================
 (function spriteCapstone() {
