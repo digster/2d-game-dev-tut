@@ -37,6 +37,9 @@
                 <li><a href="#boids">Boids / Flocking</a></li>
                 <li><a href="#wave">Wave Propagation</a></li>
                 <li><a href="#slime">Slime Mold (Physarum) — agent-based</a></li>
+                <li><a href="#smoke">Smoke (semi-Lagrangian fluid)</a></li>
+                <li><a href="#cloth">GPU Cloth (Verlet)</a></li>
+                <li><a href="#dla">DLA / Dendritic Growth</a></li>
                 <li><a href="#playground">Mini-Project: Interactive Fluid Playground</a></li>
             </ul>
         </div>
@@ -482,6 +485,143 @@ step: SIM_HEAD + SIM_LIB + `void main() {
                 <button id="btnSlimePause">Pause</button>
             </div>
             <div id="slimeGLInfo" class="info-display">Agents build emergent road networks. Drag to feed scent.</div>
+        </div>
+
+        <!-- ============================================ SMOKE -->
+        <div id="smoke" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>💨 Smoke (semi-Lagrangian fluid)</h2>
+            <p>
+                A fluid sim tuned for smoke. State packs <strong>velocity</strong> (<code>.xy</code>),
+                <strong>density</strong> (<code>.z</code>) and <strong>temperature</strong>
+                (<code>.w</code>). Advection traces each cell <em>backward</em> along its velocity
+                (semi-Lagrangian — unconditionally stable); buoyancy makes hot, dense smoke rise; the
+                curl of the density field adds the turbulent billows.
+            </p>
+            <div class="concept-box">
+                <h4>Why backward advection?</h4>
+                <p>"Where did the stuff here come from?" (<code>uv − vel·dt</code>, one bilinear
+                <code>texture()</code> read) can't overshoot or blow up — the trick that makes Stam's
+                stable fluids stable. <code>substeps:2</code> keeps it crisp at speed.</p>
+            </div>
+            <details data-demo-id="sh_smokeGL" data-deps="sh_compileShader,sh_createProgram,sh_simKit,sh_makeSim">
+                <summary>📝 Click to see: the smoke step + display</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">step: SIM_HEAD + SIM_LIB + `void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec4 s = cell(ivec2(0));
+  vec2 vel = s.xy;
+  vec4 a = texture(u_state, uv - vel * 0.010);   // semi-Lagrangian backtrace
+  vel = a.xy * 0.996;
+  float dens = a.z * 0.990, temp = a.w * 0.984;
+  vel.y += (temp * 0.85 - dens * 0.04) * 0.013;  // buoyancy
+  // + a density-curl swirl, a bottom emitter, and mouse puffs ...
+  outColor = vec4(vel, dens, temp);
+}`</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// display: density → grey smoke, temperature → a glowing hot core.</code></pre>
+                </div>
+            </details>
+            <div class="diagram"><canvas id="smokeGL" width="800" height="450"></canvas></div>
+            <div class="controls">
+                <button id="btnSmokeCalm">Calm</button>
+                <button id="btnSmokeWild">Wild</button>
+                <button id="btnSmokeClear">Clear</button>
+                <button id="btnSmokePause">Pause</button>
+            </div>
+            <div id="smokeGLInfo" class="info-display">A bottom emitter feeds a rising plume. Drag to puff hot smoke.</div>
+        </div>
+
+        <!-- ============================================ CLOTH -->
+        <div id="cloth" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>🧵 GPU Cloth (Verlet)</h2>
+            <p>
+                A 64×64 grid where <em>each texel is a cloth node</em>. State packs the node's
+                <strong>current</strong> (<code>.xy</code>) and <strong>previous</strong>
+                (<code>.zw</code>) position — Verlet integration needs no stored velocity, it's
+                implicit in <code>pos − prev</code>. Each node then pulls toward its four neighbours
+                at a fixed rest length; the top row is pinned.
+            </p>
+            <div class="concept-box">
+                <h4>Verlet in one line</h4>
+                <p><code>next = pos + (pos − prev)·damp + gravity</code>. Distance constraints to the
+                4 neighbours (read from the old buffer — a Jacobi relaxation) keep the sheet from
+                stretching. Grab nodes with the mouse, release the pins to watch it fall.</p>
+            </div>
+            <details data-demo-id="sh_clothGL" data-deps="sh_compileShader,sh_createProgram,sh_simKit,sh_makeSim">
+                <summary>📝 Click to see: the Verlet cloth step</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">step: SIM_HEAD + SIM_LIB + `void main() {
+  vec4 s = cell(ivec2(0));
+  vec2 pos = s.xy, prev = s.zw;
+  vec2 vel = (pos - prev) * 0.990;               // velocity is implicit
+  vec2 npos = pos + vel + vec2(0.0, -0.00045);   // Verlet + gravity
+  // pull toward each of 4 neighbours at rest length L (Jacobi) ...
+  outColor = vec4(npos, pos);
+}`</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Drawn as gl.POINTS — the vertex shader fetches each node's .xy.</code></pre>
+                </div>
+            </details>
+            <div class="diagram"><canvas id="clothGL" width="800" height="450"></canvas></div>
+            <div class="controls">
+                <button id="btnClothPin">Pinned</button>
+                <button id="btnClothDrop">Drop</button>
+                <button id="btnClothWind">Wind</button>
+                <button id="btnClothReset">Reset</button>
+            </div>
+            <div id="clothGLInfo" class="info-display">A pinned sheet of 4,096 Verlet nodes. Drag to grab it.</div>
+        </div>
+
+        <!-- ============================================ DLA -->
+        <div id="dla" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>❄️ DLA / Dendritic Growth</h2>
+            <p>
+                Diffusion-limited aggregation, the branching pattern behind frost, lightning,
+                mineral veins and coral. One field marks <strong>frozen</strong> cells; an empty
+                cell next to a frozen one freezes with a small per-frame probability. That single
+                local rule grows the unmistakable self-similar dendrites.
+            </p>
+            <div class="concept-box">
+                <h4>A robust GPU formulation</h4>
+                <p>True random-walker DLA needs scatter; this <em>dielectric-breakdown</em> variant
+                (probabilistic sticking on any frozen neighbour) is a pure gather rule — rock-solid
+                on the GPU and visually identical. Tips grow fastest, so it self-branches.</p>
+            </div>
+            <details data-demo-id="sh_dlaGL" data-deps="sh_compileShader,sh_createProgram,sh_simKit,sh_makeSim">
+                <summary>📝 Click to see: the DLA growth rule</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">step: SIM_HEAD + SIM_LIB + `void main() {
+  float me = cell(ivec2(0)).r;
+  if (me > 0.5) { outColor = vec4(1.0); return; } // frozen stays frozen
+  float nb = /* sum of 8 neighbours' .r */;
+  float rnd = hash(gl_FragCoord.xy + float(u_frame) * 0.137);
+  float grow = (nb > 0.5 && rnd < 0.012 * (0.3 + u_param)) ? 1.0 : 0.0;
+  outColor = vec4(grow, 0.0, 0.0, 1.0);
+}`</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// display: colour frozen cells by radius for a crystalline look.</code></pre>
+                </div>
+            </details>
+            <div class="diagram"><canvas id="dlaGL" width="800" height="450"></canvas></div>
+            <div class="controls">
+                <button id="btnDlaSlow">Slow</button>
+                <button id="btnDlaFast">Fast</button>
+                <button id="btnDlaReset">Reset</button>
+                <button id="btnDlaPause">Pause</button>
+            </div>
+            <div id="dlaGLInfo" class="info-display">A single seed grows a branching crystal. Drag to add nuclei.</div>
         </div>
 
         <!-- ============================================ PLAYGROUND -->

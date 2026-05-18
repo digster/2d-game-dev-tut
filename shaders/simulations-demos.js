@@ -968,6 +968,185 @@ const FLUID_DISP = DISP_HEAD + `void main() {
 })();
 
 // =============================================================================
+// 5d — Smoke (semi-Lagrangian advection + buoyancy)
+// State: .xy velocity, .z density, .w temperature. Hot, dense smoke rises;
+// a curl of the density field adds life; substeps:2 keeps advection stable.
+// =============================================================================
+(function smoke() {
+    const canvas = document.getElementById('smokeGL');
+    if (!canvas) return;
+    const info = document.getElementById('smokeGLInfo');
+    const sim = lazyToy(canvas, (cv) => makeSim(cv, {
+        substeps: 2,
+        seed: SIM_HEAD + `void main() { outColor = vec4(0.0); }`,
+        step: SIM_HEAD + SIM_LIB + `void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec4 s = cell(ivec2(0));
+  vec2 vel = s.xy;
+  vec2 back = uv - vel * 0.010;                 // semi-Lagrangian backtrace
+  vec4 a = texture(u_state, back);
+  vel = a.xy * 0.996;
+  float dens = a.z * 0.990;
+  float temp = a.w * 0.984;
+  vel.y += (temp * 0.85 - dens * 0.04) * 0.013; // buoyancy: hot rises
+  float dL = cell(ivec2(-1, 0)).z, dR = cell(ivec2(1, 0)).z;
+  float dD = cell(ivec2(0, -1)).z, dU = cell(ivec2(0, 1)).z;
+  vel += vec2(dU - dD, dR - dL) * 0.05 * u_param;   // curl of density → swirl
+  if (distance(uv, vec2(0.5, 0.07)) < 0.045) { dens += 0.11; temp += 0.13; }
+  float md = distance(uv, u_mouse);
+  if (u_mouseDown > 0.5 && md < 0.06) {
+    dens += (0.06 - md) * 9.0;
+    temp += (0.06 - md) * 9.0;
+    vel.y += (0.06 - md) * 2.5;
+  }
+  vel = clamp(vel, -3.0, 3.0);
+  outColor = vec4(vel, clamp(dens, 0.0, 4.0), clamp(temp, 0.0, 3.0));
+}`,
+        display: DISP_HEAD + `void main() {
+  vec4 s = texture(u_state, gl_FragCoord.xy / u_resolution);
+  float d = clamp(s.z, 0.0, 1.0);
+  float t = clamp(s.w * 0.30, 0.0, 1.0);
+  vec3 smoke = mix(vec3(0.02, 0.03, 0.05), vec3(0.78, 0.80, 0.83), d);
+  vec3 col = mix(smoke, vec3(1.0, 0.55, 0.18), t * d);   // hot core glows
+  outColor = vec4(col, 1.0);
+}`
+    }, { info: info, param: 0.8 }));
+
+    let paused = false;
+    document.getElementById('btnSmokeCalm')?.addEventListener('click', () => {
+        sim.setParam(0.3); info.textContent = 'Calm — little curl: a lazy column rises straight up.';
+    });
+    document.getElementById('btnSmokeWild')?.addEventListener('click', () => {
+        sim.setParam(1.7); info.textContent = 'Wild — strong density-curl swirl: turbulent billows.';
+    });
+    document.getElementById('btnSmokeClear')?.addEventListener('click', () => {
+        sim.reset(); info.textContent = 'Cleared. The bottom emitter refills it; drag to puff.';
+    });
+    document.getElementById('btnSmokePause')?.addEventListener('click', () => {
+        paused = !paused; sim.setPaused(paused);
+        info.textContent = paused ? 'Paused.' : 'Running — semi-Lagrangian advection + buoyancy.';
+    });
+})();
+
+// =============================================================================
+// 5e — GPU Cloth (Verlet integration + Jacobi distance constraints)
+// One texel per node: .xy current pos, .zw previous pos (Verlet needs no
+// stored velocity). Each node pulls toward its 4 neighbours at rest length.
+// =============================================================================
+(function cloth() {
+    const canvas = document.getElementById('clothGL');
+    if (!canvas) return;
+    const info = document.getElementById('clothGLInfo');
+    const N = 64;   // 64×64 = 4,096 nodes
+    const sim = lazyToy(canvas, (cv) => makeSim(cv, {
+        stateW: N, stateH: N,
+        points: { vert: POINT_VERT, frag: POINT_FRAG, count: N * N },
+        seed: SIM_HEAD + `void main() {
+  ivec2 sz = textureSize(u_state, 0);
+  ivec2 ip = ivec2(gl_FragCoord.xy);
+  vec2 g = (vec2(ip) + 0.5) / vec2(sz);
+  vec2 rest = vec2(0.12 + g.x * 0.76, 0.92 - g.y * 0.80);
+  outColor = vec4(rest, rest);                  // pos == prev → at rest
+}`,
+        step: SIM_HEAD + SIM_LIB + `void main() {
+  ivec2 sz = textureSize(u_state, 0);
+  ivec2 ip = ivec2(gl_FragCoord.xy);
+  vec4 s = cell(ivec2(0));
+  vec2 pos = s.xy, prev = s.zw;
+  bool pinned = (ip.y == sz.y - 1) && (u_param < 0.5);
+  vec2 vel = (pos - prev) * 0.990;
+  vec2 npos = pos + vel + vec2(0.0, -0.00045);  // Verlet + gravity
+  if (u_param > 1.5) npos.x += sin(u_time * 2.0 + pos.y * 9.0) * 0.00060; // wind
+  if (u_mouseDown > 0.5 && distance(pos, u_mouse) < 0.07) npos = u_mouse;
+  float L = 0.78 / float(sz.x);                 // rest segment length
+  vec2 acc = vec2(0.0); float cnt = 0.0;
+  for (int k = 0; k < 4; k++) {
+    ivec2 o = k == 0 ? ivec2(1, 0) : k == 1 ? ivec2(-1, 0)
+            : k == 2 ? ivec2(0, 1) : ivec2(0, -1);
+    ivec2 np = ip + o;
+    if (np.x < 0 || np.y < 0 || np.x >= sz.x || np.y >= sz.y) continue;
+    vec4 nb = texelFetch(u_state, np, 0);
+    vec2 diff = npos - nb.xy;
+    float dl = length(diff) + 1e-6;
+    acc += (diff / dl) * (L - dl);              // pull back to rest length
+    cnt += 1.0;
+  }
+  if (cnt > 0.0) npos += acc / cnt * 0.5;
+  if (pinned) { vec2 g = (vec2(ip) + 0.5) / vec2(sz);
+                npos = vec2(0.12 + g.x * 0.76, 0.92 - g.y * 0.80); }
+  outColor = vec4(npos, pos);
+}`,
+        display: DISP_HEAD + `void main() { outColor = vec4(0.0); }`   // points draw it
+    }, { info: info, param: 0.0 }));
+
+    document.getElementById('btnClothPin')?.addEventListener('click', () => {
+        sim.setParam(0.0); info.textContent = 'Pinned — the top row is held; the sheet hangs and sways.';
+    });
+    document.getElementById('btnClothDrop')?.addEventListener('click', () => {
+        sim.setParam(1.0); info.textContent = 'Dropped — pins released: the cloth falls under gravity.';
+    });
+    document.getElementById('btnClothWind')?.addEventListener('click', () => {
+        sim.setParam(2.0); info.textContent = 'Wind — a sine gust ripples the pinned flag. Drag to grab.';
+    });
+    document.getElementById('btnClothReset')?.addEventListener('click', () => {
+        sim.reset(); info.textContent = 'Reset to the flat hanging grid.';
+    });
+})();
+
+// =============================================================================
+// 5f — DLA / Dielectric-Breakdown Growth (sticky diffusion → dendrites)
+// Single field: .r = frozen. An empty cell with a frozen neighbour freezes
+// with a small per-frame probability → branching, DLA-style aggregates.
+// =============================================================================
+(function dla() {
+    const canvas = document.getElementById('dlaGL');
+    if (!canvas) return;
+    const info = document.getElementById('dlaGLInfo');
+    const sim = lazyToy(canvas, (cv) => makeSim(cv, {
+        seed: SIM_HEAD + `void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  outColor = vec4(step(distance(uv, vec2(0.5)), 0.008), 0.0, 0.0, 1.0);
+}`,
+        step: SIM_HEAD + SIM_LIB + `void main() {
+  float me = cell(ivec2(0)).r;
+  if (me > 0.5) { outColor = vec4(1.0, 0.0, 0.0, 1.0); return; }   // frozen stays
+  float nb = cell(ivec2(1, 0)).r + cell(ivec2(-1, 0)).r
+           + cell(ivec2(0, 1)).r + cell(ivec2(0, -1)).r
+           + cell(ivec2(1, 1)).r + cell(ivec2(-1, -1)).r
+           + cell(ivec2(1, -1)).r + cell(ivec2(-1, 1)).r;
+  float rnd = hash(gl_FragCoord.xy + float(u_frame) * 0.137);
+  float p = 0.012 * (0.3 + u_param);             // sticking probability
+  float grow = (nb > 0.5 && rnd < p) ? 1.0 : 0.0;
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  if (u_mouseDown > 0.5 && distance(uv, u_mouse) < 0.015) grow = 1.0; // seed nuclei
+  outColor = vec4(grow, 0.0, 0.0, 1.0);
+}`,
+        display: DISP_HEAD + `void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  float m = texture(u_state, uv).r;
+  float r = distance(uv, vec2(0.5));
+  vec3 dend = 0.5 + 0.5 * cos(6.2831 * (r * 2.2) + vec3(0.0, 2.0, 4.0));
+  outColor = vec4(mix(vec3(0.03, 0.04, 0.08), dend, m), 1.0);
+}`
+    }, { info: info, param: 1.0 }));
+
+    let paused = false;
+    document.getElementById('btnDlaSlow')?.addEventListener('click', () => {
+        sim.setParam(0.2); info.textContent = 'Slow growth — thin, finely-branched dendrites.';
+    });
+    document.getElementById('btnDlaFast')?.addEventListener('click', () => {
+        sim.setParam(2.5); info.textContent = 'Fast growth — bushier, denser aggregate.';
+    });
+    document.getElementById('btnDlaReset')?.addEventListener('click', () => {
+        sim.reset(); info.textContent = 'Reset to a single central seed. Drag to add nuclei.';
+    });
+    document.getElementById('btnDlaPause')?.addEventListener('click', () => {
+        paused = !paused; sim.setPaused(paused);
+        info.textContent = paused ? 'Paused — the crystal is frozen.' : 'Running — sticky diffusion.';
+    });
+})();
+
+// =============================================================================
 // 6 — Mini-Project: Interactive Fluid Playground
 // =============================================================================
 (function playground() {

@@ -671,6 +671,203 @@ DEMO_CODE.sh_playground = `(function () {
 DEMO_CODE_TS.sh_playground = DEMO_CODE.sh_playground;
 
 // =============================================================================
+// 5d — sh_smokeGL  (Smoke: semi-Lagrangian advection + buoyancy)
+// =============================================================================
+DEMO_HTML.sh_smokeGL = {
+    title: 'Shaders — Smoke (semi-Lagrangian fluid)',
+    canvas: { width: 800, height: 450 },
+    controls: [
+        { id: 'btnSmokeCalm', text: 'Calm' }, { id: 'btnSmokeWild', text: 'Wild' },
+        { id: 'btnSmokeClear', text: 'Clear' }, { id: 'btnSmokePause', text: 'Pause' }
+    ],
+    info: 'A bottom emitter feeds a rising plume. Drag to puff hot smoke.'
+};
+DEMO_CODE.sh_smokeGL = `(function () {
+    var canvas = document.getElementById('canvas');
+    var info = document.getElementById('info');
+    var sim = makeSim(canvas, {
+        substeps: 2,
+        seed: SIM_HEAD + \`void main() { outColor = vec4(0.0); }\`,
+        step: SIM_HEAD + SIM_LIB + \`void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec4 s = cell(ivec2(0));
+  vec2 vel = s.xy;
+  vec2 back = uv - vel * 0.010;
+  vec4 a = texture(u_state, back);
+  vel = a.xy * 0.996;
+  float dens = a.z * 0.990;
+  float temp = a.w * 0.984;
+  vel.y += (temp * 0.85 - dens * 0.04) * 0.013;
+  float dL = cell(ivec2(-1, 0)).z, dR = cell(ivec2(1, 0)).z;
+  float dD = cell(ivec2(0, -1)).z, dU = cell(ivec2(0, 1)).z;
+  vel += vec2(dU - dD, dR - dL) * 0.05 * u_param;
+  if (distance(uv, vec2(0.5, 0.07)) < 0.045) { dens += 0.11; temp += 0.13; }
+  float md = distance(uv, u_mouse);
+  if (u_mouseDown > 0.5 && md < 0.06) {
+    dens += (0.06 - md) * 9.0;
+    temp += (0.06 - md) * 9.0;
+    vel.y += (0.06 - md) * 2.5;
+  }
+  vel = clamp(vel, -3.0, 3.0);
+  outColor = vec4(vel, clamp(dens, 0.0, 4.0), clamp(temp, 0.0, 3.0));
+}\`,
+        display: DISP_HEAD + \`void main() {
+  vec4 s = texture(u_state, gl_FragCoord.xy / u_resolution);
+  float d = clamp(s.z, 0.0, 1.0);
+  float t = clamp(s.w * 0.30, 0.0, 1.0);
+  vec3 smoke = mix(vec3(0.02, 0.03, 0.05), vec3(0.78, 0.80, 0.83), d);
+  vec3 col = mix(smoke, vec3(1.0, 0.55, 0.18), t * d);
+  outColor = vec4(col, 1.0);
+}\`
+    }, { info: info, param: 0.8 });
+    var paused = false;
+    document.getElementById('btnSmokeCalm') && document.getElementById('btnSmokeCalm').addEventListener('click', function () {
+        sim.setParam(0.3); info.textContent = 'Calm — a lazy column rises straight up.';
+    });
+    document.getElementById('btnSmokeWild') && document.getElementById('btnSmokeWild').addEventListener('click', function () {
+        sim.setParam(1.7); info.textContent = 'Wild — turbulent billows.';
+    });
+    document.getElementById('btnSmokeClear') && document.getElementById('btnSmokeClear').addEventListener('click', function () {
+        sim.reset(); info.textContent = 'Cleared. The emitter refills it.';
+    });
+    document.getElementById('btnSmokePause') && document.getElementById('btnSmokePause').addEventListener('click', function () {
+        paused = !paused; sim.setPaused(paused);
+        info.textContent = paused ? 'Paused.' : 'Running.';
+    });
+})();`;
+DEMO_CODE_TS.sh_smokeGL = DEMO_CODE.sh_smokeGL;
+
+// =============================================================================
+// 5e — sh_clothGL  (GPU Cloth: Verlet + Jacobi distance constraints)
+// =============================================================================
+DEMO_HTML.sh_clothGL = {
+    title: 'Shaders — GPU Cloth (Verlet)',
+    canvas: { width: 800, height: 450 },
+    controls: [
+        { id: 'btnClothPin', text: 'Pinned' }, { id: 'btnClothDrop', text: 'Drop' },
+        { id: 'btnClothWind', text: 'Wind' }, { id: 'btnClothReset', text: 'Reset' }
+    ],
+    info: 'A pinned sheet of 4,096 Verlet nodes. Drag to grab it.'
+};
+DEMO_CODE.sh_clothGL = `(function () {
+    var canvas = document.getElementById('canvas');
+    var info = document.getElementById('info');
+    var N = 64;
+    var sim = makeSim(canvas, {
+        stateW: N, stateH: N,
+        points: { vert: POINT_VERT, frag: POINT_FRAG, count: N * N },
+        seed: SIM_HEAD + \`void main() {
+  ivec2 sz = textureSize(u_state, 0);
+  ivec2 ip = ivec2(gl_FragCoord.xy);
+  vec2 g = (vec2(ip) + 0.5) / vec2(sz);
+  vec2 rest = vec2(0.12 + g.x * 0.76, 0.92 - g.y * 0.80);
+  outColor = vec4(rest, rest);
+}\`,
+        step: SIM_HEAD + SIM_LIB + \`void main() {
+  ivec2 sz = textureSize(u_state, 0);
+  ivec2 ip = ivec2(gl_FragCoord.xy);
+  vec4 s = cell(ivec2(0));
+  vec2 pos = s.xy, prev = s.zw;
+  bool pinned = (ip.y == sz.y - 1) && (u_param < 0.5);
+  vec2 vel = (pos - prev) * 0.990;
+  vec2 npos = pos + vel + vec2(0.0, -0.00045);
+  if (u_param > 1.5) npos.x += sin(u_time * 2.0 + pos.y * 9.0) * 0.00060;
+  if (u_mouseDown > 0.5 && distance(pos, u_mouse) < 0.07) npos = u_mouse;
+  float L = 0.78 / float(sz.x);
+  vec2 acc = vec2(0.0); float cnt = 0.0;
+  for (int k = 0; k < 4; k++) {
+    ivec2 o = k == 0 ? ivec2(1, 0) : k == 1 ? ivec2(-1, 0)
+            : k == 2 ? ivec2(0, 1) : ivec2(0, -1);
+    ivec2 np = ip + o;
+    if (np.x < 0 || np.y < 0 || np.x >= sz.x || np.y >= sz.y) continue;
+    vec4 nb = texelFetch(u_state, np, 0);
+    vec2 diff = npos - nb.xy;
+    float dl = length(diff) + 1e-6;
+    acc += (diff / dl) * (L - dl);
+    cnt += 1.0;
+  }
+  if (cnt > 0.0) npos += acc / cnt * 0.5;
+  if (pinned) { vec2 g = (vec2(ip) + 0.5) / vec2(sz);
+                npos = vec2(0.12 + g.x * 0.76, 0.92 - g.y * 0.80); }
+  outColor = vec4(npos, pos);
+}\`,
+        display: DISP_HEAD + \`void main() { outColor = vec4(0.0); }\`
+    }, { info: info, param: 0.0 });
+    document.getElementById('btnClothPin') && document.getElementById('btnClothPin').addEventListener('click', function () {
+        sim.setParam(0.0); info.textContent = 'Pinned — the sheet hangs and sways.';
+    });
+    document.getElementById('btnClothDrop') && document.getElementById('btnClothDrop').addEventListener('click', function () {
+        sim.setParam(1.0); info.textContent = 'Dropped — the cloth falls under gravity.';
+    });
+    document.getElementById('btnClothWind') && document.getElementById('btnClothWind').addEventListener('click', function () {
+        sim.setParam(2.0); info.textContent = 'Wind — a sine gust ripples the flag.';
+    });
+    document.getElementById('btnClothReset') && document.getElementById('btnClothReset').addEventListener('click', function () {
+        sim.reset(); info.textContent = 'Reset to the flat hanging grid.';
+    });
+})();`;
+DEMO_CODE_TS.sh_clothGL = DEMO_CODE.sh_clothGL;
+
+// =============================================================================
+// 5f — sh_dlaGL  (DLA / dielectric-breakdown dendritic growth)
+// =============================================================================
+DEMO_HTML.sh_dlaGL = {
+    title: 'Shaders — DLA / Dendritic Growth',
+    canvas: { width: 800, height: 450 },
+    controls: [
+        { id: 'btnDlaSlow', text: 'Slow' }, { id: 'btnDlaFast', text: 'Fast' },
+        { id: 'btnDlaReset', text: 'Reset' }, { id: 'btnDlaPause', text: 'Pause' }
+    ],
+    info: 'A single seed grows a branching crystal. Drag to add nuclei.'
+};
+DEMO_CODE.sh_dlaGL = `(function () {
+    var canvas = document.getElementById('canvas');
+    var info = document.getElementById('info');
+    var sim = makeSim(canvas, {
+        seed: SIM_HEAD + \`void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  outColor = vec4(step(distance(uv, vec2(0.5)), 0.008), 0.0, 0.0, 1.0);
+}\`,
+        step: SIM_HEAD + SIM_LIB + \`void main() {
+  float me = cell(ivec2(0)).r;
+  if (me > 0.5) { outColor = vec4(1.0, 0.0, 0.0, 1.0); return; }
+  float nb = cell(ivec2(1, 0)).r + cell(ivec2(-1, 0)).r
+           + cell(ivec2(0, 1)).r + cell(ivec2(0, -1)).r
+           + cell(ivec2(1, 1)).r + cell(ivec2(-1, -1)).r
+           + cell(ivec2(1, -1)).r + cell(ivec2(-1, 1)).r;
+  float rnd = hash(gl_FragCoord.xy + float(u_frame) * 0.137);
+  float p = 0.012 * (0.3 + u_param);
+  float grow = (nb > 0.5 && rnd < p) ? 1.0 : 0.0;
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  if (u_mouseDown > 0.5 && distance(uv, u_mouse) < 0.015) grow = 1.0;
+  outColor = vec4(grow, 0.0, 0.0, 1.0);
+}\`,
+        display: DISP_HEAD + \`void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  float m = texture(u_state, uv).r;
+  float r = distance(uv, vec2(0.5));
+  vec3 dend = 0.5 + 0.5 * cos(6.2831 * (r * 2.2) + vec3(0.0, 2.0, 4.0));
+  outColor = vec4(mix(vec3(0.03, 0.04, 0.08), dend, m), 1.0);
+}\`
+    }, { info: info, param: 1.0 });
+    var paused = false;
+    document.getElementById('btnDlaSlow') && document.getElementById('btnDlaSlow').addEventListener('click', function () {
+        sim.setParam(0.2); info.textContent = 'Slow growth — finely-branched dendrites.';
+    });
+    document.getElementById('btnDlaFast') && document.getElementById('btnDlaFast').addEventListener('click', function () {
+        sim.setParam(2.5); info.textContent = 'Fast growth — bushier aggregate.';
+    });
+    document.getElementById('btnDlaReset') && document.getElementById('btnDlaReset').addEventListener('click', function () {
+        sim.reset(); info.textContent = 'Reset to a single central seed.';
+    });
+    document.getElementById('btnDlaPause') && document.getElementById('btnDlaPause').addEventListener('click', function () {
+        paused = !paused; sim.setPaused(paused);
+        info.textContent = paused ? 'Paused — the crystal is frozen.' : 'Running.';
+    });
+})();`;
+DEMO_CODE_TS.sh_dlaGL = DEMO_CODE.sh_dlaGL;
+
+// =============================================================================
 // TRANSITIVE-DEP DECLARATIONS
 // =============================================================================
 window.DEPENDENCY_REQUIRES = window.DEPENDENCY_REQUIRES || {};
