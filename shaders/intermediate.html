@@ -42,6 +42,9 @@
                 <li><a href="#perlin">Gradient (Perlin) Noise</a></li>
                 <li><a href="#voronoi">Voronoi / Cellular Noise</a></li>
                 <li><a href="#flow">Flow &amp; Scrolling</a></li>
+                <li><a href="#palettes">Cosine Palettes &amp; Colour Spaces</a></li>
+                <li><a href="#truchet">Truchet Tiles &amp; Hex Grids</a></li>
+                <li><a href="#seamless">Seamless &amp; Looping Patterns</a></li>
                 <li><a href="#fire">Mini-Project: Animated Fire / Smoke</a></li>
             </ul>
         </div>
@@ -819,6 +822,244 @@ void main() {
                 <button id="btnFlowField">Flow field</button>
             </div>
             <div id="flowGLInfo" class="info-display">Move the UVs over time — rivers, lava, belts, force fields.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- COSINE PALETTES -->
+        <!-- ============================================ -->
+        <div id="palettes" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🌈 Cosine Palettes &amp; Colour Spaces</h2>
+
+            <p>
+                Hand-picking colours with <code>mix()</code> gets old fast. Inigo Quilez's
+                <strong>cosine palette</strong> is one tiny function that produces an entire smooth
+                gradient from four <code>vec3</code> knobs — bias, amplitude, frequency, phase:
+            </p>
+
+            <div class="concept-box">
+                <h4>The whole palette in one line</h4>
+                <div class="formula">
+                    vec3 pal(float t, vec3 a, vec3 b, vec3 c, vec3 d) {<br>
+                    &nbsp;&nbsp;return a + b * cos(6.2831 * (c * t + d));<br>
+                    }
+                </div>
+                <p>
+                    <code>a</code> is the midpoint colour, <code>b</code> the contrast, <code>c</code>
+                    how many colour cycles fit in <code>0..1</code>, <code>d</code> the per-channel
+                    phase (offsetting R/G/B is what makes it a <em>rainbow</em> instead of greyscale).
+                    It's used everywhere — heatmaps, fire, UI accents, this whole track's blue ramp.
+                </p>
+            </div>
+
+            <div class="key-point">
+                <strong>💡 Colour spaces:</strong> RGB is for the screen, not for picking colours. A
+                straight <code>mix()</code> of green→magenta in RGB muddies through grey; sweeping the
+                <strong>hue</strong> angle (HSV) or mixing in a perceptual space (OKLab) stays vivid.
+                The HSV preset below walks the hue ring — same "colour from one number" idea, different
+                space. The palette <em>function</em> is structural, so the buttons rebuild via
+                <code>setFrag</code> (same rule as tiling/fbm).
+            </div>
+
+            <details data-demo-id="sh_palettesGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy">
+                <summary>📝 Click to see: the cosine-palette shader</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Only `colorize()` changes per preset → inject it &amp; rebuild.
+const COLORFN = {
+    rainbow: 'vec3 colorize(float t){ return pal(t, vec3(0.5), vec3(0.5), vec3(1.0), vec3(0.0,0.33,0.67)); }',
+    hsv:     'vec3 colorize(float t){ return hsv2rgb(vec3(t, 0.8, 1.0)); }'
+    // ... sunset, neon ...
+};
+function buildFrag(key) {
+    return `precision mediump float;
+uniform vec2 u_resolution; uniform float u_time;
+vec3 pal(float t, vec3 a, vec3 b, vec3 c, vec3 d){ return a + b*cos(6.28318*(c*t+d)); }
+vec3 hsv2rgb(vec3 c){ /* hue ring */ }
+${COLORFN[key]}
+void main(){
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec3 col = uv.y &lt; 0.20
+    ? colorize(uv.x)                                   // raw 1-D ramp
+    : colorize(fract(length(uv-0.5)*1.7 - u_time*0.12)); // animated field
+  gl_FragColor = vec4(col, 1.0);
+}`;
+}
+const toy = makeShaderToy(canvas, buildFrag('rainbow'), { info: info });</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">type PalKey = 'rainbow' | 'sunset' | 'neon' | 'hsv';
+const COLORFN: Record&lt;PalKey, string&gt; = {
+    rainbow: 'vec3 colorize(float t){ return pal(t, vec3(0.5), vec3(0.5), vec3(1.0), vec3(0.0,0.33,0.67)); }',
+    hsv:     'vec3 colorize(float t){ return hsv2rgb(vec3(t, 0.8, 1.0)); }'
+    // ... sunset, neon ...
+} as Record&lt;PalKey, string&gt;;
+function buildFrag(key: PalKey): string {
+    return `precision mediump float; /* ... pal(), hsv2rgb(), ${COLORFN[key]} ... */`;
+}
+const toy = makeShaderToy(canvas, buildFrag('rainbow'), { info: info });</code></pre>
+                </div>
+            </details>
+
+            <div class="diagram">
+                <canvas id="palettesGL" width="800" height="450"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnPalRainbow">Rainbow</button>
+                <button id="btnPalSunset">Sunset</button>
+                <button id="btnPalNeon">Neon</button>
+                <button id="btnPalHSV">HSV wheel</button>
+            </div>
+            <div id="palettesGLInfo" class="info-display">Four vec3 knobs → any gradient. The strip is the raw palette; above it is the same palette animated.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- TRUCHET / HEX -->
+        <!-- ============================================ -->
+        <div id="truchet" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🧩 Truchet Tiles &amp; Hex Grids</h2>
+
+            <p>
+                Tiling so far used a <em>square</em> grid with the same motif in every cell. Two
+                upgrades unlock a huge amount of free pattern: <strong>Truchet tiles</strong> (let a
+                per-cell hash pick the tile's <em>orientation</em>) and <strong>hex grids</strong>
+                (pack cells like a honeycomb instead of a checkerboard).
+            </p>
+
+            <div class="concept-box">
+                <h4>Truchet: one random bit per cell</h4>
+                <div class="formula">
+                    vec2 id = floor(uv * n);<br>
+                    if (hash(id) &lt; 0.5) f.x = 1.0 - f.x; &nbsp; // flip this tile<br>
+                    // draw two quarter-circle arcs → they connect across cells
+                </div>
+                <p>
+                    Each cell holds the same two arcs; flipping half of them at random makes the arcs
+                    join up into an endless, organic maze — zero authoring, infinite variety. It's how
+                    games fake circuit boards, pipes, mazes, and woven backgrounds.
+                </p>
+            </div>
+
+            <div class="key-point">
+                <strong>💡 Hex without trig:</strong> a hex grid is just "the nearer of two square
+                lattices offset by half a cell." That <code>hexFold</code> is <em>branchless</em>
+                (one ternary on squared distance) — no loop, GLSL ES 1.00-safe. Mode &amp; density are
+                structural → <code>setFrag</code>.
+            </div>
+
+            <details data-demo-id="sh_truchetGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy">
+                <summary>📝 Click to see: the Truchet / hex shader</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Truchet arcs: flip the cell on a hashed bit, then draw two
+// corner arcs — they line up across the flip.
+const arc = (n) =&gt; `vec3 tile(vec2 uv){
+  vec2 g = uv * ${n}.0; vec2 id = floor(g); vec2 f = fract(g);
+  if (hash(id) &lt; 0.5) f.x = 1.0 - f.x;
+  float d = min(abs(length(f)-0.5), abs(length(f-vec2(1.0))-0.5));
+  return mix(vec3(0.06,0.08,0.16), vec3(0.31,0.76,0.97),
+             smoothstep(0.07, 0.035, d));
+}`;
+// Hex: branchless fold to the nearer of two offset lattices.
+vec4 hexFold(vec2 p){ /* ... s=(1,1.732); nearer of two ... */ }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const arc = (n: number): string =&gt; `vec3 tile(vec2 uv){
+  vec2 g = uv * ${n}.0; vec2 id = floor(g); vec2 f = fract(g);
+  if (hash(id) &lt; 0.5) f.x = 1.0 - f.x;
+  float d = min(abs(length(f)-0.5), abs(length(f-vec2(1.0))-0.5));
+  return mix(vec3(0.06,0.08,0.16), vec3(0.31,0.76,0.97),
+             smoothstep(0.07, 0.035, d));
+}`;
+// hexFold(): pick the nearer of two half-offset square lattices.</code></pre>
+                </div>
+            </details>
+
+            <div class="diagram">
+                <canvas id="truchetGL" width="800" height="450"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnTruArc">Truchet arcs</button>
+                <button id="btnTruDiag">Truchet diagonals</button>
+                <button id="btnTruHex">Hex grid</button>
+                <button id="btnTruDense">Density +</button>
+            </div>
+            <div id="truchetGLInfo" class="info-display">One hashed bit per cell → an endless maze. Hex = nearer of two square lattices.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- SEAMLESS / LOOPING -->
+        <!-- ============================================ -->
+        <div id="seamless" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>♾️ Seamless &amp; Looping Patterns</h2>
+
+            <p>
+                A background texture has two ways to betray itself: a visible <strong>seam</strong>
+                where copies meet, and a visible <strong>jump</strong> when the animation restarts.
+                Both have one-line fixes, and this demo shows the broken vs fixed side by side (a
+                2&times;2 grid of the same tile, with red guides on the seams).
+            </p>
+
+            <div class="concept-box">
+                <h4>Tile in space, loop in time</h4>
+                <div class="formula">
+                    // seamless: wrap the noise lattice by the period<br>
+                    p = mod(p, vec2(period)); &nbsp; // corner `period` == corner 0<br><br>
+                    // perfect loop: drive motion ONLY by a periodic function<br>
+                    mix(a, b, 0.5 + 0.5 * sin(6.2831 * t / T)); // frame 0 == frame T
+                </div>
+                <p>
+                    If every time-dependent term is a <code>sin</code>/<code>cos</code> of
+                    <code>2&pi;t/T</code>, then <code>t = 0</code> and <code>t = T</code> are
+                    bit-identical — a flawless GIF-able loop, no fade-cut needed.
+                </p>
+            </div>
+
+            <div class="key-point">
+                <strong>💡 Why the seam happens:</strong> value noise interpolates between lattice
+                corners. At the tile edge it reaches corner <code>period</code>, but the next tile
+                starts at corner <code>0</code> — different hashes unless you <code>mod</code> the
+                lattice. Period &amp; loop length are constants → <code>setFrag</code>.
+            </div>
+
+            <details data-demo-id="sh_seamlessGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy">
+                <summary>📝 Click to see: the seamless / looping shader</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// The ONLY difference between "seam" and "seamless" is the hash:
+const HASH = {
+    seam: 'float h(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }',
+    tile: (rep) =&gt; `float h(vec2 p){ p = mod(p, vec2(${rep}.0));
+        return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }`
+};
+// time only ever enters as sin(2*pi*t/T) → loops exactly at T seconds:
+// mix(vnoise(t*rep), vnoise(t*rep+17.0), 0.5 + 0.5*sin(6.2831*u_time/T));</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const HASH = {
+    seam: 'float h(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }',
+    tile: (rep: number): string =&gt; `float h(vec2 p){ p = mod(p, vec2(${rep}.0));
+        return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }`
+};
+// mix(vnoise(t*rep), vnoise(t*rep+17.0), 0.5 + 0.5*sin(6.2831*u_time/T));</code></pre>
+                </div>
+            </details>
+
+            <div class="diagram">
+                <canvas id="seamlessGL" width="800" height="450"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnSeamShow">Show seam</button>
+                <button id="btnSeamless">Seamless</button>
+                <button id="btnSeamLoop4">Loop 4s</button>
+                <button id="btnSeamLoop8">Loop 8s</button>
+            </div>
+            <div id="seamlessGLInfo" class="info-display">Red guides mark the tile seams. "Seamless" makes them vanish; the shimmer loops exactly every T seconds.</div>
         </div>
 
         <!-- ============================================ -->

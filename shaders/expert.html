@@ -42,6 +42,8 @@
                 <li><a href="#normalmap">2D Normal-Map Lighting</a></li>
                 <li><a href="#spritesheet">Sprite-Sheet Animation</a></li>
                 <li><a href="#dither">Dither / Posterize / 1-bit</a></li>
+                <li><a href="#hatch">Cross-Hatch &amp; Halftone Shading</a></li>
+                <li><a href="#stylize">Stylized Sprite: ASCII &amp; Oil</a></li>
                 <li><a href="#shaded-sprite">Mini-Project: Fully Shaded Sprite</a></li>
             </ul>
         </div>
@@ -774,6 +776,160 @@ void main() {
                 <button id="btnDitPalette">Game Boy palette</button>
             </div>
             <div id="ditherGLInfo" class="info-display">Quantize colors; dither so the eye sees more shades than exist.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- CROSS-HATCH / HALFTONE -->
+        <!-- ============================================ -->
+        <div id="hatch" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>✒️ Cross-Hatch &amp; Halftone Shading</h2>
+
+            <p>
+                Dithering quantised <em>colour</em>. The next step is non-photorealistic
+                <strong>tonal</strong> shading: throw the colour away, keep only luminance, and
+                re-draw it as ink — engraved cross-hatching, a newspaper halftone dot screen, or a
+                1-bit ordered dither. Same idea every time: <em>darker pixel → more ink</em>.
+            </p>
+
+            <div class="concept-box">
+                <h4>Tone → ink, three ways</h4>
+                <div class="formula">
+                    L = dot(rgb, vec3(0.299, 0.587, 0.114)); &nbsp; // perceived brightness<br>
+                    hatch &nbsp;: unlock another rotated line layer as L drops<br>
+                    halftone: dot radius = sqrt(1.0 - L)<br>
+                    dither &nbsp;: step(interleavedGradientNoise(px), L)
+                </div>
+                <p>
+                    The hatch lines and halftone dots are computed in <em>screen</em> space
+                    (<code>gl_FragCoord.xy</code>) so the "ink" stays a constant physical size
+                    regardless of the sprite — exactly how a real engraving behaves.
+                </p>
+            </div>
+
+            <div class="key-point">
+                <strong>💡 Structural vs continuous:</strong> the screen <em>kind</em>
+                (hatch / halftone / dither) changes the code path → <code>setFrag</code>; the screen
+                <em>frequency</em> is just a scale → the <code>u_param</code> uniform ("Coarser").
+            </div>
+
+            <details data-demo-id="sh_hatchGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy,sh_drawSprite,sh_glslKit">
+                <summary>📝 Click to see: the cross-hatch / halftone shader</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Each mode injects a `float ink(vec2 px, float L)` (0 = ink, 1 = paper):
+const INK = {
+    hatch: `float ink(vec2 px, float L){
+  float F = mix(0.06, 0.16, u_param);
+  float k = 1.0;
+  if (L &lt; 0.85) k = min(k, step(0.5, fract((px.x + px.y) * F)));
+  if (L &lt; 0.40) k = min(k, step(0.5, fract( px.x        * F * 1.4)));
+  return k; // ... more layers as L drops ...
+}`,
+    dither: `float ign(vec2 p){ return fract(52.9829189*fract(dot(p,vec2(0.0671,0.0058)))); }
+float ink(vec2 px, float L){ return step(ign(px), L); }`
+    // ... halftone: rotated dot grid, radius = sqrt(1.0 - L) ...
+};
+const toy = makeShaderToy(canvas, buildFrag('hatch'),
+                          { info, sprite: drawSprite, param: 0.4 });</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">type HatchMode = 'hatch' | 'halftone' | 'dither';
+const INK: Record&lt;HatchMode, string&gt; = {
+    hatch: `float ink(vec2 px, float L){ /* stacked rotated line layers */ }`,
+    halftone: `float ink(vec2 px, float L){ /* rotated dot grid */ }`,
+    dither: `float ink(vec2 px, float L){ return step(ign(px), L); }`
+} as Record&lt;HatchMode, string&gt;;
+const toy = makeShaderToy(canvas, buildFrag('hatch'),
+                          { info, sprite: drawSprite, param: 0.4 });</code></pre>
+                </div>
+            </details>
+
+            <div class="diagram">
+                <canvas id="hatchGL" width="800" height="450"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnHatchHatch">Cross-hatch</button>
+                <button id="btnHatchHalf">Halftone</button>
+                <button id="btnHatchDither">Dither</button>
+                <button id="btnHatchCoarse">Coarser</button>
+            </div>
+            <div id="hatchGLInfo" class="info-display">Throw away colour, keep luminance, redraw it as ink — engraving, newsprint, 1-bit.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- STYLIZED SPRITE: ASCII / OIL -->
+        <!-- ============================================ -->
+        <div id="stylize" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🎨 Stylized Sprite: ASCII &amp; Oil Paint</h2>
+
+            <p>
+                Two more stylizers that change the <em>structure</em>, not just the tone.
+                <strong>ASCII</strong> collapses a block of pixels to one luminance value and draws a
+                brightness-keyed glyph (the terminal-art look). <strong>Oil paint</strong> is a
+                compact <em>Kuwahara</em> filter: sample four overlapping quadrants and keep the
+                <em>flattest</em> one — it smooths interiors while keeping edges crisp, like a
+                palette knife.
+            </p>
+
+            <div class="concept-box">
+                <h4>Kuwahara in one breath</h4>
+                <div class="formula">
+                    for each of 4 corner quadrants: compute mean &amp; variance<br>
+                    output = mean of the quadrant with the <strong>lowest</strong> variance
+                </div>
+                <p>
+                    Low variance = "this side is a smooth region" — so a pixel on an edge copies the
+                    calm side instead of blurring across the boundary. That edge-preserving property
+                    is why it reads as <em>paint</em> rather than blur.
+                </p>
+            </div>
+
+            <div class="key-point">
+                <strong>💡 ES 1.00 reminder:</strong> the Kuwahara window <code>K</code> and the
+                ASCII cell count are <code>for</code>-loop bounds / grid constants — structural, so
+                "Detail +" rebuilds the shader (<code>setFrag</code>), the same rule as fbm octaves.
+            </div>
+
+            <details data-demo-id="sh_stylizeGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy,sh_drawSprite,sh_glslKit">
+                <summary>📝 Click to see: the ASCII / oil shader</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Oil = compact Kuwahara: 4 quadrant means, keep the lowest-variance one.
+const oil = (k) =&gt; `const int K = ${k};
+void region(vec2 s, vec2 px, vec2 d, out vec3 mean, out float varr){
+  vec3 sum=vec3(0.0), sum2=vec3(0.0); float n=0.0;
+  for (int j=0;j&lt;=K;j++) for (int i=0;i&lt;=K;i++){
+    vec3 c = texture2D(u_tex, s + d*vec2(float(i),float(j))*px).rgb;
+    sum+=c; sum2+=c*c; n+=1.0;
+  }
+  mean = sum/n; vec3 v = sum2/n - mean*mean; varr = v.r+v.g+v.b;
+}`;
+// ASCII: one texture2D per cell → luminance → brightness-keyed strokes.</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">type StyMode = 'normal' | 'ascii' | 'oil';
+const oil = (k: number): string =&gt; `const int K = ${k};
+void region(vec2 s, vec2 px, vec2 d, out vec3 mean, out float varr){
+  /* mean + variance over a (K+1)x(K+1) quadrant */
+}`;
+function buildFrag(mode: StyMode, cs: number, k: number): string { /* ... */ }</code></pre>
+                </div>
+            </details>
+
+            <div class="diagram">
+                <canvas id="stylizeGL" width="800" height="450"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnStyNormal">Normal</button>
+                <button id="btnStyAscii">ASCII</button>
+                <button id="btnStyOil">Oil paint</button>
+                <button id="btnStyCell">Detail +</button>
+            </div>
+            <div id="stylizeGLInfo" class="info-display">ASCII collapses cells to a glyph; Kuwahara keeps the flattest quadrant → painterly.</div>
         </div>
 
         <!-- ============================================ -->

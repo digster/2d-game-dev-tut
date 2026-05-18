@@ -73,6 +73,8 @@
                 <li><a href="#transition">Scene Transitions</a></li>
                 <li><a href="#radial">Radial Blur &amp; God Rays</a></li>
                 <li><a href="#pixelate">Pixelation / Mosaic</a></li>
+                <li><a href="#chroma">Chromatic Aberration &amp; RGB-Shift</a></li>
+                <li><a href="#glitch">Datamosh / Block Glitch</a></li>
                 <li><a href="#stack">Mini-Project: Post-Process Stack</a></li>
             </ul>
         </div>
@@ -653,6 +655,131 @@ const toy = makeFXChainGL2(canvas, SCENE_GL2, chainFor('pixel', st), { info: inf
                     <button id="btnPixGL2CRT">CRT</button>
                 </div>
                 <div id="pixelateGL2Info" class="info-display">Snap uv to a grid — pixel-art / mosaic downscale.</div>
+            </div>
+        </div>
+
+        <!-- ============================================ CHROMA -->
+        <div id="chroma" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🌈 Chromatic Aberration &amp; RGB-Shift</h2>
+            <p>
+                Real lenses focus red, green and blue at slightly different points — sampling each
+                channel at a small offset fakes that <strong>chromatic aberration</strong>. Offset
+                <em>radially</em> (zero at the centre, growing to the edges) for a lens look; offset
+                with a constant lateral shift + scanline jitter for the digital <strong>RGB-shift</strong>
+                glitch. One post pass, three <code>texture</code> reads.
+            </p>
+            <div class="api-tabs" role="tablist">
+                <button class="api-tab active" data-api="gl1">WebGL1 · GLSL ES 1.00</button>
+                <button class="api-tab" data-api="gl2">WebGL2 · GLSL ES 3.00</button>
+            </div>
+            <div class="api-pane" data-api="gl1">
+                <details data-demo-id="sh_chromaGL1" data-deps="sh_compileShader,sh_createProgram,sh_fxChainGL1,sh_kitGL1">
+                    <summary>📝 Click to see: chromatic aberration (WebGL1)</summary>
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">// c.r = TEX(u_prev, uv + d); c.g = TEX(u_prev, uv); c.b = TEX(u_prev, uv - d);
+// 'ca': d = (uv-0.5)*k (radial)   'shift': d = (k+jitter, 0) (lateral)
+const st = { mode: 'ca' };
+const toy = makeFXChainGL1(canvas, SCENE_GL1, chainFor('chroma', st), { info: info, param: 1.0 });</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">const st = { mode: 'ca' };
+const toy = makeFXChainGL1(canvas, SCENE_GL1, chainFor('chroma', st), { info: info, param: 1.0 });</code></pre>
+                    </div>
+                </details>
+                <div class="diagram"><canvas id="chromaGL1" width="800" height="450"></canvas></div>
+                <div class="controls">
+                    <button id="btnChrGL1CA">CA</button>
+                    <button id="btnChrGL1Shift">RGB-shift</button>
+                    <button id="btnChrGL1Strong">Strong</button>
+                </div>
+                <div id="chromaGL1Info" class="info-display">Split R/B off green — lens CA or digital shift.</div>
+            </div>
+            <div class="api-pane" data-api="gl2" hidden>
+                <details data-demo-id="sh_chromaGL2" data-deps="sh_compileShader,sh_createProgram,sh_fxChainGL2,sh_kitGL2">
+                    <summary>📝 Click to see: chromatic aberration (WebGL2)</summary>
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">const st = { mode: 'ca' };
+const toy = makeFXChainGL2(canvas, SCENE_GL2, chainFor('chroma', st), { info: info, param: 1.0 });</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">const st = { mode: 'ca' };
+const toy = makeFXChainGL2(canvas, SCENE_GL2, chainFor('chroma', st), { info: info, param: 1.0 });</code></pre>
+                    </div>
+                </details>
+                <div class="diagram"><canvas id="chromaGL2" width="800" height="450"></canvas></div>
+                <div class="controls">
+                    <button id="btnChrGL2CA">CA</button>
+                    <button id="btnChrGL2Shift">RGB-shift</button>
+                    <button id="btnChrGL2Strong">Strong</button>
+                </div>
+                <div id="chromaGL2Info" class="info-display">Split R/B off green — lens CA or digital shift.</div>
+            </div>
+        </div>
+
+        <!-- ============================================ GLITCH -->
+        <div id="glitch" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>📺 Datamosh / Block Glitch</h2>
+            <p>
+                The corrupted-video aesthetic. Quantise time into "keyframes", hash a coarse block
+                grid, and on a fraction of blocks displace the sample and tear the colour channels.
+                It's a <em>single</em> pass — no cross-frame feedback — yet reads convincingly as
+                tape datamosh, perfect for a damage / hack / teleport stinger.
+            </p>
+            <div class="api-tabs" role="tablist">
+                <button class="api-tab active" data-api="gl1">WebGL1 · GLSL ES 1.00</button>
+                <button class="api-tab" data-api="gl2">WebGL2 · GLSL ES 3.00</button>
+            </div>
+            <div class="api-pane" data-api="gl1">
+                <details data-demo-id="sh_glitchGL1" data-deps="sh_compileShader,sh_createProgram,sh_fxChainGL1,sh_kitGL1">
+                    <summary>📝 Click to see: datamosh glitch (WebGL1)</summary>
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">// seg = floor(u_time*2.0); block hash &gt; threshold → displace + channel tear.
+// 'mosh' = sparse blocks; 'heavy' = lower threshold + larger amplitude.
+const st = { mode: 'mosh' };
+const toy = makeFXChainGL1(canvas, SCENE_GL1, chainFor('glitch', st), { info: info, param: 1.0 });</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">const st = { mode: 'mosh' };
+const toy = makeFXChainGL1(canvas, SCENE_GL1, chainFor('glitch', st), { info: info, param: 1.0 });</code></pre>
+                    </div>
+                </details>
+                <div class="diagram"><canvas id="glitchGL1" width="800" height="450"></canvas></div>
+                <div class="controls">
+                    <button id="btnGltGL1Calm">Calm</button>
+                    <button id="btnGltGL1Glitch">Glitch</button>
+                    <button id="btnGltGL1Heavy">Heavy</button>
+                </div>
+                <div id="glitchGL1Info" class="info-display">Time-quantised block displacement + channel tear.</div>
+            </div>
+            <div class="api-pane" data-api="gl2" hidden>
+                <details data-demo-id="sh_glitchGL2" data-deps="sh_compileShader,sh_createProgram,sh_fxChainGL2,sh_kitGL2">
+                    <summary>📝 Click to see: datamosh glitch (WebGL2)</summary>
+                    <div class="code-container" data-code-tabs>
+                        <div class="code-tabs" role="tablist">
+                            <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                            <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                        </div>
+                        <pre class="code-pane active" data-lang="js"><code class="language-javascript">const st = { mode: 'mosh' };
+const toy = makeFXChainGL2(canvas, SCENE_GL2, chainFor('glitch', st), { info: info, param: 1.0 });</code></pre>
+                        <pre class="code-pane" data-lang="ts"><code class="language-typescript">const st = { mode: 'mosh' };
+const toy = makeFXChainGL2(canvas, SCENE_GL2, chainFor('glitch', st), { info: info, param: 1.0 });</code></pre>
+                    </div>
+                </details>
+                <div class="diagram"><canvas id="glitchGL2" width="800" height="450"></canvas></div>
+                <div class="controls">
+                    <button id="btnGltGL2Calm">Calm</button>
+                    <button id="btnGltGL2Glitch">Glitch</button>
+                    <button id="btnGltGL2Heavy">Heavy</button>
+                </div>
+                <div id="glitchGL2Info" class="info-display">Time-quantised block displacement + channel tear.</div>
             </div>
         </div>
 

@@ -342,6 +342,46 @@ function pixel(mode) {
   OUT = TEX(u_prev, q);
 }\`;
 }
+function chroma(mode) {
+  if (mode === 'shift') return PHEAD + \`void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  float jit = 0.004 * sin(u_time * 24.0 + uv.y * 60.0);
+  float k = u_param * 0.012 + jit;
+  vec3 c;
+  c.r = TEX(u_prev, uv + vec2(k, 0.0)).r;
+  c.g = TEX(u_prev, uv).g;
+  c.b = TEX(u_prev, uv - vec2(k, 0.0)).b;
+  OUT = vec4(c, 1.0);
+}\`;
+  return PHEAD + \`void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec2 d = (uv - 0.5) * (u_param * 0.05);
+  vec3 c;
+  c.r = TEX(u_prev, uv + d).r;
+  c.g = TEX(u_prev, uv).g;
+  c.b = TEX(u_prev, uv - d).b;
+  OUT = vec4(c, 1.0);
+}\`;
+}
+function glitch(mode) {
+  var heavy = mode === 'heavy';
+  var thr = heavy ? '0.55' : '0.82';
+  var amp = heavy ? '0.22' : '0.12';
+  return PHEAD + \`void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  float seg = floor(u_time * 2.0);
+  vec2 block = floor(uv * vec2(18.0, 10.0));
+  float h = fract(sin(dot(block + seg, vec2(127.1, 311.7))) * 43758.5453);
+  float g = step(\` + thr + \`, fract(h * 7.0 + u_time));
+  vec2 off = (vec2(h, fract(h * 13.0)) - 0.5) * \` + amp + \` * u_param * g;
+  vec3 c = TEX(u_prev, uv + off).rgb;
+  if (g > 0.5) {
+    c.r = TEX(u_prev, uv + off + vec2(0.012, 0.0)).r;
+    c.b = TEX(u_prev, uv + off - vec2(0.012, 0.0)).b;
+  }
+  OUT = vec4(c, 1.0);
+}\`;
+}
 function chainFor(effect, st) {
   if (effect === 'rtt') return [IDENT];
   if (effect === 'ping') { var a = []; for (var i = 0; i < st.iters; i++) a.push(BOX); return a; }
@@ -351,6 +391,8 @@ function chainFor(effect, st) {
   if (effect === 'transition') return [transition(st.mode)];
   if (effect === 'radial') return [radial(st.mode)];
   if (effect === 'pixel') return [pixel(st.mode)];
+  if (effect === 'chroma') return [chroma(st.mode)];
+  if (effect === 'glitch') return [glitch(st.mode)];
   if (effect === 'stack') { var a = []; if (st.bloom) { a.push(BRIGHT, BBH, BBV, COMP); } a.push(grade(PRESETS[st.preset])); return a; }
   return [IDENT];
 }`;
@@ -424,7 +466,17 @@ const DEFS = [
       controls: [{ id: 'btnPixFine', text: 'Fine' }, { id: 'btnPixChunky', text: 'Chunky' }, { id: 'btnPixMosaic', text: 'Mosaic' }, { id: 'btnPixCrt', text: 'CRT' }],
       info: 'Snap uv to a coarse grid — pixel-art / mosaic downscale.',
       init: "{ mode: 'pixel' }",
-      wire: `[['btnPixFine','pixel',160.0],['btnPixChunky','pixel',56.0],['btnPixMosaic','mosaic',56.0],['btnPixCrt','crt',90.0]].forEach(function (e) { var b = document.getElementById(e[0]); if (b) b.addEventListener('click', function () { st.mode = e[1]; toy.rebuild(SCENE, chainFor('pixel', st)); toy.setParam(e[2]); info.textContent = e[1] + ' — ' + e[2] + ' cells across.'; }); });` }
+      wire: `[['btnPixFine','pixel',160.0],['btnPixChunky','pixel',56.0],['btnPixMosaic','mosaic',56.0],['btnPixCrt','crt',90.0]].forEach(function (e) { var b = document.getElementById(e[0]); if (b) b.addEventListener('click', function () { st.mode = e[1]; toy.rebuild(SCENE, chainFor('pixel', st)); toy.setParam(e[2]); info.textContent = e[1] + ' — ' + e[2] + ' cells across.'; }); });` },
+    { fx: 'chroma', title: 'Chromatic Aberration & RGB-Shift', param: '1.0',
+      controls: [{ id: 'btnChrCA', text: 'CA' }, { id: 'btnChrShift', text: 'RGB-shift' }, { id: 'btnChrStrong', text: 'Strong' }],
+      info: 'Split R/B off green — radial lens CA or a lateral digital shift.',
+      init: "{ mode: 'ca' }",
+      wire: `[['btnChrCA','ca',1.0],['btnChrShift','shift',1.0],['btnChrStrong','ca',2.4]].forEach(function (e) { var b = document.getElementById(e[0]); if (b) b.addEventListener('click', function () { st.mode = e[1]; toy.rebuild(SCENE, chainFor('chroma', st)); toy.setParam(e[2]); info.textContent = (e[1] === 'ca' ? 'Radial chromatic aberration' : 'Lateral RGB-shift') + ' — strength ' + e[2] + '.'; }); });` },
+    { fx: 'glitch', title: 'Datamosh / Block Glitch', param: '1.0',
+      controls: [{ id: 'btnGltCalm', text: 'Calm' }, { id: 'btnGltGlitch', text: 'Glitch' }, { id: 'btnGltHeavy', text: 'Heavy' }],
+      info: 'Time-quantised block displacement + channel tear — single pass.',
+      init: "{ mode: 'mosh' }",
+      wire: `[['btnGltCalm','mosh',0.4],['btnGltGlitch','mosh',1.0],['btnGltHeavy','heavy',1.6]].forEach(function (e) { var b = document.getElementById(e[0]); if (b) b.addEventListener('click', function () { st.mode = e[1]; toy.rebuild(SCENE, chainFor('glitch', st)); toy.setParam(e[2]); info.textContent = 'Datamosh ' + e[0].replace('btnGlt','').toLowerCase() + ' — block displacement + channel tear.'; }); });` }
 ];
 
 DEFS.forEach(function (d) {

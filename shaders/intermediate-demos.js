@@ -751,3 +751,206 @@ void main() {
         toy.setParam(1.8); info.textContent = 'Intensity up — u_param scales the flame.';
     });
 })();
+
+// =============================================================================
+// DEMO 8 — palettesGL  (§ Cosine Palettes & Color Spaces)
+// Inigo Quilez's a + b*cos(6.2831*(c*t+d)) — one tiny function = infinite
+// gradients. HSV is a second way to "walk colour by an angle". The palette
+// FUNCTION is structural, so the buttons rebuild via setFrag.
+// =============================================================================
+(function palettesShader() {
+    const canvas = document.getElementById('palettesGL');
+    if (!canvas) return;
+    const info = document.getElementById('palettesGLInfo');
+
+    // Each preset defines `vec3 colorize(float t)` — that's the only thing
+    // that changes, so it is injected and the shader rebuilt.
+    const COLORFN = {
+        rainbow: 'vec3 colorize(float t){ return pal(t, vec3(0.5), vec3(0.5), vec3(1.0), vec3(0.00, 0.33, 0.67)); }',
+        sunset:  'vec3 colorize(float t){ return pal(t, vec3(0.50, 0.40, 0.32), vec3(0.50, 0.38, 0.30), vec3(1.0, 0.9, 0.8), vec3(0.00, 0.15, 0.25)); }',
+        neon:    'vec3 colorize(float t){ return pal(t, vec3(0.5), vec3(0.5), vec3(2.0, 1.0, 0.0), vec3(0.50, 0.20, 0.25)); }',
+        hsv:     'vec3 colorize(float t){ return hsv2rgb(vec3(t, 0.80, 1.0)); }'
+    };
+
+    function buildFrag(key) {
+        return `precision mediump float;
+uniform vec2 u_resolution;
+uniform float u_time;
+// IQ cosine palette: 4 vec3 knobs (bias, amp, freq, phase) → any gradient.
+vec3 pal(float t, vec3 a, vec3 b, vec3 c, vec3 d){
+  return a + b * cos(6.28318 * (c * t + d));
+}
+// HSV→RGB: hue is an angle, so a palette is "walk the hue ring".
+vec3 hsv2rgb(vec3 c){
+  vec3 p = abs(fract(c.xxx + vec3(0.0, 0.6666667, 0.3333333)) * 6.0 - 3.0);
+  return c.z * mix(vec3(1.0), clamp(p - 1.0, 0.0, 1.0), c.y);
+}
+${COLORFN[key]}
+void main(){
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec3 col;
+  if (uv.y < 0.20) {
+    col = colorize(uv.x);                                  // the raw 1-D ramp
+  } else {
+    float t = fract(length(uv - vec2(0.5)) * 1.7 - u_time * 0.12);
+    col = colorize(t);                                     // same palette, animated field
+  }
+  col *= 1.0 - 0.7 * smoothstep(0.010, 0.0, abs(uv.y - 0.20));
+  gl_FragColor = vec4(col, 1.0);
+}`;
+    }
+
+    const toy = lazyToy(canvas, (cv) => makeShaderToy(cv, buildFrag('rainbow'), { info: info }));
+    function set(k, msg) { toy.setFrag(buildFrag(k)); info.textContent = msg; }
+
+    document.getElementById('btnPalRainbow')?.addEventListener('click', () =>
+        set('rainbow', 'Rainbow: a=.5 b=.5 c=1 d=(0,.33,.67) — the canonical IQ palette.'));
+    document.getElementById('btnPalSunset')?.addEventListener('click', () =>
+        set('sunset', 'Sunset: lower freq + warm phase → a hand-tuned gradient, 4 vec3s.'));
+    document.getElementById('btnPalNeon')?.addEventListener('click', () =>
+        set('neon', 'Neon: higher c (frequency) packs more colour cycles into 0..1.'));
+    document.getElementById('btnPalHSV')?.addEventListener('click', () =>
+        set('hsv', 'HSV: sweep the hue angle instead — a different colour space, same idea.'));
+})();
+
+// =============================================================================
+// DEMO 9 — truchetGL  (§ Truchet Tiles & Hex Grids)
+// Per-cell hash picks a tile ORIENTATION → emergent maze with zero authoring.
+// Hex variant: branchless fold to the nearer of two square lattices.
+// Mode + density are structural → setFrag.
+// =============================================================================
+(function truchetShader() {
+    const canvas = document.getElementById('truchetGL');
+    if (!canvas) return;
+    const info = document.getElementById('truchetGLInfo');
+
+    const TILEFN = {
+        arc: (n) => `vec3 tile(vec2 uv){
+  vec2 g = uv * ${n}.0;
+  vec2 id = floor(g);
+  vec2 f = fract(g);
+  if (hash(id) < 0.5) f.x = 1.0 - f.x;          // flip → arcs connect across cells
+  float d = abs(length(f) - 0.5);
+  d = min(d, abs(length(f - vec2(1.0)) - 0.5));
+  float ln = smoothstep(0.07, 0.035, d);
+  return mix(vec3(0.06, 0.08, 0.16), vec3(0.31, 0.76, 0.97), ln);
+}`,
+        diag: (n) => `vec3 tile(vec2 uv){
+  vec2 g = uv * ${n}.0;
+  vec2 id = floor(g);
+  vec2 f = fract(g);
+  float d = (hash(id) < 0.5) ? abs(f.x - f.y) : abs(f.x + f.y - 1.0);
+  float ln = smoothstep(0.11, 0.05, d);
+  return mix(vec3(0.06, 0.08, 0.16), vec3(0.97, 0.66, 0.31), ln);
+}`,
+        hex: (n) => `vec3 tile(vec2 uv){
+  vec4 H = hexFold((uv - 0.5) * ${n}.0);
+  float border = smoothstep(0.46, 0.49, hexDist(H.xy));
+  vec3 cell = 0.45 + 0.45 * cos(6.2831 * hash(H.zw) + vec3(0.0, 2.0, 4.0));
+  return mix(cell, vec3(0.05, 0.06, 0.12), border);
+}`
+    };
+
+    function buildFrag(mode, n) {
+        return `precision mediump float;
+uniform vec2 u_resolution;
+uniform float u_time;
+float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+// Branchless hex fold: pick the nearer of two half-offset square lattices.
+vec4 hexFold(vec2 p){
+  vec2 s = vec2(1.0, 1.7320508);
+  vec4 hc = floor(vec4(p, p - vec2(0.5, 1.0)) / s.xyxy) + 0.5;
+  vec4 h = vec4(p - hc.xy * s, p - (hc.zw + 0.5) * s);
+  return dot(h.xy, h.xy) < dot(h.zw, h.zw) ? vec4(h.xy, hc.xy)
+                                           : vec4(h.zw, hc.zw + 0.5);
+}
+float hexDist(vec2 p){ p = abs(p); return max(dot(p, vec2(0.866025, 0.5)), p.y); }
+${TILEFN[mode](n)}
+void main(){
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  uv.x *= u_resolution.x / u_resolution.y;
+  gl_FragColor = vec4(tile(uv), 1.0);
+}`;
+    }
+
+    const state = { mode: 'arc', n: 8 };
+    const toy = lazyToy(canvas, (cv) => makeShaderToy(cv, buildFrag(state.mode, state.n), { info: info }));
+    function refresh(msg) { toy.setFrag(buildFrag(state.mode, state.n)); info.textContent = msg; }
+
+    document.getElementById('btnTruArc')?.addEventListener('click', () => {
+        state.mode = 'arc'; refresh('Truchet arcs: one bit of hash per cell weaves an endless network.');
+    });
+    document.getElementById('btnTruDiag')?.addEventListener('click', () => {
+        state.mode = 'diag'; refresh('Truchet diagonals: the simplest 2-state tile — a maze of slashes.');
+    });
+    document.getElementById('btnTruHex')?.addEventListener('click', () => {
+        state.mode = 'hex'; refresh('Hex grid: fold to the nearer of two lattices → honeycomb cells.');
+    });
+    document.getElementById('btnTruDense')?.addEventListener('click', () => {
+        state.n = state.n >= 16 ? 5 : state.n + 4;
+        refresh('Density ' + state.n + ' — count is a shader constant, so we rebuild.');
+    });
+})();
+
+// =============================================================================
+// DEMO 10 — seamlessGL  (§ Seamless & Looping Patterns)
+// A texture that TILES (mod the lattice so it wraps) and a shimmer that LOOPS
+// (drive it only by sin(2*pi*t/T) so frame 0 == frame T). The classic
+// "why does my background have a visible seam?" fix.
+// =============================================================================
+(function seamlessShader() {
+    const canvas = document.getElementById('seamlessGL');
+    if (!canvas) return;
+    const info = document.getElementById('seamlessGLInfo');
+
+    const HASH = {
+        // Unwrapped: lattice index rep != index 0 → a hard seam at the tile edge.
+        seam: 'float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }',
+        // Wrapped: mod the lattice by the period → corner rep == corner 0 → seamless.
+        tile: (rep) => `float h(vec2 p){ p = mod(p, vec2(${rep}.0)); return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }`
+    };
+
+    function buildFrag(s) {
+        const hashFn = s.mode === 'seam' ? HASH.seam : HASH.tile(s.rep);
+        const guide = s.mode === 'seam' ? '0.45' : '0.0';
+        return `precision mediump float;
+uniform vec2 u_resolution;
+uniform float u_time;
+${hashFn}
+float vnoise(vec2 p){
+  vec2 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(h(i), h(i + vec2(1.0, 0.0)), f.x),
+             mix(h(i + vec2(0.0, 1.0)), h(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+void main(){
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec2 t = fract(uv * 2.0);                          // a 2x2 grid of the SAME tile
+  float n = mix(vnoise(t * ${s.rep}.0),
+                vnoise(t * ${s.rep}.0 + 17.0),
+                0.5 + 0.5 * sin(6.28318 * u_time / ${s.T}.0)); // loops exactly at T s
+  vec3 col = mix(vec3(0.04, 0.10, 0.22), vec3(0.45, 0.85, 0.95), n);
+  vec2 sm = abs(fract(uv * 2.0 + 0.5) - 0.5);
+  float gd = 1.0 - smoothstep(0.0, 0.02, min(sm.x, sm.y));
+  col = mix(col, vec3(0.95, 0.25, 0.25), gd * ${guide});
+  gl_FragColor = vec4(col, 1.0);
+}`;
+    }
+
+    const state = { mode: 'seam', rep: 6, T: 4 };
+    const toy = lazyToy(canvas, (cv) => makeShaderToy(cv, buildFrag(state), { info: info }));
+    function refresh(msg) { toy.setFrag(buildFrag(state)); info.textContent = msg; }
+
+    document.getElementById('btnSeamShow')?.addEventListener('click', () => {
+        state.mode = 'seam'; refresh('Seam visible: plain hash — the 2x2 tiles do not line up (red guides).');
+    });
+    document.getElementById('btnSeamless')?.addEventListener('click', () => {
+        state.mode = 'tile'; refresh('Seamless: mod(p, period) makes corner rep == corner 0 — no seam.');
+    });
+    document.getElementById('btnSeamLoop4')?.addEventListener('click', () => {
+        state.T = 4; refresh('Loop 4s: shimmer driven only by sin(2*pi*t/4) → frame 0 == frame 4s.');
+    });
+    document.getElementById('btnSeamLoop8')?.addEventListener('click', () => {
+        state.T = 8; refresh('Loop 8s: same trick, longer period — a perfect GIF-able loop.');
+    });
+})();

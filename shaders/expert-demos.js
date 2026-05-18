@@ -732,7 +732,151 @@ void main() {
 })();
 
 // =============================================================================
-// DEMO 7 — spriteGL  (§ Mini-Project: Fully Shaded Sprite)
+// DEMO 7 — hatchGL  (§ Cross-Hatch & Halftone Shading)
+// Map sprite luminance → an ink screen: stacked rotated line layers (hatch),
+// a rotated dot grid (halftone), or per-pixel ordered dither. Mode is
+// structural → setFrag; the screen frequency rides u_param.
+// =============================================================================
+(function hatchShader() {
+    const canvas = document.getElementById('hatchGL');
+    if (!canvas) return;
+    const info = document.getElementById('hatchGLInfo');
+
+    // Each mode returns `float ink(vec2 px, float L)` — 0 = ink, 1 = paper.
+    const INK = {
+        hatch: `float ink(vec2 px, float L){
+  float F = mix(0.06, 0.16, u_param);
+  float k = 1.0;                                  // 1 = paper
+  if (L < 0.85) k = min(k, step(0.5, fract((px.x + px.y) * F)));
+  if (L < 0.62) k = min(k, step(0.5, fract((px.x - px.y) * F)));
+  if (L < 0.40) k = min(k, step(0.5, fract( px.x        * F * 1.4)));
+  if (L < 0.20) k = min(k, step(0.5, fract( px.y        * F * 1.4)));
+  return k;
+}`,
+        halftone: `vec2 rot2(vec2 v, float a){ float s=sin(a), c=cos(a); return mat2(c,-s,s,c)*v; }
+float ink(vec2 px, float L){
+  float F = mix(0.10, 0.30, u_param);
+  vec2 cell = fract(rot2(px, 0.46) * F) - 0.5;
+  float r = sqrt(1.0 - clamp(L, 0.0, 1.0)) * 0.62; // darker → fatter dot
+  return smoothstep(r - 0.06, r + 0.06, length(cell));
+}`,
+        dither: `float ign(vec2 p){ return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
+float ink(vec2 px, float L){ return step(ign(px), L); }` // interleaved-gradient 1-bit
+    };
+
+    function buildFrag(mode) {
+        return GLSL_HEAD + `${INK[mode]}
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec4 tex = texture2D(u_tex, toSpriteUV(uv));
+  float L = dot(tex.rgb, vec3(0.299, 0.587, 0.114));
+  float k = ink(gl_FragCoord.xy, L);
+  vec3 styl = mix(vec3(0.07, 0.06, 0.10), vec3(0.96, 0.95, 0.90), k);
+  gl_FragColor = vec4(mix(backdrop(uv), styl, tex.a), 1.0);
+}`;
+    }
+
+    const state = { mode: 'hatch' };
+    const toy = lazyToy(canvas, (cv) => makeShaderToy(cv, buildFrag(state.mode), { info: info, sprite: drawSprite, param: 0.4 }));
+    function setMode(m, msg) { state.mode = m; toy.setFrag(buildFrag(m)); info.textContent = msg; }
+
+    document.getElementById('btnHatchHatch')?.addEventListener('click', () =>
+        setMode('hatch', 'Cross-hatch: darker luminance unlocks more rotated line layers.'));
+    document.getElementById('btnHatchHalf')?.addEventListener('click', () =>
+        setMode('halftone', 'Halftone: a rotated dot grid; dot radius grows as it darkens.'));
+    document.getElementById('btnHatchDither')?.addEventListener('click', () =>
+        setMode('dither', 'Dither: interleaved-gradient-noise threshold → 1-bit ink.'));
+    document.getElementById('btnHatchCoarse')?.addEventListener('click', () => {
+        toy.setParam(0.95); info.textContent = 'Coarser screen — u_param scales the line/dot frequency.';
+    });
+})();
+
+// =============================================================================
+// DEMO 8 — stylizeGL  (§ Stylized Sprite: ASCII & Oil Paint)
+// ASCII: average each grid cell's luminance, draw brightness-keyed strokes
+// (a terminal look). Oil: a compact Kuwahara — pick the lowest-variance of
+// four quadrant means → painterly flattening. Cell/kernel are structural.
+// =============================================================================
+(function stylizeShader() {
+    const canvas = document.getElementById('stylizeGL');
+    if (!canvas) return;
+    const info = document.getElementById('stylizeGLInfo');
+
+    function buildFrag(mode, cs, k) {
+        const BODY = {
+            normal: `void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec4 tex = texture2D(u_tex, toSpriteUV(uv));
+  gl_FragColor = vec4(mix(backdrop(uv), tex.rgb, tex.a), 1.0);
+}`,
+            ascii: `void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec2 s = toSpriteUV(uv);
+  float CS = ${cs}.0;
+  vec2 g = s * CS;
+  vec2 id = floor(g), f = fract(g);
+  vec4 cellTex = texture2D(u_tex, (id + 0.5) / CS);   // one sample per cell
+  float L = dot(cellTex.rgb, vec3(0.299, 0.587, 0.114)) * cellTex.a;
+  float lvl = floor(L * 5.0);                          // 0..5 "glyph weight"
+  float bars = (lvl < 0.5) ? 0.0
+    : step(0.5, fract(f.y * lvl + 0.25)) * step(0.12, f.x) * step(f.x, 0.88);
+  vec3 styl = mix(vec3(0.04, 0.06, 0.08), vec3(0.40, 0.95, 0.55), bars);
+  gl_FragColor = vec4(mix(backdrop(uv), styl, step(0.02, cellTex.a)), 1.0);
+}`,
+            oil: `const int K = ${k};
+void region(vec2 s, vec2 px, vec2 d, out vec3 mean, out float varr){
+  vec3 sum = vec3(0.0), sum2 = vec3(0.0); float n = 0.0;
+  for (int j = 0; j <= K; j++)
+  for (int i = 0; i <= K; i++) {
+    vec3 c = texture2D(u_tex, s + d * vec2(float(i), float(j)) * px).rgb;
+    sum += c; sum2 += c * c; n += 1.0;
+  }
+  mean = sum / n;
+  vec3 v = sum2 / n - mean * mean;
+  varr = v.r + v.g + v.b;
+}
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec2 s = toSpriteUV(uv);
+  vec2 px = 1.0 / u_texResolution;
+  vec3 mA, mB, mC, mD; float vA, vB, vC, vD;
+  region(s, px, vec2( 1.0,  1.0), mA, vA);
+  region(s, px, vec2(-1.0,  1.0), mB, vB);
+  region(s, px, vec2( 1.0, -1.0), mC, vC);
+  region(s, px, vec2(-1.0, -1.0), mD, vD);
+  vec3 col = mA; float best = vA;
+  if (vB < best) { best = vB; col = mB; }
+  if (vC < best) { best = vC; col = mC; }
+  if (vD < best) { best = vD; col = mD; }
+  float a = texture2D(u_tex, s).a;
+  gl_FragColor = vec4(mix(backdrop(uv), col, a), 1.0);
+}`
+        };
+        return GLSL_HEAD + BODY[mode];
+    }
+
+    const state = { mode: 'ascii', cs: 30, k: 2 };
+    const toy = lazyToy(canvas, (cv) => makeShaderToy(cv, buildFrag(state.mode, state.cs, state.k), { info: info, sprite: drawSprite }));
+    function refresh(msg) { toy.setFrag(buildFrag(state.mode, state.cs, state.k)); info.textContent = msg; }
+
+    document.getElementById('btnStyNormal')?.addEventListener('click', () => {
+        state.mode = 'normal'; refresh('Baseline — the raw faceted sprite, no stylization.');
+    });
+    document.getElementById('btnStyAscii')?.addEventListener('click', () => {
+        state.mode = 'ascii'; refresh('ASCII: one luminance sample per cell → brightness-keyed strokes.');
+    });
+    document.getElementById('btnStyOil')?.addEventListener('click', () => {
+        state.mode = 'oil'; refresh('Oil: Kuwahara — the lowest-variance quadrant mean flattens detail.');
+    });
+    document.getElementById('btnStyCell')?.addEventListener('click', () => {
+        state.cs = state.cs >= 44 ? 18 : state.cs + 8;
+        state.k = state.k >= 3 ? 1 : state.k + 1;
+        refresh('Detail ' + state.cs + ' / kernel ' + state.k + ' — both are shader constants → rebuild.');
+    });
+})();
+
+// =============================================================================
+// DEMO 9 — spriteGL  (§ Mini-Project: Fully Shaded Sprite)
 // =============================================================================
 (function spriteCapstone() {
     const canvas = document.getElementById('spriteGL');

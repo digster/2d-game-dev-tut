@@ -411,6 +411,54 @@ function pixelBody(mode) {
 }`;
 }
 
+// Chromatic aberration: split the R/B channels off the green. 'ca' offsets
+// radially (lens-like, zero at the centre); 'shift' is a constant lateral
+// split with a scanline jitter (the digital RGB-shift / glitch look).
+function chromaBody(mode) {
+    if (mode === 'shift') return `void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  float jit = 0.004 * sin(u_time * 24.0 + uv.y * 60.0);
+  float k = u_param * 0.012 + jit;
+  vec3 c;
+  c.r = TEX(u_prev, uv + vec2(k, 0.0)).r;
+  c.g = TEX(u_prev, uv).g;
+  c.b = TEX(u_prev, uv - vec2(k, 0.0)).b;
+  OUT = vec4(c, 1.0);
+}`;
+    return `void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec2 d = (uv - 0.5) * (u_param * 0.05);
+  vec3 c;
+  c.r = TEX(u_prev, uv + d).r;
+  c.g = TEX(u_prev, uv).g;
+  c.b = TEX(u_prev, uv - d).b;
+  OUT = vec4(c, 1.0);
+}`;
+}
+
+// Datamosh / block glitch: quantise time into "keyframes", hash a coarse
+// block grid, and on a fraction of blocks displace + corrupt channels. A
+// single pass (no cross-frame feedback) that reads as tape-corruption.
+function glitchBody(mode) {
+    const heavy = mode === 'heavy';
+    const thresh = heavy ? '0.55' : '0.82';
+    const amp = heavy ? '0.22' : '0.12';
+    return `void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  float seg = floor(u_time * 2.0);
+  vec2 block = floor(uv * vec2(18.0, 10.0));
+  float h = fract(sin(dot(block + seg, vec2(127.1, 311.7))) * 43758.5453);
+  float g = step(${thresh}, fract(h * 7.0 + u_time));
+  vec2 off = (vec2(h, fract(h * 13.0)) - 0.5) * ${amp} * u_param * g;
+  vec3 c = TEX(u_prev, uv + off).rgb;
+  if (g > 0.5) {
+    c.r = TEX(u_prev, uv + off + vec2(0.012, 0.0)).r;
+    c.b = TEX(u_prev, uv + off - vec2(0.012, 0.0)).b;
+  }
+  OUT = vec4(c, 1.0);
+}`;
+}
+
 // =============================================================================
 // Effect → post-chain definitions (shared by the GL1 and GL2 demo pairs).
 // =============================================================================
@@ -423,6 +471,8 @@ function chainFor(effect, state) {
     if (effect === 'transition') return [transitionBody(state.mode)];
     if (effect === 'radial') return [radialBody(state.mode)];
     if (effect === 'pixel') return [pixelBody(state.mode)];
+    if (effect === 'chroma') return [chromaBody(state.mode)];
+    if (effect === 'glitch') return [glitchBody(state.mode)];
     if (effect === 'stack') {
         const post = [];
         if (state.bloom) post.push(B.bright, B.bbH, B.bbV, B.composite);
@@ -574,6 +624,32 @@ function mountFX(canvasId, infoId, api, effect, initState, wireButtons) {
             document.getElementById('btnPix' + A + label)?.addEventListener('click', () => {
                 st.mode = m; toy.rebuildChain(); toy.setParam(p);
                 info.textContent = m + ' — ' + p + ' cells across (snap uv to a grid).';
+            });
+        });
+    });
+});
+
+// 10 — Chromatic Aberration & RGB-Shift
+['gl1', 'gl2'].forEach(api => {
+    const A = api.toUpperCase();
+    mountFX('chroma' + A, 'chroma' + A + 'Info', api, 'chroma', { mode: 'ca', _param: 1.0 }, (toy, st, info) => {
+        [['CA', 'ca', 1.0], ['Shift', 'shift', 1.0], ['Strong', 'ca', 2.4]].forEach(([label, m, p]) => {
+            document.getElementById('btnChr' + A + label)?.addEventListener('click', () => {
+                st.mode = m; toy.rebuildChain(); toy.setParam(p);
+                info.textContent = (m === 'ca' ? 'Radial chromatic aberration' : 'Lateral RGB-shift (digital glitch)') + ' — strength ' + p + '.';
+            });
+        });
+    });
+});
+
+// 11 — Datamosh / Block Glitch
+['gl1', 'gl2'].forEach(api => {
+    const A = api.toUpperCase();
+    mountFX('glitch' + A, 'glitch' + A + 'Info', api, 'glitch', { mode: 'mosh', _param: 1.0 }, (toy, st, info) => {
+        [['Calm', 'mosh', 0.4], ['Glitch', 'mosh', 1.0], ['Heavy', 'heavy', 1.6]].forEach(([label, m, p]) => {
+            document.getElementById('btnGlt' + A + label)?.addEventListener('click', () => {
+                st.mode = m; toy.rebuildChain(); toy.setParam(p);
+                info.textContent = 'Datamosh ' + label.toLowerCase() + ' — time-quantised block displacement + channel tear.';
             });
         });
     });
