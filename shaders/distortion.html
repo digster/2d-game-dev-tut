@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Distortion / Glitch / Vertex-FX — Shaders Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-glsl.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>🌀 Distortion, Glitch &amp; Vertex FX</h1>
+        <p class="subtitle">Bend the image — swirl, lens, kaleidoscope, RGB-shift, VHS, datamosh — and move real geometry in a vertex shader</p>
+
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="stylization.html" class="nav-button">← Stylization</a>
+            <a href="distortion.html" class="nav-button active">Distortion</a>
+            <a href="advanced.html" class="nav-button">Advanced →</a>
+        </div>
+
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#swirl">Swirl / Pinch / Bulge</a></li>
+                <li><a href="#lens">Fisheye / Barrel / Pincushion</a></li>
+                <li><a href="#kaleido">Kaleidoscope / Mirror Symmetry</a></li>
+                <li><a href="#rgbshift">Chromatic Aberration &amp; RGB-Shift</a></li>
+                <li><a href="#vhs">VHS / Tape Distortion</a></li>
+                <li><a href="#glitchblock">Datamosh / Block Slice Glitch</a></li>
+                <li><a href="#vertfx">Mini-Project: Vertex FX (Jelly / Wind / Flag)</a></li>
+            </ul>
+        </div>
+
+        <div class="key-point">
+            <strong>💡 The big idea:</strong> a fragment shader can't move pixels — but it can
+            <em>lie about where to read them</em>. Remap the sampling <code>uv</code> and the image
+            appears to bend. The first six demos warp one shared <code>dscene(uv)</code> (palette +
+            grid + ring) so the distortion is unmistakable. The last demo is different — it deforms
+            an actual <strong>mesh in the vertex shader</strong> (the only vertex demo in the track).
+        </div>
+
+        <!-- ============================================ SWIRL -->
+        <div id="swirl" class="section">
+            <span class="level-indicator level-intermediate">DISTORTION</span>
+            <h2>🌀 Swirl / Pinch / Bulge</h2>
+            <p>
+                Convert <code>uv</code> to polar coordinates around a centre (the mouse), tweak the
+                radius or angle, convert back. A radius-decaying angle gives a <strong>swirl</strong>;
+                shrinking the radius is a <strong>pinch</strong>; <code>pow(r, &lt;1)</code> is a
+                <strong>bulge</strong> magnifier.
+            </p>
+            <div class="concept-box">
+                <h4>Polar remap</h4>
+                <div class="formula">
+                    d = uv - centre; r = length(d); a = atan(d.y, d.x);<br>
+                    a += swirlAmount * exp(-r * k); &nbsp; // decays outward<br>
+                    uv' = centre + vec2(cos(a), sin(a)) * r;
+                </div>
+            </div>
+            <details data-demo-id="sh_swirlGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy,sh_dscene">
+                <summary>📝 Click to see: the swirl shader</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">const WARP = {
+  swirl: 'a += (0.6 + 1.8 * u_param) * exp(-r * 4.0);',
+  pinch: 'r *= mix(1.0, smoothstep(0.0, 0.5, r), 0.5 + 0.9 * u_param);',
+  bulge: 'r = pow(r, 1.0 - 0.55 * clamp(u_param, 0.0, 0.95));'
+};  // centre = u_mouse / u_resolution</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// resample dscene() at the remapped uv → the image appears to bend.</code></pre>
+                </div>
+            </details>
+            <div class="diagram"><canvas id="swirlGL" width="800" height="450"></canvas></div>
+            <div class="controls">
+                <button id="btnSwSwirl">Swirl</button>
+                <button id="btnSwPinch">Pinch</button>
+                <button id="btnSwBulge">Bulge</button>
+                <button id="btnSwStrong">Stronger</button>
+            </div>
+            <div id="swirlGLInfo" class="info-display">Polar remap around the cursor — move the mouse over the canvas.</div>
+        </div>
+
+        <!-- ============================================ LENS -->
+        <div id="lens" class="section">
+            <span class="level-indicator level-intermediate">DISTORTION</span>
+            <h2>🔭 Fisheye / Barrel / Pincushion</h2>
+            <p>
+                Lens distortion is a radial scale that grows with <code>r²</code>:
+                <code>uv' = c + (uv-c)·(1 + k·r²)</code>. Negative <code>k</code> bows the edges out
+                (barrel / fisheye); positive pinches them in (pincushion).
+            </p>
+            <details data-demo-id="sh_lensGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy,sh_dscene">
+                <summary>📝 Click to see: the lens shader</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">vec2 c = uv - 0.5;
+float r2 = dot(c, c);
+float k = sign * (0.35 + 1.4 * u_param);
+vec2 luv = 0.5 + c * (1.0 + k * r2);   // r² → corners distort most</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// sign = -1 barrel/fisheye, +1 pincushion.</code></pre>
+                </div>
+            </details>
+            <div class="diagram"><canvas id="lensGL" width="800" height="450"></canvas></div>
+            <div class="controls">
+                <button id="btnLensBarrel">Barrel</button>
+                <button id="btnLensPin">Pincushion</button>
+                <button id="btnLensStrong">Stronger</button>
+                <button id="btnLensSubtle">Subtle</button>
+            </div>
+            <div id="lensGLInfo" class="info-display">A radial scale that grows with r² — fisheye vs pincushion.</div>
+        </div>
+
+        <!-- ============================================ KALEIDO -->
+        <div id="kaleido" class="section">
+            <span class="level-indicator level-intermediate">DISTORTION</span>
+            <h2>🔆 Kaleidoscope / Mirror Symmetry</h2>
+            <p>
+                Fold the polar angle into <code>N</code> wedges with <code>mod</code>, then mirror
+                inside each wedge — instant radial symmetry. A staple of menu backdrops, portals and
+                music visualisers.
+            </p>
+            <div class="concept-box">
+                <h4>Fold &amp; mirror the angle</h4>
+                <div class="formula">
+                    wedge = 2π / N;<br>
+                    a = mod(a, wedge);<br>
+                    a = abs(a - wedge * 0.5); &nbsp; // reflect within the wedge
+                </div>
+                <p>Segment count is a shader constant → the buttons rebuild via
+                <code>setFrag</code>.</p>
+            </div>
+            <details data-demo-id="sh_kaleidoGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy,sh_dscene">
+                <summary>📝 Click to see: the kaleidoscope shader</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">float wedge = 6.28318 / ${seg}.0;     // ${seg} is a constant → rebuild
+a = mod(a, wedge);
+a = abs(a - wedge * 0.5);
+vec2 kuv = 0.5 + vec2(cos(a), sin(a)) * r;</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// a slow u_time term makes the symmetry rotate.</code></pre>
+                </div>
+            </details>
+            <div class="diagram"><canvas id="kaleidoGL" width="800" height="450"></canvas></div>
+            <div class="controls">
+                <button id="btnKal3">3-fold</button>
+                <button id="btnKal6">6-fold</button>
+                <button id="btnKal8">8-fold</button>
+                <button id="btnKal12">12-fold</button>
+            </div>
+            <div id="kaleidoGLInfo" class="info-display">Fold the angle into N mirrored wedges → radial symmetry.</div>
+        </div>
+
+        <!-- ============================================ RGB-SHIFT -->
+        <div id="rgbshift" class="section">
+            <span class="level-indicator level-intermediate">DISTORTION</span>
+            <h2>🌈 Chromatic Aberration &amp; RGB-Shift</h2>
+            <p>
+                Sample R, G and B at slightly different UVs. Offset <em>radially</em> for a real-lens
+                chromatic aberration; offset with a wobbling <em>lateral</em> vector for the digital
+                RGB-shift glitch.
+            </p>
+            <details data-demo-id="sh_rgbshiftGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy,sh_dscene">
+                <summary>📝 Click to see: the RGB-shift shader</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">col.r = dscene(uv + dir * k).r;
+col.g = dscene(uv).g;
+col.b = dscene(uv - dir * k).b;   // dir = (uv-0.5) radial, or lateral</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// k = 0.004 + u_param * 0.03 — channel separation amount.</code></pre>
+                </div>
+            </details>
+            <div class="diagram"><canvas id="rgbshiftGL" width="800" height="450"></canvas></div>
+            <div class="controls">
+                <button id="btnRgbCA">Radial CA</button>
+                <button id="btnRgbShift">RGB-shift</button>
+                <button id="btnRgbStrong">Stronger</button>
+            </div>
+            <div id="rgbshiftGLInfo" class="info-display">Sample each channel at a different uv — lens CA vs digital shift.</div>
+        </div>
+
+        <!-- ============================================ VHS -->
+        <div id="vhs" class="section">
+            <span class="level-indicator level-intermediate">DISTORTION</span>
+            <h2>📼 VHS / Tape Distortion</h2>
+            <p>
+                Stack the analogue artefacts: per-scanline horizontal <strong>jitter</strong>, a slow
+                tape <strong>wobble</strong>, <strong>chroma bleed</strong>, <strong>scanlines</strong>
+                and <strong>grain</strong> — the retro found-footage look.
+            </p>
+            <details data-demo-id="sh_vhsGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy,sh_dscene">
+                <summary>📝 Click to see: the VHS shader</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">float jit = (h11(band + floor(u_time*12.0)) - 0.5) * 0.03 * A;
+float wob = sin(uv.y * 8.0 + u_time * 2.0) * 0.004 * A;
+vec2 suv = uv + vec2(jit + wob, 0.0);
+// + chroma bleed, scanlines, grain</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// A is the severity (normal vs heavy chewed-up tape).</code></pre>
+                </div>
+            </details>
+            <div class="diagram"><canvas id="vhsGL" width="800" height="450"></canvas></div>
+            <div class="controls">
+                <button id="btnVhsOn">VHS</button>
+                <button id="btnVhsHeavy">Heavy</button>
+            </div>
+            <div id="vhsGLInfo" class="info-display">Jitter + wobble + chroma bleed + scanlines + grain.</div>
+        </div>
+
+        <!-- ============================================ GLITCH BLOCK -->
+        <div id="glitchblock" class="section">
+            <span class="level-indicator level-intermediate">DISTORTION</span>
+            <h2>📺 Datamosh / Block Slice Glitch</h2>
+            <p>
+                Quantise time into "keyframes", hash horizontal slices and a coarse block grid, and
+                on a fraction of them displace the sample and tear the channels — the corrupted-codec
+                aesthetic, a perfect damage / hack / teleport stinger.
+            </p>
+            <details data-demo-id="sh_glitchBlockGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy,sh_dscene">
+                <summary>📝 Click to see: the datamosh shader</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">float seg = floor(u_time * 3.0);          // keyframes
+float slice = floor(uv.y * 14.0);
+float on = step(thr, fract(h2(vec2(slice, seg)) * 7.0 + u_time));
+g.x += (hs - 0.5) * 0.35 * on;            // slice tear</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// + a coarse block displacement on top, + channel tear.</code></pre>
+                </div>
+            </details>
+            <div class="diagram"><canvas id="glitchBlockGL" width="800" height="450"></canvas></div>
+            <div class="controls">
+                <button id="btnGbCalm">Glitch</button>
+                <button id="btnGbBurst">Burst</button>
+            </div>
+            <div id="glitchBlockGLInfo" class="info-display">Time-quantised slice + block displacement with channel tear.</div>
+        </div>
+
+        <!-- ============================================ VERTEX FX -->
+        <div id="vertfx" class="section">
+            <span class="level-indicator level-intermediate">DISTORTION</span>
+            <h2>🎏 Mini-Project: Vertex FX — Jelly / Wind / Flag</h2>
+            <p>
+                Every other demo in the whole track is a full-screen fragment quad. This one is
+                different: a real <strong>triangulated mesh</strong> whose vertices are moved in the
+                <strong>vertex shader</strong>. That's how games do flags, foliage sway, jelly
+                sprites, water surfaces and squash-and-stretch — geometry, not pixels.
+            </p>
+            <div class="concept-box">
+                <h4>A new (tiny) harness: makeMeshToy</h4>
+                <p><code>makeShaderToy</code> only ever draws two triangles, so it physically can't do
+                this. <code>makeMeshToy</code> builds a 56×56 grid mesh with <code>a_position</code>
+                + <code>a_uv</code>, runs your vertex + fragment shaders, and mirrors the same handle
+                shape (plus <code>rebuild({vert,frag})</code>) so <code>lazyToy</code> drives it
+                unchanged — zero edits to the shared runtime.</p>
+            </div>
+            <div class="key-point">
+                <strong>💡 Displacement = animation:</strong> the vertex shader offsets each vertex
+                by a <code>sin</code> wave of its UV and <code>u_time</code>, and passes the
+                displacement to the fragment shader as a shading term so the folds catch light. Drag
+                on the canvas to grab the mesh.
+            </div>
+            <details data-demo-id="sh_vertfxGL" data-deps="sh_compileShader,sh_createProgram,sh_makeMeshToy">
+                <summary>📝 Click to see: the vertex-FX demo</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// VERTEX shader (not fragment!) — it moves geometry:
+const DISP = {
+  flag:  'float dz = sin(a_uv.x*9.0 - u_time*6.0)*0.09*a_uv.x*(0.5+u_param);',
+  jelly: 'float dz = sin(a_uv.x*6.0+u_time*5.0)*sin(a_uv.y*6.0+u_time*4.0)*0.10*(0.4+u_param);'
+};
+// p.y += dz;  v_shade = 0.5 + dz*3.0;  gl_Position = vec4(p,0,1);
+const toy = makeMeshToy(canvas, buildVert('flag'), FRAG, { info });</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">type Mode = 'calm' | 'jelly' | 'wind' | 'flag';
+// makeMeshToy returns { stop, setParam, setPaused, rebuild, destroy }.</code></pre>
+                </div>
+            </details>
+            <div class="diagram"><canvas id="vertfxGL" width="800" height="450"></canvas></div>
+            <div class="controls">
+                <button id="btnVfxFlag">Flag</button>
+                <button id="btnVfxJelly">Jelly</button>
+                <button id="btnVfxWind">Wind</button>
+                <button id="btnVfxCalm">Calm</button>
+            </div>
+            <div id="vertfxGLInfo" class="info-display">A real mesh deformed in the vertex stage. Drag to grab it.</div>
+
+            <div class="example-box">
+                <h4>🎮 What you just built</h4>
+                <p>The vertex-shader toolkit: waving flags, swaying foliage, jelly/squash sprites,
+                water-surface meshes — the half of game shading that <em>moves geometry</em> rather
+                than recolouring pixels.</p>
+            </div>
+            <div class="key-point">
+                <strong>💡 What's next:</strong> the <a href="advanced.html">Advanced tier</a>
+                chains these into multi-pass post-processing (render-to-texture, bloom, the full
+                production FX stack).
+            </div>
+        </div>
+
+        <div class="section" style="text-align: center;">
+            <h2>✅ Distortion Tier Complete</h2>
+            <p style="font-size: 1.1em; margin: 24px 0;">
+                You can swirl, lens, kaleidoscope, channel-split, VHS and datamosh any image — and
+                you've written the track's only vertex-shader effect.
+            </p>
+            <a href="advanced.html" class="nav-button" style="font-size: 1.2em; padding: 20px 40px;">
+                Continue to Advanced →
+            </a>
+        </div>
+    </div>
+
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <script src="../shared/utils.js"></script>
+    <script src="../shared/code-tabs.js"></script>
+    <script src="../shared/lazy-demo.js"></script>
+    <script src="distortion-demos.js"></script>
+    <script src="bundles-distortion.js"></script>
+    <script src="../shared/export-demo.js"></script>
+
+    <script>
+        const scrollToTopBtn = document.getElementById('scrollToTop');
+        scrollToTopBtn.addEventListener('click', () => {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+        window.addEventListener('scroll', () => {
+            scrollToTopBtn.style.opacity = window.pageYOffset > 300 ? '1' : '0';
+        });
+        scrollToTopBtn.style.opacity = '0';
+        scrollToTopBtn.style.transition = 'opacity 0.3s';
+    </script>
+</body>
+</html>

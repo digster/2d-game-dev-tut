@@ -12,16 +12,18 @@ index.html                     ← landing page, links to every track
 shared/                        ← cross-track helpers (styles, utils, lazy mount, export)
 <track>/                       ← one folder per track (e.g. shaders/, isometric-strategy/)
   index.html                   ← that track's clickable topic index (must stay in sync)
-  beginner|intermediate|expert|advanced|simulations.html   ← one page per TIER
+  <tier>.html                  ← one page per TIER (shaders: beginner, intermediate,
+                                  expert, raymarching, stylization, distortion,
+                                  advanced, simulations — 8 tiers)
   <tier>-demos.js              ← page-side interactive demos for that tier
   bundles-<tier>.js            ← standalone-export payload for that tier (shaders only)
 memory/YYYY-MM-DD.md           ← running work log (see CLAUDE.md)
 ```
 
 **Why tiers are separate files:** content is split beginner → intermediate →
-expert → advanced → simulations so each file stays editable without hitting
-length limits, and the per-track `index.html` is the single source of truth that
-links them. **Any content add/edit must keep that index consistent** (project
+expert → raymarching → stylization → distortion → advanced → simulations so each
+file stays editable without hitting length limits, and the per-track
+`index.html` is the single source of truth that links them. **Any content add/edit must keep that index consistent** (project
 rule). For long pages, the in-page `<div class="toc">` is also a clickable
 index.
 
@@ -61,7 +63,8 @@ Engines that conform (all in the tier `*-demos.js` files):
 
 | Harness        | Model                                   | Use for |
 |----------------|-----------------------------------------|---------|
-| `makeShaderToy`| single fragment shader                  | most effects |
+| `makeShaderToy`| single fragment shader (fullscreen quad) | most effects, NPR, UV-warps, raymarching |
+| `makeMeshToy`  | a real triangulated grid mesh + **user vertex shader** (a_position/a_uv) | vertex-stage geometry FX (jelly/wind/flag) — `distortion-demos.js` |
 | `makeFXChain`  | multi-pass post-processing chain        | bloom, blur, … |
 | `makeSim`      | **one** ping-pong float grid, one step, gather-only (RGBA channels packed) | Life, RD, fluid, wave, particles/boids (`points` display) |
 | `makeAgentSim` | **two** coupled buffer pairs (small agents + screen trail), multi-pass, **scatter** (`gl.POINTS` additive deposit) | Physarum/slime-mold-class agent sims |
@@ -69,9 +72,15 @@ Engines that conform (all in the tier `*-demos.js` files):
 **Rule of thumb:** a new *example* of an existing class ⇒ add only shaders to a
 new demo IIFE. A new *class* of simulation that the existing harnesses can't
 express ⇒ add a **sibling harness** (do not retrofit a working one — `makeSim`
-powers 9 demos). `makeAgentSim` ([shaders/simulations-demos.js](shaders/simulations-demos.js))
-is the worked example: it exists precisely because `makeSim`'s single-grid
-gather model can't represent agents sensing a separately-diffused trail.
+powers 9 demos). Two worked examples: `makeAgentSim`
+([shaders/simulations-demos.js](shaders/simulations-demos.js)) exists because
+`makeSim`'s single-grid gather model can't represent agents sensing a
+separately-diffused trail; `makeMeshToy`
+([shaders/distortion-demos.js](shaders/distortion-demos.js)) exists because
+`makeShaderToy`'s fullscreen quad has no geometry — a vertex-stage effect needs
+a real mesh. Both still return the `lazyToy` handle shape (`makeMeshToy` adds
+`rebuild({vert,frag})`, already in `LAZY_DEMO_METHODS`) so the shared runtime is
+untouched.
 
 ### makeAgentSim per-frame pipeline
 

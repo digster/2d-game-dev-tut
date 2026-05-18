@@ -138,7 +138,9 @@
                     <li><strong>A library of full-screen GLSL effects</strong> — water, fire, fog, vignette, CRT/scanline, color grading</li>
                     <li><strong>A multi-pass post-processing chain</strong> — render-to-texture → blur → bloom</li>
                     <li><strong>Sprite/material shaders</strong> — dissolve, outline, hit-flash, palette-swap</li>
-                    <li><strong>GPU compute-style effects</strong> — reaction-diffusion, fluid, particles on the GPU</li>
+                    <li><strong>GPU compute-style effects</strong> — reaction-diffusion, fluid, particles, smoke, cloth on the GPU</li>
+                    <li><strong>A single-pass 3D renderer</strong> — raymarched SDF scenes, soft shadows, Mandelbrot/Mandelbulb fractals</li>
+                    <li><strong>Non-photorealistic &amp; distortion FX</strong> — toon, hatching, halftone, swirl, kaleidoscope, VHS, plus a vertex-shader effect</li>
                     <li><strong>Every demo is exportable</strong> — 📋 Export gives a standalone runnable HTML</li>
                 </ul>
             </div>
@@ -155,9 +157,10 @@
         <div class="section">
             <h2>🗺️ Track Roadmap</h2>
             <p>
-                Five tiers, each in its own file so it stays focused and quick to load. Tiers build up:
-                fundamentals first, then progressively more game-oriented effects. The track is shipped
-                iteratively — only tiers marked <em>Ready</em> are written yet.
+                Eight tiers, each in its own file so it stays focused and quick to load. Tiers build
+                up: fundamentals first, then procedural texture, sprite materials, a full 3D
+                raymarcher, non-photorealistic stylization, image distortion, multi-pass
+                post-processing, and GPU compute. Every tier is <em>Ready</em>.
             </p>
 
             <div class="roadmap">
@@ -228,6 +231,64 @@
                         <li>Cross-hatch &amp; halftone shading</li>
                         <li>Stylized sprite (ASCII, Kuwahara oil)</li>
                         <li><em>Mini-project:</em> a fully shaded sprite</li>
+                    </ul>
+                </a>
+
+                <!-- Raymarching tier card -->
+                <a href="raymarching.html" class="tier-card active">
+                    <div class="tier-card-header">
+                        <span class="level-indicator level-advanced">RAYMARCHING</span>
+                        <span class="tier-card-status ready">Ready</span>
+                    </div>
+                    <div class="tier-card-title">Raymarching, 3D &amp; Fractals</div>
+                    <p>Turn one fragment shader into a renderer — sphere-trace SDFs, light them, dive into fractals.</p>
+                    <ul>
+                        <li>The raymarch loop (sphere tracing)</li>
+                        <li>SDF primitives &amp; smooth-min</li>
+                        <li>Normals, diffuse &amp; soft shadows</li>
+                        <li>Ambient occlusion &amp; fog</li>
+                        <li>Mandelbrot &amp; Julia (escape-time)</li>
+                        <li>Mandelbulb (3D distance-estimator)</li>
+                        <li>Domain repetition (infinite worlds)</li>
+                        <li><em>Mini-project:</em> a composed raymarched scene</li>
+                    </ul>
+                </a>
+
+                <!-- Stylization tier card -->
+                <a href="stylization.html" class="tier-card active">
+                    <div class="tier-card-header">
+                        <span class="level-indicator level-expert">STYLIZATION</span>
+                        <span class="tier-card-status ready">Ready</span>
+                    </div>
+                    <div class="tier-card-title">Stylization &amp; NPR</div>
+                    <p>Re-draw a shaded scene as ink, dots, hatching, paint or text — non-photorealistic rendering.</p>
+                    <ul>
+                        <li>Toon / cel shading</li>
+                        <li>Sobel / Roberts edge ink</li>
+                        <li>Cross-hatch (scene-wide)</li>
+                        <li>Halftone / Ben-Day dots</li>
+                        <li>Kuwahara oil paint</li>
+                        <li>ASCII / dither art</li>
+                        <li><em>Mini-project:</em> a switchable stylization stack</li>
+                    </ul>
+                </a>
+
+                <!-- Distortion tier card -->
+                <a href="distortion.html" class="tier-card active">
+                    <div class="tier-card-header">
+                        <span class="level-indicator level-intermediate">DISTORTION</span>
+                        <span class="tier-card-status ready">Ready</span>
+                    </div>
+                    <div class="tier-card-title">Distortion, Glitch &amp; Vertex FX</div>
+                    <p>Bend the image — swirl, lens, kaleidoscope, RGB-shift, VHS, datamosh — plus the track's only vertex shader.</p>
+                    <ul>
+                        <li>Swirl / pinch / bulge</li>
+                        <li>Fisheye / barrel / pincushion</li>
+                        <li>Kaleidoscope / mirror symmetry</li>
+                        <li>Chromatic aberration &amp; RGB-shift</li>
+                        <li>VHS / tape distortion</li>
+                        <li>Datamosh / block slice glitch</li>
+                        <li><em>Mini-project:</em> vertex FX (jelly / wind / flag)</li>
                     </ul>
                 </a>
 

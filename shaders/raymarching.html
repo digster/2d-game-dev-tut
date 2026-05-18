@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Raymarching, 3D &amp; Fractals — Shaders Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-glsl.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>🔮 Raymarching, 3D &amp; Fractals</h1>
+        <p class="subtitle">Turn one fragment shader into a renderer — sphere-trace SDFs, light them, and dive into fractals</p>
+
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="expert.html" class="nav-button">← Expert</a>
+            <a href="raymarching.html" class="nav-button active">Raymarching</a>
+            <a href="stylization.html" class="nav-button">Stylization →</a>
+        </div>
+
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#march">The Raymarch Loop</a></li>
+                <li><a href="#sdf3d">SDF Primitives &amp; Smooth-Min</a></li>
+                <li><a href="#lighting3d">Normals, Diffuse &amp; Soft Shadows</a></li>
+                <li><a href="#ao">Ambient Occlusion &amp; Fog</a></li>
+                <li><a href="#mandelbrot">Mandelbrot &amp; Julia</a></li>
+                <li><a href="#mandelbulb">Mandelbulb (3D fractal)</a></li>
+                <li><a href="#domainrep">Repeated Worlds (domain repetition)</a></li>
+                <li><a href="#scene3d">Mini-Project: Raymarched Scene</a></li>
+            </ul>
+        </div>
+
+        <div class="key-point">
+            <strong>💡 The leap:</strong> every other tier shades 2D. Here the fragment shader is a
+            <em>renderer</em> — for each pixel it marches a ray through a Signed Distance Field
+            (a function returning the distance to the nearest surface) until it hits something.
+            Prereq: Beginner SDFs and Intermediate noise/palettes. The camera orbits with the mouse.
+            <strong>GLSL ES 1.00:</strong> loop bounds must be constant, so step counts &amp;
+            fractal iterations rebuild via <code>setFrag</code>; fractals use
+            <code>precision highp float</code>.
+        </div>
+
+        <!-- ============================================ MARCH -->
+        <div id="march" class="section">
+            <span class="level-indicator level-advanced">RAYMARCHING</span>
+            <h2>📏 The Raymarch Loop</h2>
+            <p>
+                Sphere tracing: from the camera, repeatedly step along the ray by exactly the
+                distance to the nearest surface (the SDF value) — you can never overshoot, so you
+                converge onto the surface. Too few steps and grazing rays fall short.
+            </p>
+            <div class="concept-box">
+                <h4>The whole renderer</h4>
+                <div class="formula">
+                    for i in 0..STEPS:<br>
+                    &nbsp;&nbsp;d = map(ro + rd * t); &nbsp; // distance to nearest surface<br>
+                    &nbsp;&nbsp;if (d &lt; ε) break; &nbsp; // hit<br>
+                    &nbsp;&nbsp;t += d; &nbsp; // safe to jump exactly d
+                </div>
+                <p>STEPS is a constant loop bound → the buttons rebuild the shader.</p>
+            </div>
+            <details data-demo-id="sh_marchGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy,sh_rmKit">
+                <summary>📝 Click to see: the raymarch loop</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">float map(vec3 p) { return length(p) - 1.0; }   // a sphere
+for (int i = 0; i &lt; ${steps}; i++) {           // bound MUST be constant
+  vec3 p = ro + rd * t;
+  d = map(p);
+  if (d &lt; 0.002 || t &gt; 12.0) break;
+  t += d;
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// camera ro/rd are built by the shared RM_CAM kit; mouse = orbit.</code></pre>
+                </div>
+            </details>
+            <div class="diagram"><canvas id="marchGL" width="800" height="450"></canvas></div>
+            <div class="controls">
+                <button id="btnMarch32">32 steps</button>
+                <button id="btnMarch64">64 steps</button>
+                <button id="btnMarch128">128 steps</button>
+            </div>
+            <div id="marchGLInfo" class="info-display">Step along the ray by the SDF value until you hit. Drag to orbit.</div>
+        </div>
+
+        <!-- ============================================ SDF3D -->
+        <div id="sdf3d" class="section">
+            <span class="level-indicator level-advanced">RAYMARCHING</span>
+            <h2>🧊 SDF Primitives &amp; Smooth-Min</h2>
+            <p>
+                Sphere, box and torus each have a one-line distance function. Combine them with
+                <code>min</code> (union), <code>max</code>/<code>-</code> (subtract), or the
+                polynomial <strong>smooth-min</strong> that melts them into organic blends.
+            </p>
+            <details data-demo-id="sh_sdf3dGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy,sh_rmKit">
+                <summary>📝 Click to see: SDF primitives &amp; smin</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">float smin(float a, float b, float k){
+  float h = clamp(0.5 + 0.5*(b-a)/k, 0.0, 1.0);
+  return mix(b, a, h) - k*h*(1.0-h);
+}
+// union: min(a,b)  subtract: max(-a,b)  blend: smin(a,b,k)</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// normals via central differences of map() (e.xyy swizzle trick).</code></pre>
+                </div>
+            </details>
+            <div class="diagram"><canvas id="sdf3dGL" width="800" height="450"></canvas></div>
+            <div class="controls">
+                <button id="btnSdfUnion">Union</button>
+                <button id="btnSdfSmooth">Smooth-min</button>
+                <button id="btnSdfSub">Subtract</button>
+                <button id="btnSdfMorph">Morph</button>
+            </div>
+            <div id="sdf3dGLInfo" class="info-display">One-line primitives, combined with min / max / smin.</div>
+        </div>
+
+        <!-- ============================================ LIGHTING -->
+        <div id="lighting3d" class="section">
+            <span class="level-indicator level-advanced">RAYMARCHING</span>
+            <h2>💡 Normals, Diffuse &amp; Soft Shadows</h2>
+            <p>
+                The surface normal is the gradient of the SDF (central differences). Lambert
+                <code>N·L</code> gives diffuse; marching a ray toward the light gives shadows — and
+                tracking the <em>closest miss</em> turns hard shadows into soft penumbrae for free.
+            </p>
+            <details data-demo-id="sh_lighting3dGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy,sh_rmKit">
+                <summary>📝 Click to see: lighting &amp; soft shadows</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// soft shadow: along the shadow ray, keep the smallest h/t
+sh = min(sh, 10.0 * h / st);   // h = SDF, st = distance travelled</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// hard shadow is the same loop without that running-minimum.</code></pre>
+                </div>
+            </details>
+            <div class="diagram"><canvas id="lighting3dGL" width="800" height="450"></canvas></div>
+            <div class="controls">
+                <button id="btnLitHard">Hard shadows</button>
+                <button id="btnLitSoft">Soft shadows</button>
+            </div>
+            <div id="lighting3dGLInfo" class="info-display">Normal = ∇map; Lambert + a shadow march. The light moves.</div>
+        </div>
+
+        <!-- ============================================ AO -->
+        <div id="ao" class="section">
+            <span class="level-indicator level-advanced">RAYMARCHING</span>
+            <h2>🌑 Ambient Occlusion &amp; Fog</h2>
+            <p>
+                Five short marches along the normal estimate how "boxed in" a point is — that
+                <strong>ambient occlusion</strong> darkens creases and contact points and is what
+                makes the render read as solid. Exponential <strong>fog</strong> adds depth.
+            </p>
+            <details data-demo-id="sh_aoGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy,sh_rmKit">
+                <summary>📝 Click to see: AO &amp; fog</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">for (int i = 0; i &lt; 5; i++) {
+  float h = 0.02 + 0.12 * float(i);
+  o += (h - map(p + n * h)) * s;   // expected vs actual distance
+  s *= 0.7;
+}
+occ = clamp(1.0 - 1.6 * o, 0.0, 1.0);</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// fog: mix(col, sky, 1.0 - exp(-k * t * t)).</code></pre>
+                </div>
+            </details>
+            <div class="diagram"><canvas id="aoGL" width="800" height="450"></canvas></div>
+            <div class="controls">
+                <button id="btnAoNone">No AO</button>
+                <button id="btnAoOn">AO on</button>
+                <button id="btnAoFog">Toggle fog</button>
+            </div>
+            <div id="aoGLInfo" class="info-display">Short normal marches → contact shadows; exp fog → depth.</div>
+        </div>
+
+        <!-- ============================================ MANDELBROT -->
+        <div id="mandelbrot" class="section">
+            <span class="level-indicator level-advanced">RAYMARCHING</span>
+            <h2>🌀 Mandelbrot &amp; Julia</h2>
+            <p>
+                Escape-time fractals: iterate <code>z = z² + c</code> and colour by how fast it
+                escapes. For the <strong>Mandelbrot</strong> set <code>c</code> is the pixel; for a
+                <strong>Julia</strong> set <code>c</code> is fixed (drive it with the mouse). Uses
+                <code>precision highp float</code> for a clean deep zoom.
+            </p>
+            <details data-demo-id="sh_mandelbrotGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy,sh_rmKit">
+                <summary>📝 Click to see: the escape-time fractal</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">for (int i = 0; i &lt; ${iter}; i++) {            // iteration count = constant
+  z = vec2(z.x*z.x - z.y*z.y, 2.0*z.x*z.y) + cc;
+  if (dot(z, z) &gt; 64.0) break;
+  it += 1.0;
+}
+float sm = it + 1.0 - log2(0.5 * log2(dot(z,z)));  // smooth colour</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Julia: z starts at the pixel, cc is the (mouse-driven) constant.</code></pre>
+                </div>
+            </details>
+            <div class="diagram"><canvas id="mandelbrotGL" width="800" height="450"></canvas></div>
+            <div class="controls">
+                <button id="btnMbSet">Mandelbrot</button>
+                <button id="btnMbJulia">Julia</button>
+                <button id="btnMbIter64">64 iter</button>
+                <button id="btnMbIter256">256 iter</button>
+            </div>
+            <div id="mandelbrotGLInfo" class="info-display">z = z² + c, coloured by escape speed. Slow auto-zoom.</div>
+        </div>
+
+        <!-- ============================================ MANDELBULB -->
+        <div id="mandelbulb" class="section">
+            <span class="level-indicator level-advanced">RAYMARCHING</span>
+            <h2>🪐 Mandelbulb (3D fractal)</h2>
+            <p>
+                The Mandelbrot's 3D cousin: a <strong>distance-estimator</strong> raymarch of the
+                power-8 spherical iteration. The running minimum radius is an <em>orbit trap</em>
+                used to colour it. <code>precision highp float</code>.
+            </p>
+            <details data-demo-id="sh_mandelbulbGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy,sh_rmKit">
+                <summary>📝 Click to see: the Mandelbulb DE</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">dr = pow(r, P-1.0) * P * dr + 1.0;          // distance-estimator
+float zr = pow(r, P);
+theta *= P; phi *= P;
+z = zr * vec3(sin(theta)*cos(phi), sin(theta)*sin(phi), cos(theta)) + pos;
+return 0.5 * log(r) * r / dr;                // the DE</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// P (power) and DE iterations are constants → rebuild on change.</code></pre>
+                </div>
+            </details>
+            <div class="diagram"><canvas id="mandelbulbGL" width="800" height="450"></canvas></div>
+            <div class="controls">
+                <button id="btnBulbP8">Power 8</button>
+                <button id="btnBulbP4">Power 4</button>
+                <button id="btnBulbDetail">Detail +</button>
+            </div>
+            <div id="mandelbulbGLInfo" class="info-display">A distance-estimated 3D fractal. Orbit with the mouse.</div>
+        </div>
+
+        <!-- ============================================ DOMAIN REP -->
+        <div id="domainrep" class="section">
+            <span class="level-indicator level-advanced">RAYMARCHING</span>
+            <h2>♾️ Repeated Worlds (Domain Repetition)</h2>
+            <p>
+                <code>mod(p, s)</code> on the position evaluates one small SDF as if it were tiled
+                infinitely — an endless lattice for zero extra cost. <code>abs(mod(...))</code>
+                mirrors the cells into a kaleidoscopic tunnel you fly through.
+            </p>
+            <details data-demo-id="sh_domainrepGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy,sh_rmKit">
+                <summary>📝 Click to see: domain repetition</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">float map(vec3 p) {
+  p.z += u_time * 1.5;            // fly forward
+  vec3 q = mod(p, 2.0) - 1.0;     // ← infinite tiling
+  return min(length(q) - 0.45, sdBox(q, vec3(0.18)));
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// mirror variant: vec3 q = abs(mod(p, 4.0) - 2.0) - 1.0;</code></pre>
+                </div>
+            </details>
+            <div class="diagram"><canvas id="domainrepGL" width="800" height="450"></canvas></div>
+            <div class="controls">
+                <button id="btnDrRepeat">Repeat</button>
+                <button id="btnDrMirror">Mirror</button>
+                <button id="btnDrFast">Faster</button>
+            </div>
+            <div id="domainrepGLInfo" class="info-display">mod() on position → an infinite world from one object.</div>
+        </div>
+
+        <!-- ============================================ SCENE -->
+        <div id="scene3d" class="section">
+            <span class="level-indicator level-advanced">RAYMARCHING</span>
+            <h2>🏔️ Mini-Project: Raymarched Scene</h2>
+            <p>
+                Everything composed: smin-blended primitives on a ground plane, a moving light with
+                soft shadows, ambient occlusion, exponential fog, a cosine-palette material and a
+                gamma pass — a game-ready vignette / skybox / loading backdrop.
+            </p>
+            <details data-demo-id="sh_scene3dGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy,sh_rmKit">
+                <summary>📝 Click to see: the composed scene</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">col = base * (0.12 + 0.95 * diff * softShadow) * ao
+    + pow(diff, 32.0) * softShadow * 0.6;
+col = mix(col, sky, 1.0 - exp(-0.018 * t * t));      // fog
+col = pow(col, vec3(0.4545));                         // gamma</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// presets swap the cosine palette (crystal / lava / ice).</code></pre>
+                </div>
+            </details>
+            <div class="diagram"><canvas id="scene3dGL" width="800" height="450"></canvas></div>
+            <div class="controls">
+                <button id="btnSc3Crystal">Crystal</button>
+                <button id="btnSc3Lava">Lava</button>
+                <button id="btnSc3Ice">Ice</button>
+                <button id="btnSc3Fog">Toggle fog</button>
+            </div>
+            <div id="scene3dGLInfo" class="info-display">smin + soft shadow + AO + fog + palette + gamma — one shader.</div>
+
+            <div class="example-box">
+                <h4>🎮 What you just built</h4>
+                <p>A complete single-pass 3D renderer: drop it behind a menu, as a skybox, a loading
+                screen or a portal — no meshes, no textures, all on the GPU.</p>
+            </div>
+            <div class="key-point">
+                <strong>💡 What's next:</strong> the <a href="stylization.html">Stylization tier</a>
+                re-renders any scene (including this one) as toon, ink, halftone or paint.
+            </div>
+        </div>
+
+        <div class="section" style="text-align: center;">
+            <h2>✅ Raymarching Tier Complete</h2>
+            <p style="font-size: 1.1em; margin: 24px 0;">
+                You turned a fragment shader into a renderer — SDF scenes, lighting, AO, fog and two
+                kinds of fractal, all single-pass on the GPU.
+            </p>
+            <a href="stylization.html" class="nav-button" style="font-size: 1.2em; padding: 20px 40px;">
+                Continue to Stylization →
+            </a>
+        </div>
+    </div>
+
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <script src="../shared/utils.js"></script>
+    <script src="../shared/code-tabs.js"></script>
+    <script src="../shared/lazy-demo.js"></script>
+    <script src="raymarching-demos.js"></script>
+    <script src="bundles-raymarching.js"></script>
+    <script src="../shared/export-demo.js"></script>
+
+    <script>
+        const scrollToTopBtn = document.getElementById('scrollToTop');
+        scrollToTopBtn.addEventListener('click', () => {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+        window.addEventListener('scroll', () => {
+            scrollToTopBtn.style.opacity = window.pageYOffset > 300 ? '1' : '0';
+        });
+        scrollToTopBtn.style.opacity = '0';
+        scrollToTopBtn.style.transition = 'opacity 0.3s';
+    </script>
+</body>
+</html>

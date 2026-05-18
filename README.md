@@ -25,23 +25,28 @@ own subdirectory with a per-tier file structure mirroring the Fundamentals layou
   See `isometric-strategy/index.html` for the track roadmap. Currently scaffolded;
   tier files are landing iteratively.
 - `shaders/` — learn WebGL / GLSL fragment shaders for 2D game effects.
-  See `shaders/index.html` for the track roadmap. **Fully shipped — all 5
+  See `shaders/index.html` for the track roadmap. **Fully shipped — all 8
   tiers:** Beginner (Shader Foundations), Intermediate (Patterns, Noise &
-  Distortion), Expert (Textures & Sprite Shaders), Advanced (Multi-Pass &
-  Post-Processing), Simulations (GPU Compute-Style Effects). WebGL1 + GLSL
-  ES 1.00 through Expert; Advanced shows every effect in WebGL1 *and* WebGL2;
-  Simulations is WebGL2 + GLSL ES 3.00 with `RGBA16F` float textures
+  Distortion), Expert (Textures & Sprite Shaders), **Raymarching (3D SDFs &
+  Fractals)**, **Stylization (NPR)**, **Distortion (Glitch & Vertex FX)**,
+  Advanced (Multi-Pass & Post-Processing), Simulations (GPU Compute-Style
+  Effects). WebGL1 + GLSL ES 1.00 for most tiers (raymarching/fractals use
+  `precision highp float`); Advanced shows every effect in WebGL1 *and*
+  WebGL2; Simulations is WebGL2 + GLSL ES 3.00 with `RGBA16F` float textures
   (`EXT_color_buffer_float`, with graceful degradation). Demo IDs and helper
-  bundles are prefixed `sh_`. Each tier was later expanded with extra
-  examples: Beginner (2D transforms, polar coords, SDF boolean combine),
-  Intermediate (gradient/Perlin noise, Voronoi, flow & scrolling), Expert
-  (2D normal-map lighting, sprite-sheet animation, dither/posterize),
-  Advanced (scene transitions, radial blur & god rays, pixelation — each in
-  WebGL1 + WebGL2), Simulations (falling-sand Margolus CA, boids/flocking,
-  2D wave equation, agent-based slime mold / Physarum). The slime-mold demo
-  runs on a sibling harness, `makeAgentSim` (two coupled fields + a scatter
-  pass), added alongside the gather-only `makeSim`; see `ARCHITECTURE.md`
-  for the harness-contract extension seam.
+  bundles are prefixed `sh_`. The track was broadened for shader *mastery*
+  variety: Intermediate gained IQ cosine palettes, Truchet/hex tiling and
+  seamless/looping patterns; Expert gained cross-hatch/halftone and
+  ASCII/Kuwahara sprite stylizers; Advanced gained chromatic aberration and
+  datamosh (each WebGL1 + WebGL2); Simulations gained semi-Lagrangian smoke,
+  Verlet GPU cloth and DLA. Three whole new tiers were added — a single-pass
+  Raymarching renderer (SDFs, soft shadows, AO/fog, Mandelbrot/Julia,
+  Mandelbulb), Stylization/NPR (toon, Sobel ink, hatching, halftone,
+  Kuwahara, ASCII), and Distortion (swirl/lens/kaleidoscope, RGB-shift, VHS,
+  datamosh) plus the track's only **vertex-shader** demo. That vertex demo
+  runs on a second sibling harness, `makeMeshToy` (a real grid mesh + user
+  vertex shader), alongside `makeAgentSim` and the gather-only `makeSim`;
+  see `ARCHITECTURE.md` for the harness-contract extension seam.
 
 ## Shared assets
 

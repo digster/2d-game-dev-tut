@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stylization / NPR — Shaders Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <!-- Prism.js Syntax Highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+    <!-- GLSL highlighting: `glsl` extends `c` extends `clike`; `c` before `glsl`. -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-glsl.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>🎨 Stylization &amp; NPR</h1>
+        <p class="subtitle">Re-draw a shaded scene as ink, dots, hatching, paint or text — non-photorealistic rendering</p>
+
+        <!-- Navigation -->
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="raymarching.html" class="nav-button">← Raymarching</a>
+            <a href="stylization.html" class="nav-button active">Stylization</a>
+            <a href="distortion.html" class="nav-button">Distortion →</a>
+        </div>
+
+        <!-- Table of Contents -->
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#toon">Toon / Cel Shading</a></li>
+                <li><a href="#edge">Sobel / Roberts Edge Ink</a></li>
+                <li><a href="#hatch">Cross-Hatch (scene-wide)</a></li>
+                <li><a href="#halftone">Halftone / Ben-Day Dots</a></li>
+                <li><a href="#kuwahara">Kuwahara Oil Paint</a></li>
+                <li><a href="#ascii">ASCII / Dither Art</a></li>
+                <li><a href="#nprstack">Mini-Project: Stylization Stack</a></li>
+            </ul>
+        </div>
+
+        <div class="key-point">
+            <strong>💡 Prereq:</strong> the <a href="beginner.html">Beginner</a> and
+            <a href="intermediate.html">Intermediate</a> tiers (<code>uv</code>,
+            <code>smoothstep</code>, <code>mix</code>, the <code>makeShaderToy</code> runner). Every
+            demo here re-renders one shared <code>scene(uv)</code> — three lit balls on a gradient —
+            then post-processes it, so you compare stylizers on identical input.
+        </div>
+
+        <!-- ============================================ TOON -->
+        <div id="toon" class="section">
+            <span class="level-indicator level-expert">STYLIZATION</span>
+            <h2>🖍️ Toon / Cel Shading</h2>
+            <p>
+                The cartoon look in one move: take the smooth lighting and <strong>quantise the value
+                channel into a few hard bands</strong>, keeping the hue. Add a luminance-gradient
+                outline and you have the anime/cel-shaded staple.
+            </p>
+            <div class="concept-box">
+                <h4>Band the value, keep the hue</h4>
+                <div class="formula">
+                    L = luminance(colour);<br>
+                    q = floor(L * bands) / (bands - 1.0); &nbsp; // hard steps<br>
+                    out = (colour / L) * q; &nbsp; // re-apply banded value to the hue
+                </div>
+                <p>Band count is a shader constant → the buttons rebuild via <code>setFrag</code>,
+                the same structural-vs-continuous rule from the noise tiers.</p>
+            </div>
+            <details data-demo-id="sh_toonGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy,sh_nprScene">
+                <summary>📝 Click to see: the toon shader</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">function buildFrag(bands, rim) {
+  return NPR_HEAD + NPR_SCENE + `void main() {
+  vec3 c = scene(gl_FragCoord.xy / u_resolution);
+  float L = lum(c);
+  float B = ${bands}.0;
+  float q = floor(L * B) / (B - 1.0);          // hard value bands
+  vec3 outc = clamp((c / max(L, 1e-3)) * q, 0.0, 1.0);
+  // ... luminance-gradient edge ink when rim is on ...
+  gl_FragColor = vec4(outc, 1.0);
+}`;
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function buildFrag(bands: number, rim: number): string {
+  return NPR_HEAD + NPR_SCENE + `/* band L into 'bands' steps, keep hue, ink edges */`;
+}</code></pre>
+                </div>
+            </details>
+            <div class="diagram"><canvas id="toonGL" width="800" height="450"></canvas></div>
+            <div class="controls">
+                <button id="btnToon2">2 bands</button>
+                <button id="btnToon4">4 bands</button>
+                <button id="btnToon6">6 bands</button>
+                <button id="btnToonRim">Toggle edge ink</button>
+            </div>
+            <div id="toonGLInfo" class="info-display">Quantise the value into hard bands, keep the hue, ink the silhouette.</div>
+        </div>
+
+        <!-- ============================================ EDGE -->
+        <div id="edge" class="section">
+            <span class="level-indicator level-expert">STYLIZATION</span>
+            <h2>✏️ Sobel / Roberts Edge Ink</h2>
+            <p>
+                Edge detection turns any image into line art. <strong>Sobel</strong> is a 3×3
+                weighted gradient; <strong>Roberts</strong> is a cheap 2×2 diagonal one. Threshold
+                the gradient magnitude and you get ink — on paper, or over the colour scene.
+            </p>
+            <div class="concept-box">
+                <h4>The gradient magnitude is the edge</h4>
+                <p><code>g = length(vec2(∂L/∂x, ∂L/∂y))</code>. Big where luminance changes fast
+                (silhouettes, shading boundaries), ~0 on flat regions — <code>smoothstep</code> it
+                into a clean ink mask.</p>
+            </div>
+            <details data-demo-id="sh_edgeGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy,sh_nprScene">
+                <summary>📝 Click to see: the edge-detect shader</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Sobel: 9 luminance taps → gx, gy → length() → ink mask.
+const sobel = `... gx = (L20+2L21+L22) - (L00+2L01+L02); ...
+  float g = length(vec2(gx, gy));`;
+const ink = `smoothstep(0.10, 0.22, g)`;</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Roberts is the cheap 2x2 alternative: length(vec2(a-d, b-c)).</code></pre>
+                </div>
+            </details>
+            <div class="diagram"><canvas id="edgeGL" width="800" height="450"></canvas></div>
+            <div class="controls">
+                <button id="btnEdgeSobel">Sobel</button>
+                <button id="btnEdgeRoberts">Roberts</button>
+                <button id="btnEdgeFill">Ink over scene</button>
+                <button id="btnEdgeThick">Thicker</button>
+            </div>
+            <div id="edgeGLInfo" class="info-display">Threshold the luminance-gradient magnitude → clean line art.</div>
+        </div>
+
+        <!-- ============================================ HATCH -->
+        <div id="hatch" class="section">
+            <span class="level-indicator level-expert">STYLIZATION</span>
+            <h2>✒️ Cross-Hatch (scene-wide)</h2>
+            <p>
+                The engraving / pencil look: as a pixel gets darker, unlock another layer of rotated
+                parallel lines. Computed in <em>screen space</em> so the strokes stay a constant
+                physical size — exactly how a real etching behaves.
+            </p>
+            <details data-demo-id="sh_hatchGL2" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy,sh_nprScene">
+                <summary>📝 Click to see: the cross-hatch shader</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">float k = 1.0;
+if (L &lt; 0.85) k = min(k, step(0.5, fract((g.x + g.y) * F)));
+if (L &lt; 0.62) k = min(k, step(0.5, fract((g.x - g.y) * F)));
+if (L &lt; 0.40) k = min(k, step(0.5, fract( g.x * F * 1.5)));
+// darker → more line layers stack → reads as deeper shadow</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// u_param scales the nib frequency F (continuous → uniform, not rebuild).</code></pre>
+                </div>
+            </details>
+            <div class="diagram"><canvas id="hatchGL2" width="800" height="450"></canvas></div>
+            <div class="controls">
+                <button id="btnHatch2Sketch">Pencil</button>
+                <button id="btnHatch2Colour">Tinted</button>
+                <button id="btnHatch2Dense">Denser</button>
+                <button id="btnHatch2Coarse">Coarser</button>
+            </div>
+            <div id="hatchGL2Info" class="info-display">Darker luminance stacks more rotated line layers — engraving.</div>
+        </div>
+
+        <!-- ============================================ HALFTONE -->
+        <div id="halftone" class="section">
+            <span class="level-indicator level-expert">STYLIZATION</span>
+            <h2>⚫ Halftone / Ben-Day Dots</h2>
+            <p>
+                Print reproduces tone with <strong>dots of varying size</strong>. One rotated screen
+                gives a mono halftone; rotating a separate screen per channel gives the CMYK
+                comic-book / Lichtenstein Ben-Day look.
+            </p>
+            <details data-demo-id="sh_halftoneGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy,sh_nprScene">
+                <summary>📝 Click to see: the halftone shader</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">float dotScreen(vec2 g, float ang, float tone){
+  vec2 cell = fract(rot2(g, ang) * F) - 0.5;
+  float r = sqrt(tone) * 0.62;          // darker → bigger dot
+  return smoothstep(r - 0.05, r + 0.05, length(cell));
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// CMYK: dotScreen(.r,0.26), dotScreen(.g,1.30), dotScreen(.b,2.30).</code></pre>
+                </div>
+            </details>
+            <div class="diagram"><canvas id="halftoneGL" width="800" height="450"></canvas></div>
+            <div class="controls">
+                <button id="btnHtMono">Mono</button>
+                <button id="btnHtCmyk">CMYK</button>
+                <button id="btnHtCoarse">Coarser</button>
+                <button id="btnHtFine">Fine</button>
+            </div>
+            <div id="halftoneGLInfo" class="info-display">Tone becomes dot size; rotate a screen per channel for Ben-Day.</div>
+        </div>
+
+        <!-- ============================================ KUWAHARA -->
+        <div id="kuwahara" class="section">
+            <span class="level-indicator level-expert">STYLIZATION</span>
+            <h2>🖌️ Kuwahara Oil Paint</h2>
+            <p>
+                An <em>edge-preserving</em> filter that reads as paint. For each pixel, look at four
+                overlapping quadrants and output the <strong>mean of the lowest-variance one</strong>
+                — flat regions smooth, edges stay crisp, like a palette knife.
+            </p>
+            <div class="concept-box">
+                <h4>Why it preserves edges</h4>
+                <p>Low variance = "this side is a calm region". A pixel straddling an edge copies the
+                calm side instead of averaging across the boundary, so the boundary survives. The
+                window <code>K</code> is a loop bound → structural → <code>setFrag</code>.</p>
+            </div>
+            <details data-demo-id="sh_kuwaharaGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy,sh_nprScene">
+                <summary>📝 Click to see: the Kuwahara shader</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">const int K = ${k};
+void region(vec2 uv, vec2 px, vec2 d, out vec3 mean, out float varr){
+  for (int j=0;j&lt;=K;j++) for (int i=0;i&lt;=K;i++) { /* mean + variance */ }
+}
+// output = mean of the quadrant with the smallest variance</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// 4 quadrants sampled from the procedural scene() — no texture needed.</code></pre>
+                </div>
+            </details>
+            <div class="diagram"><canvas id="kuwaharaGL" width="800" height="450"></canvas></div>
+            <div class="controls">
+                <button id="btnKuwOff">Off</button>
+                <button id="btnKuwSmall">K = 2</button>
+                <button id="btnKuwBig">K = 4</button>
+            </div>
+            <div id="kuwaharaGLInfo" class="info-display">Keep the flattest of four quadrants → painterly, edges intact.</div>
+        </div>
+
+        <!-- ============================================ ASCII -->
+        <div id="ascii" class="section">
+            <span class="level-indicator level-expert">STYLIZATION</span>
+            <h2>🔡 ASCII / Dither Art</h2>
+            <p>
+                Two structure-changing stylizers. <strong>ASCII</strong> collapses each grid cell to
+                one luminance value and draws a brightness-keyed glyph (terminal art).
+                <strong>Dither</strong> applies an interleaved-gradient 1-bit threshold — the eye
+                fuses the noise into shades.
+            </p>
+            <details data-demo-id="sh_asciiGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy,sh_nprScene">
+                <summary>📝 Click to see: the ASCII / dither shader</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">vec2 g = uv * vec2(${cells}.0);
+vec3 cc = scene((floor(g) + 0.5) / vec2(${cells}.0));   // one sample / cell
+float lvl = floor(lum(cc) * 5.0);                        // glyph weight
+float bars = step(0.5, fract(fract(g).y * lvl + 0.25));  // strokes</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// dither: step(interleavedGradientNoise(fragCoord), luminance) → 1-bit.</code></pre>
+                </div>
+            </details>
+            <div class="diagram"><canvas id="asciiGL" width="800" height="450"></canvas></div>
+            <div class="controls">
+                <button id="btnAsciiAscii">ASCII</button>
+                <button id="btnAsciiDither">Dither</button>
+                <button id="btnAsciiCell">Cell +</button>
+            </div>
+            <div id="asciiGLInfo" class="info-display">Collapse cells to glyphs, or 1-bit dither — structure, not just tone.</div>
+        </div>
+
+        <!-- ============================================ NPR STACK -->
+        <div id="nprstack" class="section">
+            <span class="level-indicator level-expert">STYLIZATION</span>
+            <h2>🎛️ Mini-Project: Stylization Stack</h2>
+            <p>
+                The capstone: one scene, a switchable NPR pipeline. Flip between the cartoon, pencil,
+                comic-print, painterly and terminal looks live — exactly the kind of
+                art-direction toggle a game's render settings expose.
+            </p>
+            <details data-demo-id="sh_nprStackGL" data-deps="sh_compileShader,sh_createProgram,sh_fullscreenQuad,sh_makeShaderToy,sh_nprScene">
+                <summary>📝 Click to see: the stylization stack</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">const STYLE = { toonink: `...`, hatch: `...`, halftone: `...`,
+                oil: `...`, ascii: `...` };
+function buildFrag(style) {
+  return NPR_HEAD + NPR_SCENE + `void main(){ ${STYLE[style]} }`;
+}  // switching the style rebuilds the shader (structural)</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">type Style = 'toonink' | 'hatch' | 'halftone' | 'oil' | 'ascii';</code></pre>
+                </div>
+            </details>
+            <div class="diagram"><canvas id="nprStackGL" width="800" height="450"></canvas></div>
+            <div class="controls">
+                <button id="btnNprToon">Toon + ink</button>
+                <button id="btnNprHatch">Hatch</button>
+                <button id="btnNprHalf">Halftone</button>
+                <button id="btnNprOil">Oil</button>
+                <button id="btnNprAscii">ASCII</button>
+            </div>
+            <div id="nprStackGLInfo" class="info-display">One scene, five non-photorealistic pipelines — pick the art direction.</div>
+
+            <div class="example-box">
+                <h4>🎮 What you just built</h4>
+                <p>A reusable NPR post stack. Drop any of these on a render target for a stylised
+                game look — cel-shaded, inked, comic, painterly or ASCII — all asset-free on the GPU.</p>
+            </div>
+            <div class="key-point">
+                <strong>💡 What's next:</strong> the <a href="distortion.html">Distortion tier</a>
+                bends the image itself — swirl, fisheye, kaleidoscope, glitch — and adds the only
+                vertex-shader demo in the track.
+            </div>
+        </div>
+
+        <!-- Next Steps -->
+        <div class="section" style="text-align: center;">
+            <h2>✅ Stylization Tier Complete</h2>
+            <p style="font-size: 1.1em; margin: 24px 0;">
+                You can re-render any scene as toon, ink, hatch, halftone, oil or ASCII — a complete
+                non-photorealistic toolkit, all single-pass on the GPU.
+            </p>
+            <a href="distortion.html" class="nav-button" style="font-size: 1.2em; padding: 20px 40px;">
+                Continue to Distortion →
+            </a>
+        </div>
+    </div>
+
+    <!-- Scroll to Top Button -->
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <script src="../shared/utils.js"></script>
+    <script src="../shared/code-tabs.js"></script>
+    <script src="../shared/lazy-demo.js"></script>
+    <script src="stylization-demos.js"></script>
+    <script src="bundles-stylization.js"></script>
+    <script src="../shared/export-demo.js"></script>
+
+    <script>
+        const scrollToTopBtn = document.getElementById('scrollToTop');
+        scrollToTopBtn.addEventListener('click', () => {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+        window.addEventListener('scroll', () => {
+            scrollToTopBtn.style.opacity = window.pageYOffset > 300 ? '1' : '0';
+        });
+        scrollToTopBtn.style.opacity = '0';
+        scrollToTopBtn.style.transition = 'opacity 0.3s';
+    </script>
+</body>
+</html>

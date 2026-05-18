@@ -103,3 +103,27 @@ in a real browser (vein network forms & is stable, 0 console errors, lazy
 teardown frees the context, makeSim demos unaffected). Standalone-export
 bundle registration deliberately deferred (avoids duplicating a ~180-line
 harness as a brittle string) and flagged in ARCHITECTURE.md.
+
+# shaders track — mastery-variety expansion
+"In terms of mastering shaders, the examples in the shaders track lack
+variety — have a look and improve it by adding the appropriate examples."
+Planned, approved, and implemented as +34 console-verified demos.
+Existing tiers extended (+12): Intermediate (IQ cosine palettes,
+Truchet/hex tiling, seamless/looping patterns), Expert (cross-hatch/
+halftone, ASCII/Kuwahara sprite stylizers), Advanced (chromatic
+aberration, datamosh — each WebGL1 + WebGL2), Simulations (semi-Lagrangian
+smoke, Verlet GPU cloth, DLA dendritic growth). Three new tiers added
+between Expert and Advanced: Raymarching/3D/Fractals (8 — march loop, SDF
+smin, lighting + soft shadows, AO/fog, Mandelbrot/Julia, Mandelbulb,
+domain repetition, composed scene), Stylization/NPR (7 — toon, Sobel/
+Roberts ink, cross-hatch, halftone, Kuwahara oil, ASCII/dither, stack),
+Distortion/Glitch/Vertex-FX (7 — swirl/pinch/bulge, fisheye/barrel,
+kaleidoscope, RGB-shift, VHS, datamosh, vertex-FX). A second sibling
+harness, makeMeshToy (real grid mesh + user vertex shader, returns the
+lazyToy handle shape + rebuild({vert,frag})), added with zero edits to
+shared/ — it powers the track's only vertex-shader demo. Every demo
+browser-verified console-clean across all presets (one GLSL ES 1.00
+int*float bug — bare ${rim} → ${rim}.0 — caught by screenshot and fixed);
+all export bundles syntax-validated. Both index files, the 8-card roadmap,
+in-page TOCs and the expert↔raymarching↔…↔distortion↔advanced prev/next
+chain kept consistent. ARCHITECTURE.md & README.md updated.
