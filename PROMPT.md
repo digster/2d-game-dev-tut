@@ -127,3 +127,17 @@ int*float bug — bare ${rim} → ${rim}.0 — caught by screenshot and fixed);
 all export bundles syntax-validated. Both index files, the 8-card roadmap,
 in-page TOCs and the expert↔raymarching↔…↔distortion↔advanced prev/next
 chain kept consistent. ARCHITECTURE.md & README.md updated.
+
+---
+
+## 2026-05-18 (pt.2) — Fix two broken simulation demos
+
+> Two issues on the simulation page —
+> * Can't see anything in the GPU verlet cloth example
+> * All the options in the reaction-diffusion example give the same output
+
+Diagnosed in plan mode and fixed in both `shaders/simulations-demos.js` and
+`shaders/bundles-simulations.js`: cloth pin-row inversion + WIND pin gate,
+Gray-Scott unstable Laplacian (normalized kernel), canonical RD seed +
+coarser state grid, and cloth-local point shaders for visibility. All
+browser-verified console-clean.

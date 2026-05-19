@@ -619,21 +619,26 @@ function makeAgentSim(canvas, spec, opts) {
     };
     function spec(p) {
         return {
+            // Gray-Scott's pattern wavelength is fixed in *grid cells*, so the
+            // sim runs on a coarse state grid (display upscales it). On a full
+            // 800×450 grid features are sub-pixel and the slower presets
+            // (mitosis/worms) diffuse away before they can organise.
+            stateW: 320, stateH: 180,
             substeps: 12,
             seed: SIM_HEAD + SIM_LIB + `void main() {
   vec2 uv = gl_FragCoord.xy / u_resolution;
   float b = (distance(uv, vec2(0.5)) < 0.03) ? 1.0 : 0.0;
-  outColor = vec4(1.0, b, 0.0, 1.0);
+  outColor = vec4(1.0 - b, b, 0.0, 1.0);   // patch: A=0,B=1 — its edge is the reaction front
 }`,
             step: SIM_HEAD + SIM_LIB + `const float Da = 1.0, Db = 0.5, dt = 1.0;
 const float feed = ${p.f}, kill = ${p.k};
 void main() {
   vec2 s = cell(ivec2(0)).rg;
-  vec2 lap = cell(ivec2(1,0)).rg + cell(ivec2(-1,0)).rg
-           + cell(ivec2(0,1)).rg + cell(ivec2(0,-1)).rg
-           + 0.5*(cell(ivec2(1,1)).rg + cell(ivec2(-1,1)).rg
-                + cell(ivec2(1,-1)).rg + cell(ivec2(-1,-1)).rg)
-           - 6.0 * s;
+  vec2 lap = 0.2 * (cell(ivec2(1,0)).rg + cell(ivec2(-1,0)).rg
+                  + cell(ivec2(0,1)).rg + cell(ivec2(0,-1)).rg)
+           + 0.05 * (cell(ivec2(1,1)).rg + cell(ivec2(-1,1)).rg
+                   + cell(ivec2(1,-1)).rg + cell(ivec2(-1,-1)).rg)
+           - s;
   float A = s.r, Bc = s.g, r = A*Bc*Bc;
   float nA = A + (Da*lap.r - r + feed*(1.0-A)) * dt;
   float nB = Bc + (Db*lap.g + r - (feed+kill)*Bc) * dt;
@@ -1038,9 +1043,33 @@ const FLUID_DISP = DISP_HEAD + `void main() {
     if (!canvas) return;
     const info = document.getElementById('clothGLInfo');
     const N = 64;   // 64×64 = 4,096 nodes
+    // Cloth-local point shaders (the shared POINT_* are tuned for the dense
+    // 65k-particle demo: 2px, and v_spd = |prev| which is meaningless here).
+    // Bigger points + the TRUE Verlet speed (|pos−prev|) so the sheet is
+    // clearly visible and the colour actually reads as motion.
+    const CLOTH_PVERT = `#version 300 es
+uniform sampler2D u_state;
+out float v_spd;
+void main() {
+  int W = textureSize(u_state, 0).x;
+  ivec2 t = ivec2(gl_VertexID % W, gl_VertexID / W);
+  vec4 s = texelFetch(u_state, t, 0);
+  v_spd = length(s.xy - s.zw);
+  gl_Position = vec4(s.xy * 2.0 - 1.0, 0.0, 1.0);
+  gl_PointSize = 3.5;
+}`;
+    const CLOTH_PFRAG = `#version 300 es
+precision highp float;
+in float v_spd;
+out vec4 outColor;
+void main() {
+  float a = smoothstep(0.5, 0.0, length(gl_PointCoord - 0.5));
+  vec3 c = mix(vec3(0.35, 0.7, 1.0), vec3(1.0, 0.8, 0.3), clamp(v_spd * 120.0, 0.0, 1.0));
+  outColor = vec4(c * a, a);
+}`;
     const sim = lazyToy(canvas, (cv) => makeSim(cv, {
         stateW: N, stateH: N,
-        points: { vert: POINT_VERT, frag: POINT_FRAG, count: N * N },
+        points: { vert: CLOTH_PVERT, frag: CLOTH_PFRAG, count: N * N },
         seed: SIM_HEAD + `void main() {
   ivec2 sz = textureSize(u_state, 0);
   ivec2 ip = ivec2(gl_FragCoord.xy);
@@ -1053,7 +1082,7 @@ const FLUID_DISP = DISP_HEAD + `void main() {
   ivec2 ip = ivec2(gl_FragCoord.xy);
   vec4 s = cell(ivec2(0));
   vec2 pos = s.xy, prev = s.zw;
-  bool pinned = (ip.y == sz.y - 1) && (u_param < 0.5);
+  bool pinned = (ip.y == 0) && (u_param < 0.5 || u_param > 1.5);   // top row held in PINNED(0) & WIND(2), released only in DROP(1)
   vec2 vel = (pos - prev) * 0.990;
   vec2 npos = pos + vel + vec2(0.0, -0.00045);  // Verlet + gravity
   if (u_param > 1.5) npos.x += sin(u_time * 2.0 + pos.y * 9.0) * 0.00060; // wind
