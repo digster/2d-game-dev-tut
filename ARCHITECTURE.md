@@ -16,9 +16,19 @@ shared/                        ← cross-track helpers (styles, utils, lazy moun
                                   expert, raymarching, stylization, distortion,
                                   advanced, simulations — 8 tiers)
   <tier>-demos.js              ← page-side interactive demos for that tier
-  bundles-<tier>.js            ← standalone-export payload for that tier (shaders only)
+  bundles-<tier>.js            ← standalone-export payload for that tier
 memory/YYYY-MM-DD.md           ← running work log (see CLAUDE.md)
 ```
+
+**Sub-tracks (voxel-worlds only).** Most tracks are flat. `voxel-worlds/` is the
+exception: it teaches two distinct game styles, so its `index.html` links to two
+**sub-track subdirectories** — `voxel-worlds/terraria/` and `voxel-worlds/noita/`
+— and each sub-track is itself a normal track folder (own `index.html` +
+`<tier>.html` + `<tier>-demos.js` + `bundles-<tier>.js`). Sub-track pages sit
+**two** levels deep, so they reference shared assets as `../../shared/…` and
+Fundamentals anchors as `../../<page>.html#…` (vs `../` for a flat track). The
+root `index.html` TOC nests two `<ul>` levels for this track (track → sub-track →
+tier) where flat tracks nest only one.
 
 **Why tiers are separate files:** content is split beginner → intermediate →
 expert → raymarching → stylization → distortion → advanced → simulations so each
@@ -117,5 +127,9 @@ export is a clean follow-up iteration.
   file is safely shared by a whole tier page).
 - Harnesses degrade gracefully (`fail()` paints the error onto a 2D canvas)
   rather than throwing — feature gaps are a message, not a crash.
-- Other tracks (e.g. `isometric-strategy/`) follow the same tier-file +
-  per-track-index structure but are plain Canvas2D, not the WebGL harness stack.
+- Other tracks (`isometric-strategy/`, `voxel-worlds/`) follow the same
+  tier-file + per-track-index structure but are plain Canvas2D, not the WebGL
+  harness stack. Their `bundles-<tier>.js` only needs to register demos whose
+  controls are buttons — the export scaffold (`shared/export-demo.js`) renders
+  `controls` entries as `<button>` only, so a demo using sliders/checkboxes/
+  radios omits `data-demo-id` to cleanly opt out of the Export button.

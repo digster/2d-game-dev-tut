@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beginner — Terraria Voxels — Voxel Worlds Track</title>
+    <!-- Path note: two directories deep, so ../../shared/... and ../../<page>.html. -->
+    <link rel="stylesheet" href="../../shared/styles.css">
+    <!-- Prism.js Syntax Highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>🌲 Beginner — Tile Foundations</h1>
+        <p class="subtitle">Tile coords, flat-array storage, viewport culling, and a layered foreground/background world — the substrate every 2D voxel game is built on.</p>
+
+        <!-- Navigation -->
+        <div class="nav">
+            <a href="../../index.html" class="nav-button">← Home</a>
+            <a href="../index.html" class="nav-button">← Voxel Worlds</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="beginner.html" class="nav-button active">Beginner</a>
+            <a href="intermediate.html" class="nav-button">Intermediate →</a>
+        </div>
+
+        <!-- Table of Contents -->
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#intro">What is a 2D Voxel World?</a></li>
+                <li><a href="#tile-coords">Tile Coordinates ↔ Screen Pixels</a></li>
+                <li><a href="#data">Tile Data Structures (2D array vs flat Uint8Array)</a></li>
+                <li><a href="#draw-grid">Drawing a Tile Grid</a></li>
+                <li><a href="#palette">Procedural Textures (No Image Assets)</a></li>
+                <li><a href="#camera">Camera &amp; Viewport Culling</a></li>
+                <li><a href="#layers">Foreground vs Background Walls</a></li>
+                <li><a href="#recap">Tier Recap</a></li>
+            </ul>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- INTRO -->
+        <!-- ============================================ -->
+        <div id="intro" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🧱 What is a 2D Voxel World?</h2>
+
+            <p>
+                A <strong>2D voxel world</strong> represents the playable area as a fixed grid where every
+                cell stores a <em>material</em> (air, dirt, stone, wood, …) instead of a sprite or polygon.
+                The whole game state lives in a 2D array; rendering and physics both read from the same
+                grid. This is the model behind Terraria, Starbound, Noita, Powder Toy, Minecraft 2D — every
+                game where you can "dig anywhere" and "place anywhere".
+            </p>
+
+            <div class="example-box">
+                <h4>🕹️ Games you've probably played</h4>
+                <ul>
+                    <li><strong>Terraria</strong> — the inspiration for this sub-track</li>
+                    <li><strong>Starbound</strong> — same model, sci-fi setting</li>
+                    <li><strong>Junk Jack, Crea, Forager</strong> — tile-mining family</li>
+                    <li><strong>Noita, Powder Toy</strong> — cellular-pixel cousin (see the <a href="../noita/index.html">Noita sub-track</a>)</li>
+                </ul>
+            </div>
+
+            <h3>Sprite-based vs voxel-based: the same scene, two ways</h3>
+            <p>
+                A sprite-based platformer stores a few objects on top of a backdrop. A voxel game stores
+                every part of the world as a grid cell. The voxel model is more memory-hungry but lets the
+                player change <em>anything</em>.
+            </p>
+            <div class="diagram">
+                <canvas id="voxIntro" width="800" height="320"></canvas>
+            </div>
+            <div id="voxIntroInfo" class="info-display">Left: sprites floating over a backdrop. Right: every cell stores a tile ID.</div>
+
+            <div class="key-point">
+                <strong>💡 Key insight:</strong> the voxel-grid representation is what makes Terraria-style
+                games <em>universally destructible</em>. Because every visible pixel is just a lookup in a
+                grid, "mining" reduces to writing <code>grid[y][x] = 0</code>. No special-cased "this wall
+                can break, this one can't".
+            </div>
+
+            <div class="key-point">
+                <strong>📖 Deeper context:</strong> the broader space of "how to make terrain destructible"
+                is covered in <a href="../../simulation.html#destructible-terrain">Fundamentals → Destructible
+                Terrain</a>. This tier focuses on the tile-grid approach specifically.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- TILE COORDS -->
+        <!-- ============================================ -->
+        <div id="tile-coords" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>📐 Tile Coordinates ↔ Screen Pixels</h2>
+
+            <p>
+                Two coordinate systems live side by side. <strong>Tile coordinates</strong>
+                <code>(tx, ty)</code> are integers indexing the grid. <strong>Screen coordinates</strong>
+                are pixel positions on the canvas. The transform is trivial but writing it down once now
+                saves a tier of confusion later.
+            </p>
+
+            <div class="concept-box">
+                <h4>The formulas</h4>
+                <div class="formula">
+                    screenX = tx × TILE − cameraX<br>
+                    screenY = ty × TILE − cameraY
+                </div>
+                <p>And the inverse (mouse-to-tile picking):</p>
+                <div class="formula">
+                    tx = floor((screenX + cameraX) / TILE)<br>
+                    ty = floor((screenY + cameraY) / TILE)
+                </div>
+                <p>
+                    The <strong>camera offset</strong> shifts the world relative to the screen — when the
+                    camera moves right, every tile draws further left. <code>TILE</code> is the per-track
+                    constant for tile size in pixels (we'll use <strong>24</strong> by default).
+                </p>
+            </div>
+
+            <div class="step">
+                <span class="step-number">1</span>
+                <strong>Implement the forward transform <code>tileToScreen</code>:</strong>
+            </div>
+
+            <details>
+                <summary>📝 Click to see: tileToScreen / screenToTile</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Tile coord -> top-left screen pixel of that tile.
+function tileToScreen(tx, ty, tile, cameraX = 0, cameraY = 0) {
+    return {
+        x: tx * tile - cameraX,
+        y: ty * tile - cameraY
+    };
+}
+
+// Screen pixel -> integer tile coord. floor() handles negatives correctly.
+function screenToTile(sx, sy, tile, cameraX = 0, cameraY = 0) {
+    return {
+        x: Math.floor((sx + cameraX) / tile),
+        y: Math.floor((sy + cameraY) / tile)
+    };
+}
+
+// Example: 24-px tiles, camera at (96, 48). Mouse at (200, 100).
+const t = screenToTile(200, 100, 24, 96, 48);
+// t = { x: floor(296/24), y: floor(148/24) } = { x: 12, y: 6 }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Tile coord -> top-left screen pixel of that tile.
+function tileToScreen(
+    tx: number,
+    ty: number,
+    tile: number,
+    cameraX: number = 0,
+    cameraY: number = 0
+): { x: number; y: number } {
+    return {
+        x: tx * tile - cameraX,
+        y: ty * tile - cameraY
+    };
+}
+
+// Screen pixel -> integer tile coord. floor() handles negatives correctly.
+function screenToTile(
+    sx: number,
+    sy: number,
+    tile: number,
+    cameraX: number = 0,
+    cameraY: number = 0
+): { x: number; y: number } {
+    return {
+        x: Math.floor((sx + cameraX) / tile),
+        y: Math.floor((sy + cameraY) / tile)
+    };
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>See it in action</h3>
+            <p>Hover the canvas — the highlighted tile follows your cursor and the live coord readout shows what the math is doing. Drag the slider to change tile size; the math stays the same, only the resolution changes.</p>
+            <div class="diagram">
+                <canvas id="voxTileCoords" width="720" height="360"></canvas>
+            </div>
+            <div class="controls">
+                <label style="display: inline-flex; align-items: center; gap: 8px;">
+                    TILE size:
+                    <input type="range" id="voxTileSize" min="12" max="48" step="4" value="24" style="width: 200px;">
+                    <span id="voxTileSizeValue">24</span> px
+                </label>
+            </div>
+            <div id="voxTileCoordsInfo" class="info-display">Hover over the grid — coords appear here.</div>
+
+            <div class="challenge-box">
+                <h4>🎯 Try this</h4>
+                <p>
+                    Hover near the very top-left of the canvas. The reported tile is <code>(0, 0)</code>.
+                    Slide the tile size to its smallest. What changes? The <em>number of tiles</em> on
+                    screen quadruples (each axis halves), but the per-tile math is identical. That's the
+                    point: tile size is a free parameter.
+                </p>
+            </div>
+
+            <div class="key-point">
+                <strong>📖 Deeper context:</strong> tile coordinates are just 2D vectors with integer
+                components. If you haven't yet, skim
+                <a href="../../beginner.html#vectors">Fundamentals → Vectors</a>. The
+                <a href="../../expert.html#tilemap">Fundamentals → Tilemap Systems</a> tier formalizes the
+                same model with more bells and whistles.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- DATA -->
+        <!-- ============================================ -->
+        <div id="data" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🗂️ Tile Data Structures</h2>
+
+            <p>You have two ways to store the grid:</p>
+
+            <div class="concept-box">
+                <h4>Option A: array-of-arrays (the readable one)</h4>
+                <p>
+                    <code>tiles[y][x] = 2</code>. Easy to write, easy to read in a debugger. Each row is a
+                    separate JS array, allocated separately, with pointer indirection on every access.
+                    Fine for tiny demos, wasteful at scale.
+                </p>
+            </div>
+
+            <div class="concept-box">
+                <h4>Option B: flat <code>Uint8Array</code> (the fast one)</h4>
+                <p>
+                    <code>tiles[y * W + x] = 2</code>. <strong>One</strong> contiguous allocation. Each cell
+                    is exactly one byte (0–255 — plenty for 256 material types). Cache-friendly, easy to
+                    serialize for save/load, and ~1 MB per 1000×1000 world. <strong>This is what real
+                    voxel engines use.</strong>
+                </p>
+            </div>
+
+            <div class="step">
+                <span class="step-number">1</span>
+                <strong>Wrap it in a tiny <code>TileWorld</code> class</strong> so the indexing math lives in one place:
+            </div>
+
+            <details>
+                <summary>📝 Click to see: TileWorld class</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// A 2D grid stored as a single contiguous byte array.
+// One byte per cell = 256 possible material IDs.
+class TileWorld {
+    constructor(width, height) {
+        this.width = width;
+        this.height = height;
+        // Uint8Array zero-initializes by default — that's our "air" tile (id 0).
+        this.tiles = new Uint8Array(width * height);
+    }
+
+    // Convert (x, y) -> flat array index.
+    index(x, y) {
+        return y * this.width + x;
+    }
+
+    // Bounds-checked read. Returns 0 ("air") for out-of-bounds reads
+    // so callers don't have to guard their iteration.
+    get(x, y) {
+        if (x &lt; 0 || x &gt;= this.width || y &lt; 0 || y &gt;= this.height) return 0;
+        return this.tiles[y * this.width + x];
+    }
+
+    // Silently ignores out-of-bounds writes (same convention as get()).
+    set(x, y, value) {
+        if (x &lt; 0 || x &gt;= this.width || y &lt; 0 || y &gt;= this.height) return;
+        this.tiles[y * this.width + x] = value;
+    }
+
+    inBounds(x, y) {
+        return x &gt;= 0 &amp;&amp; x &lt; this.width &amp;&amp; y &gt;= 0 &amp;&amp; y &lt; this.height;
+    }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// A 2D grid stored as a single contiguous byte array.
+class TileWorld {
+    width: number;
+    height: number;
+    tiles: Uint8Array;
+
+    constructor(width: number, height: number) {
+        this.width = width;
+        this.height = height;
+        this.tiles = new Uint8Array(width * height);
+    }
+
+    index(x: number, y: number): number {
+        return y * this.width + x;
+    }
+
+    get(x: number, y: number): number {
+        if (x &lt; 0 || x &gt;= this.width || y &lt; 0 || y &gt;= this.height) return 0;
+        return this.tiles[y * this.width + x];
+    }
+
+    set(x: number, y: number, value: number): void {
+        if (x &lt; 0 || x &gt;= this.width || y &lt; 0 || y &gt;= this.height) return;
+        this.tiles[y * this.width + x] = value;
+    }
+
+    inBounds(x: number, y: number): boolean {
+        return x &gt;= 0 &amp;&amp; x &lt; this.width &amp;&amp; y &gt;= 0 &amp;&amp; y &lt; this.height;
+    }
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>Visualizing the flat layout</h3>
+            <p>
+                The diagram below shows a 16×8 grid (top) and the corresponding <code>Uint8Array</code>
+                (bottom strip, one square per byte). Drag the slider to scrub through the array — the
+                highlighted cell and byte stay in lock-step. This is why the math is so simple:
+                <code>index = y × W + x</code> just walks the bytes in row-major order.
+            </p>
+            <div class="diagram">
+                <canvas id="voxFlatArray" width="720" height="380"></canvas>
+            </div>
+            <div class="controls">
+                <label style="display: inline-flex; align-items: center; gap: 8px;">
+                    Array index:
+                    <input type="range" id="voxFlatIndex" min="0" max="127" step="1" value="0" style="width: 300px;">
+                    <span id="voxFlatIndexValue">0</span>
+                </label>
+            </div>
+            <div id="voxFlatArrayInfo" class="info-display">index=0, x=0, y=0, value=0 (air)</div>
+
+            <div class="example-box">
+                <h4>🎮 Why this matters</h4>
+                <p>
+                    A 1000×1000 world is one megabyte at one byte per cell. Saving to localStorage is just
+                    <code>btoa(String.fromCharCode(...tiles))</code> (or better,
+                    <code>JSON.stringify(Array.from(tiles))</code> if you want it human-readable). With
+                    array-of-arrays you'd pay 8× the memory plus per-row allocation overhead.
+                </p>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- DRAW GRID -->
+        <!-- ============================================ -->
+        <div id="draw-grid" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🖌️ Drawing a Tile Grid</h2>
+
+            <p>
+                The render loop is a nested <code>for</code>. Each cell's material ID looks up an entry in a
+                <strong>materials table</strong> (<code>{ name, color, solid }</code>) and we
+                <code>fillRect</code> a solid color. No images, no sprite atlas — just the canvas API.
+            </p>
+
+            <div class="step">
+                <span class="step-number">1</span>
+                <strong>Define a materials table:</strong>
+            </div>
+
+            <details data-demo-id="vox_drawGrid" data-deps="vox_colors,vox_materials,vox_drawTile,vox_TileWorld">
+                <summary>📝 Click to see: materials &amp; drawTile</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Material ID -> { name, color, solid }
+// Convention: ID 0 is always "air" (the empty cell).
+const VOX_MATERIALS = [
+    { id: 0, name: 'air',   color: null,      solid: false },
+    { id: 1, name: 'dirt',  color: '#7a4f2b', solid: true  },
+    { id: 2, name: 'grass', color: '#4a8a3a', solid: true  },
+    { id: 3, name: 'stone', color: '#6e6e7a', solid: true  },
+    { id: 4, name: 'ore',   color: '#d4a843', solid: true  },
+    { id: 5, name: 'wood',  color: '#8a5a2a', solid: true  },
+    { id: 6, name: 'sand',  color: '#d7c878', solid: true  },
+    { id: 7, name: 'water', color: '#4fc3f7', solid: false }
+];
+
+// Draw one tile at (sx, sy) on the canvas. Air gets skipped — the bg shows through.
+function drawTile(ctx, sx, sy, size, materialId) {
+    const m = VOX_MATERIALS[materialId];
+    if (!m || !m.color) return; // air or unknown: leave the background showing
+    ctx.fillStyle = m.color;
+    ctx.fillRect(sx, sy, size, size);
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">type Material = { id: number; name: string; color: string | null; solid: boolean };
+
+const VOX_MATERIALS: Material[] = [
+    { id: 0, name: 'air',   color: null,      solid: false },
+    { id: 1, name: 'dirt',  color: '#7a4f2b', solid: true  },
+    { id: 2, name: 'grass', color: '#4a8a3a', solid: true  },
+    { id: 3, name: 'stone', color: '#6e6e7a', solid: true  },
+    { id: 4, name: 'ore',   color: '#d4a843', solid: true  },
+    { id: 5, name: 'wood',  color: '#8a5a2a', solid: true  },
+    { id: 6, name: 'sand',  color: '#d7c878', solid: true  },
+    { id: 7, name: 'water', color: '#4fc3f7', solid: false }
+];
+
+function drawTile(
+    ctx: CanvasRenderingContext2D,
+    sx: number,
+    sy: number,
+    size: number,
+    materialId: number
+): void {
+    const m = VOX_MATERIALS[materialId];
+    if (!m || !m.color) return;
+    ctx.fillStyle = m.color;
+    ctx.fillRect(sx, sy, size, size);
+}</code></pre>
+                </div>
+            </details>
+
+            <div class="step">
+                <span class="step-number">2</span>
+                <strong>Iterate every cell and draw it:</strong>
+            </div>
+
+            <details data-demo-id="vox_drawGrid" data-deps="vox_colors,vox_materials,vox_drawTile,vox_TileWorld">
+                <summary>📝 Click to see: the render loop</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Pixel-art looks crisp only with image smoothing disabled.
+ctx.imageSmoothingEnabled = false;
+
+function renderWorld(ctx, world, tile) {
+    for (let y = 0; y &lt; world.height; y++) {
+        for (let x = 0; x &lt; world.width; x++) {
+            const id = world.get(x, y);
+            drawTile(ctx, x * tile, y * tile, tile, id);
+        }
+    }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">ctx.imageSmoothingEnabled = false;
+
+function renderWorld(
+    ctx: CanvasRenderingContext2D,
+    world: TileWorld,
+    tile: number
+): void {
+    for (let y = 0; y &lt; world.height; y++) {
+        for (let x = 0; x &lt; world.width; x++) {
+            const id = world.get(x, y);
+            drawTile(ctx, x * tile, y * tile, tile, id);
+        }
+    }
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>The first voxel world</h3>
+            <p>
+                A hand-authored 30×15 cross-section: sky, grass-topped dirt, deep stone, scattered ore.
+                Toggle the overlays to see the render layers in isolation.
+            </p>
+            <div class="diagram">
+                <canvas id="voxDrawGrid" width="720" height="360"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnDrawGridFill" class="active">Show fill</button>
+                <button id="btnDrawGridLines">Show grid lines</button>
+                <button id="btnDrawGridIds">Show material IDs</button>
+            </div>
+            <div id="voxDrawGridInfo" class="info-display">A 30×15 hand-authored world.</div>
+
+            <div class="key-point">
+                <strong>📖 Deeper context:</strong> the per-frame render loop pattern (clear → draw all
+                things → repeat) is covered in <a href="../../beginner.html#game-systems">Fundamentals →
+                Building Your First Game System</a>.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- PALETTE -->
+        <!-- ============================================ -->
+        <div id="palette" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🎨 Procedural Textures (No Image Assets)</h2>
+
+            <p>
+                Solid-color tiles look like programmer art. Two cheap tricks make them look 100× better with
+                <strong>zero added assets</strong>:
+            </p>
+
+            <div class="concept-box">
+                <h4>Trick 1 — per-tile color jitter</h4>
+                <p>
+                    Hash <code>(x, y)</code> into a small RGB offset and apply it to the base color. Each
+                    cell gets a subtly different shade; the world stops looking like solid bars of paint.
+                </p>
+            </div>
+
+            <div class="concept-box">
+                <h4>Trick 2 — procedural sub-rects</h4>
+                <p>
+                    Draw 2–4 darker pebble-like rects <em>inside</em> each tile at hash-driven positions.
+                    For stone: small jagged specks. For dirt: scattered roots. For wood: a vertical grain
+                    line. Each rule is one or two lines of canvas code.
+                </p>
+            </div>
+
+            <div class="step">
+                <span class="step-number">1</span>
+                <strong>The 2D hash — deterministic noise from <code>(x, y)</code>:</strong>
+            </div>
+
+            <details>
+                <summary>📝 Click to see: hash2D &amp; the textured drawTile</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Tiny deterministic 2D hash. Same (x, y, seed) -> same value, every time.
+// This is enough for visual noise — don't use it for crypto.
+function hash2D(x, y, seed = 0) {
+    let h = (x * 374761393) ^ (y * 668265263) ^ (seed * 2147483647);
+    h = (h ^ (h &gt;&gt;&gt; 13)) * 1274126177;
+    h = h ^ (h &gt;&gt;&gt; 16);
+    return (h &gt;&gt;&gt; 0) / 4294967295; // 0..1
+}
+
+// Tint a hex color by ±amount per channel, deterministically per (x, y).
+function jitterColor(hex, x, y, amount = 12, seed = 0) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    const dr = (hash2D(x, y, seed)       * 2 - 1) * amount;
+    const dg = (hash2D(x, y, seed + 1)   * 2 - 1) * amount;
+    const db = (hash2D(x, y, seed + 2)   * 2 - 1) * amount;
+    const clamp = v =&gt; Math.max(0, Math.min(255, v | 0));
+    return `rgb(${clamp(r + dr)}, ${clamp(g + dg)}, ${clamp(b + db)})`;
+}
+
+// Textured drawTile: solid base + jitter + a couple of speckles.
+function drawTileTextured(ctx, sx, sy, size, materialId, seed) {
+    const m = VOX_MATERIALS[materialId];
+    if (!m || !m.color) return;
+
+    // Layer 1: jittered base
+    ctx.fillStyle = jitterColor(m.color, sx / size | 0, sy / size | 0, 12, seed);
+    ctx.fillRect(sx, sy, size, size);
+
+    // Layer 2: 2-3 small darker speckles for "grain"
+    const speckles = 3;
+    for (let i = 0; i &lt; speckles; i++) {
+        const hx = hash2D(sx / size | 0, sy / size | 0, seed + 10 + i);
+        const hy = hash2D(sx / size | 0, sy / size | 0, seed + 20 + i);
+        ctx.fillStyle = jitterColor(m.color, sx + i, sy + i, 30, seed + 7);
+        ctx.fillRect(
+            sx + (hx * (size - 4)) | 0,
+            sy + (hy * (size - 4)) | 0,
+            2, 2
+        );
+    }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function hash2D(x: number, y: number, seed: number = 0): number {
+    let h: number = (x * 374761393) ^ (y * 668265263) ^ (seed * 2147483647);
+    h = (h ^ (h &gt;&gt;&gt; 13)) * 1274126177;
+    h = h ^ (h &gt;&gt;&gt; 16);
+    return (h &gt;&gt;&gt; 0) / 4294967295;
+}
+
+function jitterColor(
+    hex: string,
+    x: number,
+    y: number,
+    amount: number = 12,
+    seed: number = 0
+): string {
+    const r: number = parseInt(hex.slice(1, 3), 16);
+    const g: number = parseInt(hex.slice(3, 5), 16);
+    const b: number = parseInt(hex.slice(5, 7), 16);
+    const dr: number = (hash2D(x, y, seed)     * 2 - 1) * amount;
+    const dg: number = (hash2D(x, y, seed + 1) * 2 - 1) * amount;
+    const db: number = (hash2D(x, y, seed + 2) * 2 - 1) * amount;
+    const clamp = (v: number): number =&gt; Math.max(0, Math.min(255, v | 0));
+    return `rgb(${clamp(r + dr)}, ${clamp(g + dg)}, ${clamp(b + db)})`;
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>Stack the layers</h3>
+            <p>
+                The same 30×15 world from the previous section, with the texture layers toggleable. Watch
+                how each cheap layer adds visual depth — and how dragging the seed re-shuffles the noise.
+            </p>
+            <div class="diagram">
+                <canvas id="voxPalette" width="720" height="360"></canvas>
+            </div>
+            <div class="controls">
+                <label><input type="checkbox" id="voxPaletteJitter" checked> Per-tile jitter</label>
+                <label><input type="checkbox" id="voxPaletteTexture" checked> Procedural speckles</label>
+                <label style="display: inline-flex; align-items: center; gap: 8px;">
+                    Seed:
+                    <input type="range" id="voxPaletteSeed" min="0" max="20" step="1" value="0" style="width: 160px;">
+                    <span id="voxPaletteSeedValue">0</span>
+                </label>
+            </div>
+            <div id="voxPaletteInfo" class="info-display">Toggle layers and slide the seed to see how each one contributes.</div>
+
+            <div class="challenge-box">
+                <h4>🎯 Try this</h4>
+                <p>
+                    Turn off both layers. The world looks like flat paint stripes. Turn on jitter only — now
+                    each tile is subtly distinct. Add speckles — it starts to look like dirt and stone.
+                    All of this from a deterministic 2D hash, no image assets, no extra bandwidth.
+                </p>
+            </div>
+
+            <div class="key-point">
+                <strong>📖 Deeper context:</strong> our 2D hash is "noise-shaped" but cheap. For real
+                terrain (caves, surface heights, biome blending) we'll graduate to <a href="../../expert.html#noise">Fundamentals → Perlin Noise</a> in the Expert tier.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- CAMERA -->
+        <!-- ============================================ -->
+        <div id="camera" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>📷 Camera &amp; Viewport Culling</h2>
+
+            <p>
+                Real voxel worlds are bigger than the screen — 80×40 is small for a Terraria world, and
+                Terraria worlds go to 8400×2400. The trick that keeps rendering fast: only iterate the
+                tiles that are actually <em>visible</em>.
+            </p>
+
+            <div class="concept-box">
+                <h4>The viewport-culling pattern</h4>
+                <p>
+                    Compute the tile range covered by the visible rectangle and iterate <em>only</em> that
+                    range:
+                </p>
+                <div class="formula">
+                    tx0 = floor(cameraX / TILE)<br>
+                    tx1 = ceil((cameraX + viewportW) / TILE)<br>
+                    ty0 = floor(cameraY / TILE)<br>
+                    ty1 = ceil((cameraY + viewportH) / TILE)
+                </div>
+                <p>
+                    Result: render time is proportional to the <strong>screen</strong>, not to the world.
+                    An 8400×2400 world renders the same speed as an 80×40 one.
+                </p>
+            </div>
+
+            <details>
+                <summary>📝 Click to see: renderViewport (the culled render loop)</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Renders only the tiles that intersect the viewport.
+// Returns the count of tiles drawn — handy for the perf counter.
+function renderViewport(ctx, world, tile, cameraX, cameraY, viewportW, viewportH) {
+    const tx0 = Math.max(0, Math.floor(cameraX / tile));
+    const ty0 = Math.max(0, Math.floor(cameraY / tile));
+    const tx1 = Math.min(world.width,  Math.ceil((cameraX + viewportW) / tile));
+    const ty1 = Math.min(world.height, Math.ceil((cameraY + viewportH) / tile));
+
+    let drawn = 0;
+    for (let y = ty0; y &lt; ty1; y++) {
+        for (let x = tx0; x &lt; tx1; x++) {
+            const id = world.get(x, y);
+            if (id === 0) continue; // skip air
+            drawTile(ctx, x * tile - cameraX, y * tile - cameraY, tile, id);
+            drawn++;
+        }
+    }
+    return drawn;
+}
+
+// Per-frame camera update from WASD/arrow keys.
+function updateCamera(camera, keys, speed, world, tile, viewportW, viewportH) {
+    if (keys.has('a') || keys.has('ArrowLeft'))  camera.x -= speed;
+    if (keys.has('d') || keys.has('ArrowRight')) camera.x += speed;
+    if (keys.has('w') || keys.has('ArrowUp'))    camera.y -= speed;
+    if (keys.has('s') || keys.has('ArrowDown'))  camera.y += speed;
+    // Clamp so we can't scroll past the world edges.
+    camera.x = Math.max(0, Math.min(world.width  * tile - viewportW, camera.x));
+    camera.y = Math.max(0, Math.min(world.height * tile - viewportH, camera.y));
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function renderViewport(
+    ctx: CanvasRenderingContext2D,
+    world: TileWorld,
+    tile: number,
+    cameraX: number,
+    cameraY: number,
+    viewportW: number,
+    viewportH: number
+): number {
+    const tx0: number = Math.max(0, Math.floor(cameraX / tile));
+    const ty0: number = Math.max(0, Math.floor(cameraY / tile));
+    const tx1: number = Math.min(world.width,  Math.ceil((cameraX + viewportW) / tile));
+    const ty1: number = Math.min(world.height, Math.ceil((cameraY + viewportH) / tile));
+
+    let drawn: number = 0;
+    for (let y = ty0; y &lt; ty1; y++) {
+        for (let x = tx0; x &lt; tx1; x++) {
+            const id: number = world.get(x, y);
+            if (id === 0) continue;
+            drawTile(ctx, x * tile - cameraX, y * tile - cameraY, tile, id);
+            drawn++;
+        }
+    }
+    return drawn;
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>Pan around an 80×40 world</h3>
+            <p>
+                Click the canvas to give it focus, then drive the camera with <strong>WASD</strong> or
+                arrow keys. Toggle the culling-bounds overlay to <em>see</em> that off-screen tiles aren't
+                drawn — the "tiles drawn" counter stays roughly constant as you pan.
+            </p>
+            <div class="diagram">
+                <canvas id="voxCamera" width="720" height="400" tabindex="0"></canvas>
+            </div>
+            <div class="controls">
+                <label style="display: inline-flex; align-items: center; gap: 8px;">
+                    Speed:
+                    <input type="range" id="voxCameraSpeed" min="2" max="12" step="1" value="6" style="width: 160px;">
+                    <span id="voxCameraSpeedValue">6</span> px/frame
+                </label>
+                <label><input type="checkbox" id="voxCameraBounds"> Show culling bounds</label>
+            </div>
+            <div id="voxCameraInfo" class="info-display">Click canvas, then use WASD / arrows. Tiles drawn: —</div>
+
+            <div class="example-box">
+                <h4>🎮 What you just unlocked</h4>
+                <p>
+                    Constant-time rendering regardless of world size is the foundation under every
+                    "infinite" voxel game. Adding chunk streaming (load the next chunk when the camera
+                    nears its edge) is a short hop from here — that's the Expert tier.
+                </p>
+            </div>
+
+            <div class="key-point">
+                <strong>📖 Deeper context:</strong> the broader idea of "only process what's near the
+                camera" is <a href="../../expert.html#spatial">Fundamentals → Spatial Partitioning</a>.
+                Viewport culling is a degenerate case of it where the partitions are tile-aligned.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- LAYERS -->
+        <!-- ============================================ -->
+        <div id="layers" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🏞️ Foreground vs Background Walls</h2>
+
+            <p>
+                Terraria draws <em>two</em> tile grids: a <strong>background "wall" layer</strong> rendered
+                dim and first, and a <strong>foreground "tile" layer</strong> rendered bright on top. Walls
+                fill in behind dug-out tunnels; without them, every tunnel would be a slice of empty sky.
+            </p>
+
+            <div class="concept-box">
+                <h4>The implementation is dumber than it looks</h4>
+                <p>
+                    Two <code>Uint8Array</code>s of the same shape. Render the background first (dimmer
+                    palette), render the foreground second (full palette). That's it. The same
+                    materials table can be reused, just with a "wall variant" shading multiplier applied
+                    at draw time.
+                </p>
+            </div>
+
+            <details>
+                <summary>📝 Click to see: drawing two layers</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Background walls render at ~60% brightness — just enough to read as "behind".
+const WALL_DIM = 0.6;
+
+function dimColor(hex, factor) {
+    const r = parseInt(hex.slice(1, 3), 16) * factor;
+    const g = parseInt(hex.slice(3, 5), 16) * factor;
+    const b = parseInt(hex.slice(5, 7), 16) * factor;
+    return `rgb(${r | 0}, ${g | 0}, ${b | 0})`;
+}
+
+function drawWallTile(ctx, sx, sy, size, materialId) {
+    const m = VOX_MATERIALS[materialId];
+    if (!m || !m.color) return;
+    ctx.fillStyle = dimColor(m.color, WALL_DIM);
+    ctx.fillRect(sx, sy, size, size);
+}
+
+function renderLayered(ctx, fg, bg, tile, cam, vw, vh, mode) {
+    // mode: 'fg' | 'bg' | 'both'
+    if (mode === 'bg' || mode === 'both') {
+        // Background first — dim variant, drawn through ALL cells (no "air" skip).
+        renderViewportWith(ctx, bg, tile, cam.x, cam.y, vw, vh, drawWallTile);
+    }
+    if (mode === 'fg' || mode === 'both') {
+        // Foreground next — bright variant, "air" cells skip so bg shows through.
+        renderViewport(ctx, fg, tile, cam.x, cam.y, vw, vh);
+    }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const WALL_DIM: number = 0.6;
+
+function dimColor(hex: string, factor: number): string {
+    const r: number = parseInt(hex.slice(1, 3), 16) * factor;
+    const g: number = parseInt(hex.slice(3, 5), 16) * factor;
+    const b: number = parseInt(hex.slice(5, 7), 16) * factor;
+    return `rgb(${r | 0}, ${g | 0}, ${b | 0})`;
+}
+
+function drawWallTile(
+    ctx: CanvasRenderingContext2D,
+    sx: number,
+    sy: number,
+    size: number,
+    materialId: number
+): void {
+    const m = VOX_MATERIALS[materialId];
+    if (!m || !m.color) return;
+    ctx.fillStyle = dimColor(m.color, WALL_DIM);
+    ctx.fillRect(sx, sy, size, size);
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>See the wall trick in action</h3>
+            <p>
+                The same 80×40 world with a separate background wall grid. The cave from the previous
+                section now has a dim stone-wall <em>behind</em> the empty tiles when both layers are
+                shown — giving the world a real sense of being underground rather than floating in sky.
+            </p>
+            <div class="diagram">
+                <canvas id="voxLayers" width="720" height="400" tabindex="0"></canvas>
+            </div>
+            <div class="controls">
+                <label><input type="radio" name="voxLayersMode" value="fg" id="voxLayersFg"> Foreground only</label>
+                <label><input type="radio" name="voxLayersMode" value="bg" id="voxLayersBg"> Background only</label>
+                <label><input type="radio" name="voxLayersMode" value="both" id="voxLayersBoth" checked> Both (Terraria-style)</label>
+            </div>
+            <div id="voxLayersInfo" class="info-display">Click canvas, drive with WASD / arrows.</div>
+
+            <div class="challenge-box">
+                <h4>🎯 Try this</h4>
+                <p>
+                    Switch to "Foreground only". The cave is a slice of pure black sky. Switch to "Both".
+                    Suddenly the cave is a tunnel — because the background wall behind it tells your eye
+                    "this is inside a hill, not floating in space". That single rendering decision is why
+                    Terraria caves feel like caves.
+                </p>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- RECAP -->
+        <!-- ============================================ -->
+        <div id="recap" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🧭 Tier Recap</h2>
+
+            <p>You can now:</p>
+            <ul>
+                <li>Think in <strong>tile coordinates</strong> and convert between them and screen pixels</li>
+                <li>Store a world in a <strong>flat <code>Uint8Array</code></strong> with one byte per cell</li>
+                <li>Render the grid with <code>fillRect</code> — no image assets needed</li>
+                <li>Make tiles look <strong>visually distinct</strong> with a deterministic 2D hash</li>
+                <li>Scroll a <strong>camera</strong> through a world bigger than the viewport, with viewport culling</li>
+                <li>Layer a <strong>foreground</strong> and <strong>background</strong> wall grid for the Terraria "cave" feel</li>
+            </ul>
+
+            <div class="example-box">
+                <h4>🎮 What you just built</h4>
+                <p>
+                    The visual foundation of every 2D voxel game in roughly 200 lines of glue code. The
+                    Intermediate tier turns this static world into something interactive: click to mine,
+                    click to place, a player avatar walking on tiles, and falling sand.
+                </p>
+            </div>
+        </div>
+
+        <!-- Next Steps -->
+        <div class="section" style="text-align: center;">
+            <h2>✅ Beginner Tier Complete</h2>
+            <p style="font-size: 1.1em; margin: 24px 0;">
+                The next tier picks this world up and lets the player edit it — mouse-to-tile picking,
+                mining and placement, a player avatar with AABB collision against the grid, and falling
+                tiles.
+            </p>
+            <a href="intermediate.html" class="nav-button" style="font-size: 1.2em; padding: 20px 40px;">
+                Continue to Intermediate →
+            </a>
+            <p style="margin-top: 20px;"><em>Intermediate isn't written yet — coming in the next phase. Track your progress on the <a href="index.html">sub-track index</a>.</em></p>
+        </div>
+    </div>
+
+    <!-- Scroll to Top Button -->
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <!-- Load shared utilities. Paths are relative to this two-deep subdirectory. -->
+    <script src="../../shared/utils.js"></script>
+
+    <!-- Code-tab toggle (JavaScript / TypeScript). Same script the Fundamentals pages use. -->
+    <script src="../../shared/code-tabs.js"></script>
+
+    <!-- Page-specific interactive demos. -->
+    <script src="beginner-demos.js"></script>
+
+    <!-- Voxel-specific bundles for the Export button.
+         If the file isn't present yet (other tiers during rollout), the 404
+         is harmless and the Export buttons simply don't render. -->
+    <script src="bundles-beginner.js"></script>
+    <!-- Shared export-demo injector. Looks for <details data-demo-id="..."> and
+         attaches a 📋 Export button that copies a runnable HTML to the clipboard. -->
+    <script src="../../shared/export-demo.js"></script>
+</body>
+</html>

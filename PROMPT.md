@@ -141,3 +141,17 @@ Diagnosed in plan mode and fixed in both `shaders/simulations-demos.js` and
 Gray-Scott unstable Laplacian (normalized kernel), canonical RD seed +
 coarser state grid, and cloth-local point shaders for visibility. All
 browser-verified console-clean.
+
+## 2026-05-21 — New track: Voxel Worlds (scaffold + Terraria Beginner tier)
+
+> - I want to learn everything about 2D voxel worlds and manipulation(similar to Terraria)
+> - Add as a new track in the game section
+
+Planned in plan mode (→ approved). Added a new `voxel-worlds/` track — the
+first with nested sub-tracks: `terraria/` (tile-grid voxels) and `noita/`
+(cellular-pixel voxels), the latter scoped to only concepts not in Terraria.
+Iteration 1 shipped the scaffold (3 index pages) plus the fully-implemented
+Terraria Beginner tier: 7 interactive Canvas2D demos (tile coords, flat-array
+storage, sprite-less rendering, viewport culling, fg/bg wall layers). Root
+`index.html` got a VOXEL nav button + two-level nested TOC. All browser-verified
+console-clean. README.md + ARCHITECTURE.md updated.

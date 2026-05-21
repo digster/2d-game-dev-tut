@@ -24,6 +24,17 @@ own subdirectory with a per-tier file structure mirroring the Fundamentals layou
 - `isometric-strategy/` — build an AoE2 / Red Alert 2 style isometric RTS.
   See `isometric-strategy/index.html` for the track roadmap. Currently scaffolded;
   tier files are landing iteratively.
+- `voxel-worlds/` — learn 2D voxel worlds and manipulation, Terraria-style.
+  See `voxel-worlds/index.html` for the track roadmap. This track is unique in
+  having **two sub-tracks**, each its own nested subdirectory with its own
+  five-/three-tier file structure: `voxel-worlds/terraria/` (tile-grid voxels —
+  block-discrete, player-edited) and `voxel-worlds/noita/` (cellular-pixel
+  voxels — every pixel self-simulates). Currently scaffolded; the Terraria
+  **Beginner tier is shipped** (7 interactive Canvas2D demos: tile coords,
+  flat-`Uint8Array` storage, sprite-less grid rendering with a deterministic 2D
+  hash, viewport culling, foreground/background wall layers). The Noita
+  sub-track index deliberately covers only concepts *not* in Terraria. Demo IDs
+  and helper bundles are prefixed `vox_`.
 - `shaders/` — learn WebGL / GLSL fragment shaders for 2D game effects.
   See `shaders/index.html` for the track roadmap. **Fully shipped — all 8
   tiers:** Beginner (Shader Foundations), Intermediate (Patterns, Noise &
