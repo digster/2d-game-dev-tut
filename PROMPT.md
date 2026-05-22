@@ -218,3 +218,17 @@ teleport bug live, and a paint-walls-and-pour-sand sandbox), and
 `noita/bundles-beginner.js`. Introduced ImageData/Uint8ClampedArray rendering
 (new technique for the track). Unlocked the Noita Beginner tier across all
 cross-tier links. All browser-verified console-clean. README.md updated.
+
+## 2026-05-21 (pt.7) — Voxel Worlds: Noita Intermediate tier
+
+> Okay, work on the next iteration.
+
+Built the Noita sub-track Intermediate tier ("Liquids, Gases, Fire &
+Reactions"): `noita/intermediate.html` (5 sections + recap),
+`noita/intermediate-demos.js` (a multi-material cellular-automaton engine — 10
+materials, 5 behaviour kinds dispatched from a table, a per-cell moved flag,
+density-ordered liquid swaps, fire burn timers, a reaction table — plus 5
+demos), and `noita/bundles-intermediate.js`. Unlocked the Noita Intermediate
+tier across all cross-tier links. Fixed two demo issues found in verification
+(gas dissipating too fast; the fire structure's pillar being free-standing).
+All browser-verified console-clean. README.md updated.

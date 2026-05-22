@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Intermediate — Noita Voxels — Voxel Worlds Track</title>
+    <!-- Path note: two directories deep — ../../shared/..., cross-track ../terraria/. -->
+    <link rel="stylesheet" href="../../shared/styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>🔥 Intermediate — Liquids, Gases, Fire &amp; Reactions</h1>
+        <p class="subtitle">Add the materials that make a falling-sand engine come alive — and the rules that let them interact.</p>
+
+        <!-- Navigation -->
+        <div class="nav">
+            <a href="../../index.html" class="nav-button">← Home</a>
+            <a href="../index.html" class="nav-button">← Voxel Worlds</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="beginner.html" class="nav-button">← Beginner</a>
+            <a href="intermediate.html" class="nav-button active">Intermediate</a>
+            <a href="advanced.html" class="nav-button">Advanced →</a>
+        </div>
+
+        <!-- Table of Contents -->
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#liquids">Liquids &amp; Density</a></li>
+                <li><a href="#gases">Gases: Inverted Gravity</a></li>
+                <li><a href="#fire">Fire: Propagation &amp; Fuel</a></li>
+                <li><a href="#reactions">Material Reactions</a></li>
+                <li><a href="#sandbox">Mini-Project: the Full Sandbox</a></li>
+                <li><a href="#recap">Tier Recap</a></li>
+            </ul>
+        </div>
+
+        <div class="key-point">
+            <strong>💡 One engine, many materials.</strong> The <a href="beginner.html">Beginner tier</a>
+            had one rule for one material (sand). This tier generalises: each material has a
+            <strong>kind</strong> — powder, liquid, gas, fire, solid — and a single step function dispatches
+            on kind. Add a material by adding a table row, not a new engine. The update-order trick is a
+            per-cell <strong>"moved this frame" flag</strong>: mark a cell processed when its content moves,
+            skip already-moved cells — so one scan handles falling sand, rising gas <em>and</em>
+            sideways-flowing liquid at once.
+        </div>
+
+        <!-- ============================================ -->
+        <!-- LIQUIDS -->
+        <!-- ============================================ -->
+        <div id="liquids" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>💧 Liquids &amp; Density</h2>
+
+            <p>
+                A <strong>liquid</strong> is a powder that also spreads <em>sideways</em>: down →
+                down-diagonal → left/right. The sideways step is what makes water level out into a flat
+                surface instead of piling like sand.
+            </p>
+
+            <div class="concept-box">
+                <h4>Density: who sinks through whom</h4>
+                <p>
+                    Two liquids meet — which goes on top? Each liquid has a <strong>density</strong>. A
+                    liquid can move "down" not only into air but by <strong>swapping with a lighter
+                    liquid</strong> below it. Water (density 3) sinks through oil (density 2), so oil ends
+                    up floating — the layering emerges from one comparison. Sand, denser still, sinks
+                    through both.
+                </p>
+            </div>
+
+            <details>
+                <summary>📝 Click to see: the liquid rule</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Inside the per-cell dispatch, for a liquid of density `dens`:
+const dens = MAT[m].density;
+
+// "Down" accepts air OR a lighter liquid — that swap is the density rule.
+const canDown = (t) =&gt; t === AIR || (MAT[t].kind === 'liquid' &amp;&amp; MAT[t].density &lt; dens);
+const canSide = (t) =&gt; t === AIR;
+
+if (tryMove(i, x, y + 1, canDown)) return;          // straight down
+const d = Math.random() &lt; 0.5 ? -1 : 1;             // random tie-break
+if (tryMove(i, x + d, y + 1, canDown)) return;      // down-diagonal
+if (tryMove(i, x - d, y + 1, canDown)) return;
+if (tryMove(i, x + d, y,     canSide)) return;      // sideways — the liquid step
+if (tryMove(i, x - d, y,     canSide)) return;</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const dens: number = MAT[m].density;
+
+const canDown = (t: number): boolean =&gt;
+    t === AIR || (MAT[t].kind === 'liquid' &amp;&amp; MAT[t].density &lt; dens);
+const canSide = (t: number): boolean =&gt; t === AIR;
+
+if (tryMove(i, x, y + 1, canDown)) return;
+const d: number = Math.random() &lt; 0.5 ? -1 : 1;
+if (tryMove(i, x + d, y + 1, canDown)) return;
+if (tryMove(i, x - d, y + 1, canDown)) return;
+if (tryMove(i, x + d, y,     canSide)) return;
+if (tryMove(i, x - d, y,     canSide)) return;</code></pre>
+                </div>
+            </details>
+
+            <h3>Pour and watch them layer</h3>
+            <p>
+                Paint <strong>water</strong> and <strong>oil</strong> — oil rises to float on water. Drop
+                <strong>sand</strong> in and it sinks through both to the bottom.
+            </p>
+            <div class="diagram">
+                <canvas id="noiLiquid" width="720" height="450"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnLiquidWater">💧 Water</button>
+                <button id="btnLiquidOil">🛢️ Oil</button>
+                <button id="btnLiquidSand">🟡 Sand</button>
+                <button id="btnLiquidWall">⬜ Wall</button>
+                <button id="btnLiquidErase">🧽 Erase</button>
+                <button id="btnLiquidClear">Clear</button>
+            </div>
+            <div id="noiLiquidInfo" class="info-display">Paint water and oil and watch them separate.</div>
+
+            <div class="key-point">
+                <strong>📖 Compare:</strong> <a href="../terraria/expert.html#water">Terraria → Cellular
+                Liquids</a> ran a similar rule on 16-pixel tiles. Here it runs per pixel, and density makes
+                <em>multiple</em> liquids interact.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- GASES -->
+        <!-- ============================================ -->
+        <div id="gases" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>☁️ Gases: Inverted Gravity</h2>
+
+            <p>
+                A <strong>gas</strong> is a liquid <em>turned upside down</em>. Where a liquid tries down →
+                down-diagonal → sideways, a gas tries <strong>up → up-diagonal → sideways</strong>. Smoke
+                and steam rise, pool against ceilings, and slowly <strong>dissipate</strong> — each frame a
+                small chance to vanish back to air.
+            </p>
+
+            <div class="concept-box">
+                <h4>Why the "moved" flag earns its keep here</h4>
+                <p>
+                    The <a href="beginner.html#updateorder">Beginner tier</a> showed a top-down scan makes
+                    falling sand teleport. Rising gas has the <em>mirror</em> bug under a bottom-up scan. The
+                    fix that handles both at once: the per-cell <strong>moved</strong> flag. A gas cell that
+                    rises marks its destination moved; when the scan reaches that cell it's skipped — so it
+                    rises exactly one row per frame regardless of scan direction.
+                </p>
+            </div>
+
+            <details>
+                <summary>📝 Click to see: the gas rule</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// A gas: the liquid rule with the vertical direction flipped.
+if (Math.random() &lt; 0.02) { grid[i] = AIR; return; }   // dissipate
+
+const canG = (t) =&gt; t === AIR;
+const d = Math.random() &lt; 0.5 ? -1 : 1;
+if (tryMove(i, x,     y - 1, canG)) return;            // up   (vs liquid's y+1)
+if (tryMove(i, x + d, y - 1, canG)) return;            // up-diagonal
+if (tryMove(i, x - d, y - 1, canG)) return;
+if (tryMove(i, x + d, y,     canG)) return;            // sideways
+if (tryMove(i, x - d, y,     canG)) return;</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">if (Math.random() &lt; 0.02) { grid[i] = AIR; return; }
+
+const canG = (t: number): boolean =&gt; t === AIR;
+const d: number = Math.random() &lt; 0.5 ? -1 : 1;
+if (tryMove(i, x,     y - 1, canG)) return;
+if (tryMove(i, x + d, y - 1, canG)) return;
+if (tryMove(i, x - d, y - 1, canG)) return;
+if (tryMove(i, x + d, y,     canG)) return;
+if (tryMove(i, x - d, y,     canG)) return;</code></pre>
+                </div>
+            </details>
+
+            <h3>Watch it rise</h3>
+            <p>Paint <strong>smoke</strong> or <strong>steam</strong> low on the canvas — it climbs and gathers under the ceiling.</p>
+            <div class="diagram">
+                <canvas id="noiGas" width="720" height="450"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnGasSmoke">💨 Smoke</button>
+                <button id="btnGasSteam">☁️ Steam</button>
+                <button id="btnGasWall">⬜ Wall</button>
+                <button id="btnGasErase">🧽 Erase</button>
+                <button id="btnGasClear">Clear</button>
+            </div>
+            <div id="noiGasInfo" class="info-display">Paint gas near the floor and watch it rise.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- FIRE -->
+        <!-- ============================================ -->
+        <div id="fire" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🔥 Fire: Propagation &amp; Fuel</h2>
+
+            <p>
+                Fire isn't a material that <em>moves</em> — it's a material with a <strong>lifespan</strong>.
+                A fire cell carries a burn timer (we store it in a parallel <code>aux</code> array). Each
+                frame it counts down, tries to <strong>ignite</strong> flammable neighbours, puffs
+                <strong>smoke</strong> upward — and when the timer hits zero, it dies.
+            </p>
+
+            <div class="concept-box">
+                <h4>Ignition is probabilistic</h4>
+                <p>
+                    A fire cell doesn't instantly convert every neighbour. Each flammable neighbour catches
+                    with a <em>probability</em> per frame — so flame creeps along wood at a believable pace
+                    instead of flashing the whole structure at once. When a cell ignites, its burn timer is
+                    set from the fuel's energy: oil burns fast and bright, wood burns long.
+                </p>
+            </div>
+
+            <details data-demo-id="noi_fire" data-deps="">
+                <summary>📝 Click to see: the fire rule</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// `aux[i]` holds this fire cell's remaining burn time.
+function stepFire(grid, aux, W, H, i, x, y) {
+    aux[i]--;                                       // burn down
+
+    // Try to ignite each flammable neighbour, with a per-frame probability.
+    const nb = [[1,0],[-1,0],[0,1],[0,-1]];
+    for (const [dx, dy] of nb) {
+        const nx = x + dx, ny = y + dy;
+        if (nx &lt; 0 || nx &gt;= W || ny &lt; 0 || ny &gt;= H) continue;
+        const j = ny * W + nx;
+        const nm = grid[j];
+        if (MAT[nm].flammable &amp;&amp; Math.random() &lt; 0.26) {
+            grid[j] = FIRE;
+            aux[j] = MAT[nm].fuel;                  // fuel energy → burn time
+        }
+    }
+    // Puff smoke upward into open air.
+    if (y &gt; 0 &amp;&amp; grid[i - W] === AIR &amp;&amp; Math.random() &lt; 0.30) grid[i - W] = SMOKE;
+    // Burnt out → become smoke or clear air.
+    if (aux[i] &lt;= 0) grid[i] = Math.random() &lt; 0.5 ? SMOKE : AIR;
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function stepFire(grid: Uint8Array, aux: Uint8Array,
+                  W: number, H: number, i: number, x: number, y: number): void {
+    aux[i]--;
+
+    const nb = [[1,0],[-1,0],[0,1],[0,-1]];
+    for (const [dx, dy] of nb) {
+        const nx = x + dx, ny = y + dy;
+        if (nx &lt; 0 || nx &gt;= W || ny &lt; 0 || ny &gt;= H) continue;
+        const j = ny * W + nx;
+        const nm = grid[j];
+        if (MAT[nm].flammable &amp;&amp; Math.random() &lt; 0.26) {
+            grid[j] = FIRE;
+            aux[j] = MAT[nm].fuel;
+        }
+    }
+    if (y &gt; 0 &amp;&amp; grid[i - W] === AIR &amp;&amp; Math.random() &lt; 0.30) grid[i - W] = SMOKE;
+    if (aux[i] &lt;= 0) grid[i] = Math.random() &lt; 0.5 ? SMOKE : AIR;
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>Set it alight</h3>
+            <p>
+                A wooden frame is pre-built. Pick the <strong>igniter</strong> and click it — fire creeps
+                through the wood, smoke billows up, and each beam burns out once its fuel is spent. Paint
+                <strong>oil</strong> on for a faster, fiercer burn.
+            </p>
+            <div class="diagram">
+                <canvas id="noiFire" width="720" height="450"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnFireIgnite">🔥 Igniter</button>
+                <button id="btnFireWood">🟫 Wood</button>
+                <button id="btnFireOil">🛢️ Oil</button>
+                <button id="btnFireErase">🧽 Erase</button>
+                <button id="btnFireReset">Reset structure</button>
+            </div>
+            <div id="noiFireInfo" class="info-display">Pick the igniter and click the structure.</div>
+
+            <div class="key-point">
+                <strong>📖 Context:</strong> fire spreading by probability is a cellular cousin of heat
+                diffusion — see <a href="../../simulation.html#thermal-simulation">Fundamentals → Thermal
+                Simulation</a>.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- REACTIONS -->
+        <!-- ============================================ -->
+        <div id="reactions" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>⚗️ Material Reactions</h2>
+
+            <p>
+                The last ingredient: materials that <strong>transform on contact</strong>. When water
+                touches lava, both change — the water flashes to steam, the lava chills to stone. Rather
+                than hard-code that into the water rule <em>and</em> the lava rule, we keep a
+                <strong>reaction table</strong>: a list of "<code>A</code> next to <code>B</code> →
+                <code>A</code> becomes <code>C</code>, <code>B</code> becomes <code>D</code>".
+            </p>
+
+            <div class="concept-box">
+                <h4>One table, checked before movement</h4>
+                <p>
+                    Each frame, before a cell tries to move, it scans its neighbours against the table. A
+                    match transforms both cells and the cell is done for the frame. Adding a new
+                    interaction — acid eats stone, water freezes near ice — is one more table row, no engine
+                    change. This is the data-driven heart of a Noita-style sandbox.
+                </p>
+            </div>
+
+            <details>
+                <summary>📝 Click to see: the reaction table &amp; check</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// "When A touches B: A → ra, B → rb."  Add an interaction = add a row.
+const REACTIONS = [
+    { a: WATER, b: LAVA, ra: STEAM, rb: STONE },   // water quenches lava
+    { a: WATER, b: FIRE, ra: STEAM, rb: AIR   }    // water puts out fire
+];
+
+// Checked per cell, before it moves.
+function tryReact(grid, W, H, i, x, y) {
+    const m = grid[i];
+    const nb = [[1,0],[-1,0],[0,1],[0,-1]];
+    for (const rule of REACTIONS) {
+        if (rule.a !== m) continue;
+        for (const [dx, dy] of nb) {
+            const nx = x + dx, ny = y + dy;
+            if (nx &lt; 0 || nx &gt;= W || ny &lt; 0 || ny &gt;= H) continue;
+            const j = ny * W + nx;
+            if (grid[j] === rule.b) {
+                grid[i] = rule.ra;
+                grid[j] = rule.rb;
+                return true;                       // reacted — done this frame
+            }
+        }
+    }
+    return false;
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">type Reaction = { a: number; b: number; ra: number; rb: number };
+const REACTIONS: Reaction[] = [
+    { a: WATER, b: LAVA, ra: STEAM, rb: STONE },
+    { a: WATER, b: FIRE, ra: STEAM, rb: AIR   }
+];
+
+function tryReact(grid: Uint8Array, W: number, H: number,
+                  i: number, x: number, y: number): boolean {
+    const m = grid[i];
+    const nb = [[1,0],[-1,0],[0,1],[0,-1]];
+    for (const rule of REACTIONS) {
+        if (rule.a !== m) continue;
+        for (const [dx, dy] of nb) {
+            const nx = x + dx, ny = y + dy;
+            if (nx &lt; 0 || nx &gt;= W || ny &lt; 0 || ny &gt;= H) continue;
+            const j = ny * W + nx;
+            if (grid[j] === rule.b) {
+                grid[i] = rule.ra;
+                grid[j] = rule.rb;
+                return true;
+            }
+        }
+    }
+    return false;
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>Quench the lava</h3>
+            <p>
+                A basin of <strong>lava</strong> sits ready. Pour <strong>water</strong> onto it: where they
+                meet, steam hisses up and a stone crust forms.
+            </p>
+            <div class="diagram">
+                <canvas id="noiReact" width="720" height="450"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnReactWater">💧 Water</button>
+                <button id="btnReactLava">🌋 Lava</button>
+                <button id="btnReactWall">⬜ Wall</button>
+                <button id="btnReactErase">🧽 Erase</button>
+                <button id="btnReactReset">Reset basin</button>
+            </div>
+            <div id="noiReactInfo" class="info-display">Pour water onto the lava.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- SANDBOX -->
+        <!-- ============================================ -->
+        <div id="sandbox" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🧪 Mini-Project: the Full Sandbox</h2>
+
+            <p>
+                Every material, every rule, one canvas. Eight paintable materials — powder, three liquids,
+                a flammable solid, fire, an inert wall — all running through the single dispatch step. The
+                fun is in the combinations: oil on water that you set alight, lava you quench, sand poured
+                through steam.
+            </p>
+
+            <div class="concept-box">
+                <h4>The whole engine is a table + a dispatch</h4>
+                <p>
+                    Notice how little <em>special-case</em> code exists. A material is a row in
+                    <code>MAT</code> with a <code>kind</code>; the step function switches on kind;
+                    interactions are rows in <code>REACTIONS</code>. The richness on screen is
+                    <strong>emergent</strong> — it comes from a handful of small rules composing, not from
+                    code that knows about "a burning oil slick on a lake".
+                </p>
+            </div>
+
+            <details data-demo-id="noi_sandbox" data-deps="">
+                <summary>📝 Click to see: the material table</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Add a material = add a row. The engine never names a material directly;
+// it only ever asks for `.kind`, `.density`, `.flammable`, `.fuel`, `.color`.
+const MAT = [
+    { name: 'air',   kind: 'air',    color: [13, 17, 30]  },
+    { name: 'stone', kind: 'solid',  color: [92, 96, 108] },
+    { name: 'sand',  kind: 'powder', color: [206, 180, 110] },
+    { name: 'water', kind: 'liquid', density: 3, color: [60, 120, 210] },
+    { name: 'oil',   kind: 'liquid', density: 2, color: [70, 56, 40],
+      flammable: true, fuel: 60 },
+    { name: 'lava',  kind: 'liquid', density: 7, color: [220, 95, 30] },
+    { name: 'wood',  kind: 'solid',  color: [120, 78, 42],
+      flammable: true, fuel: 150 },
+    { name: 'fire',  kind: 'fire',   color: [255, 150, 40] },
+    { name: 'smoke', kind: 'gas',    color: [70, 70, 78] },
+    { name: 'steam', kind: 'gas',    color: [200, 210, 222] }
+];</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">type Material = {
+    name: string;
+    kind: 'air' | 'solid' | 'powder' | 'liquid' | 'gas' | 'fire';
+    color: [number, number, number];
+    density?: number;
+    flammable?: boolean;
+    fuel?: number;
+};
+
+const MAT: Material[] = [
+    { name: 'air',   kind: 'air',    color: [13, 17, 30]  },
+    { name: 'stone', kind: 'solid',  color: [92, 96, 108] },
+    { name: 'sand',  kind: 'powder', color: [206, 180, 110] },
+    { name: 'water', kind: 'liquid', density: 3, color: [60, 120, 210] },
+    { name: 'oil',   kind: 'liquid', density: 2, color: [70, 56, 40],
+      flammable: true, fuel: 60 },
+    { name: 'lava',  kind: 'liquid', density: 7, color: [220, 95, 30] },
+    { name: 'wood',  kind: 'solid',  color: [120, 78, 42],
+      flammable: true, fuel: 150 },
+    { name: 'fire',  kind: 'fire',   color: [255, 150, 40] },
+    { name: 'smoke', kind: 'gas',    color: [70, 70, 78] },
+    { name: 'steam', kind: 'gas',    color: [200, 210, 222] }
+];</code></pre>
+                </div>
+            </details>
+
+            <h3>Play</h3>
+            <p>
+                Pick a material and paint. Try: a pool of water, a layer of oil on top, then a spark.
+                Or pour water onto lava. Or bury fire in sand.
+            </p>
+            <div class="diagram">
+                <canvas id="noiSandbox" width="720" height="480"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnSbSand">🟡 Sand</button>
+                <button id="btnSbWater">💧 Water</button>
+                <button id="btnSbOil">🛢️ Oil</button>
+                <button id="btnSbLava">🌋 Lava</button>
+                <button id="btnSbWood">🟫 Wood</button>
+                <button id="btnSbFire">🔥 Fire</button>
+                <button id="btnSbWall">⬜ Wall</button>
+                <button id="btnSbErase">🧽 Erase</button>
+                <button id="btnSbClear">Clear</button>
+            </div>
+            <div id="noiSandboxInfo" class="info-display">Pick a material and paint.</div>
+
+            <div class="example-box">
+                <h4>🎮 What you just built</h4>
+                <p>
+                    A Noita-class material sandbox: ten materials, five behaviour kinds, a reaction table —
+                    and emergent interactions nobody wrote line-by-line. Every rule is local and small; the
+                    spectacle is what happens when they run together, 36,000 cells at a time.
+                </p>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- RECAP -->
+        <!-- ============================================ -->
+        <div id="recap" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🧭 Tier Recap</h2>
+
+            <p>You can now:</p>
+            <ul>
+                <li>Run a <strong>multi-material</strong> CA — one step, dispatched by material kind</li>
+                <li>Flow <strong>liquids</strong> with sideways spread, and layer them by <strong>density</strong></li>
+                <li>Rise <strong>gases</strong> — the liquid rule with gravity inverted</li>
+                <li>Spread <strong>fire</strong> probabilistically through fuel, with burn timers and smoke</li>
+                <li>Drive interactions from a data-driven <strong>reaction table</strong></li>
+            </ul>
+
+            <div class="example-box">
+                <h4>🎮 What you just built</h4>
+                <p>
+                    A living sandbox. The Advanced tier makes it <em>fast and extensible</em> — only
+                    simulating cells that are actually active (sleeping the settled ones), and turning the
+                    material set into a proper library you can grow without touching the engine.
+                </p>
+            </div>
+        </div>
+
+        <!-- Next Steps -->
+        <div class="section" style="text-align: center;">
+            <h2>✅ Intermediate Tier Complete</h2>
+            <p style="font-size: 1.1em; margin: 24px 0;">
+                Next: performance — active-cell tracking and sleeping chunks — and a material library
+                architecture.
+            </p>
+            <a href="advanced.html" class="nav-button" style="font-size: 1.2em; padding: 20px 40px;">
+                Continue to Advanced →
+            </a>
+            <p style="margin-top: 20px;"><em>Advanced isn't written yet — coming in the next phase. Track your progress on the <a href="index.html">sub-track index</a>.</em></p>
+        </div>
+    </div>
+
+    <!-- Scroll to Top Button -->
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <!-- Load shared utilities. Paths are relative to this two-deep subdirectory. -->
+    <script src="../../shared/utils.js"></script>
+    <script src="../../shared/code-tabs.js"></script>
+    <script src="intermediate-demos.js"></script>
+    <script src="bundles-intermediate.js"></script>
+    <script src="../../shared/export-demo.js"></script>
+</body>
+</html>
