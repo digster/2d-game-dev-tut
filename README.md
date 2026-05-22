@@ -45,9 +45,16 @@ own subdirectory with a per-tier file structure mirroring the Fundamentals layou
   + A* hunter + day/night + lighting). Simulations (5 demos): deep-dive
   visualisers — cave-carving (noise iso-band vs worm-walk), biome blending,
   a ring-by-ring BFS light stepper, a liquid-flow stepper with per-cell
-  decision arrows, and an ore-by-depth histogram. The Noita sub-track index
-  deliberately covers only concepts *not* in Terraria. Demo IDs and helper
+  decision arrows, and an ore-by-depth histogram. Terraria demo IDs and helper
   bundles are prefixed `vox_`.
+  The **Noita sub-track's Beginner tier ("Falling Sand from Scratch") is also
+  shipped** — 4 demos: a 36,000-pixel `ImageData`-rendered falling-sand engine,
+  a coarse rule-stepper with per-grain decision arrows, a scan-order demo that
+  shows the top-down "teleport" bug live, and a paint-walls-and-pour-sand
+  sandbox. It teaches only what's new vs Terraria: per-pixel cellular automata,
+  `ImageData`/`Uint8ClampedArray` rendering, and update-order correctness.
+  Noita demo IDs are prefixed `noi`. The Noita Intermediate/Advanced tiers
+  remain on the roadmap.
 - `shaders/` — learn WebGL / GLSL fragment shaders for 2D game effects.
   See `shaders/index.html` for the track roadmap. **Fully shipped — all 8
   tiers:** Beginner (Shader Foundations), Intermediate (Patterns, Noise &

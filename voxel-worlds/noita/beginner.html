@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beginner — Noita Voxels — Voxel Worlds Track</title>
+    <!-- Path note: two directories deep, so ../../shared/... and ../../<page>.html.
+         Cross-references to the Terraria sub-track use ../terraria/. -->
+    <link rel="stylesheet" href="../../shared/styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>🔥 Beginner — Falling Sand from Scratch</h1>
+        <p class="subtitle">Build a cellular-pixel voxel engine: every pixel is a material, every pixel simulates itself, every frame.</p>
+
+        <!-- Navigation -->
+        <div class="nav">
+            <a href="../../index.html" class="nav-button">← Home</a>
+            <a href="../index.html" class="nav-button">← Voxel Worlds</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="beginner.html" class="nav-button active">Beginner</a>
+        </div>
+
+        <!-- Table of Contents -->
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#engine">Pixels, Not Tiles — the ImageData Engine</a></li>
+                <li><a href="#sandrule">The Falling-Sand Rule</a></li>
+                <li><a href="#updateorder">Update Order &amp; Directional Bias</a></li>
+                <li><a href="#bucket">Mini-Project: Bucket of Sand</a></li>
+                <li><a href="#recap">Tier Recap</a></li>
+            </ul>
+        </div>
+
+        <div class="key-point">
+            <strong>💡 What's different from Terraria voxels:</strong> in the
+            <a href="../terraria/index.html">Terraria sub-track</a> a tile is ~16px and sits still until the
+            player edits it. Here a cell is <strong>one pixel</strong>, and <em>every</em> cell runs a rule
+            <em>every frame</em> — the world simulates itself. That changes two things: how you
+            <strong>render</strong> (you can't <code>fillRect</code> tens of thousands of cells) and how
+            carefully you must think about <strong>update order</strong>. This tier builds that engine.
+        </div>
+
+        <!-- ============================================ -->
+        <!-- ENGINE -->
+        <!-- ============================================ -->
+        <div id="engine" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🖼️ Pixels, Not Tiles — the ImageData Engine</h2>
+
+            <p>
+                The world is still a flat <code>Uint8Array</code> of material ids — that storage idea carries
+                over unchanged from <a href="../terraria/beginner.html#data">Terraria → Tile Data
+                Structures</a>. What changes is <strong>scale</strong>: a 240×150 grid is 36,000 cells, and
+                redrawing that many with one <code>fillRect</code> each, every frame, is far too slow.
+            </p>
+
+            <div class="concept-box">
+                <h4>Render through an ImageData buffer</h4>
+                <p>
+                    Instead of drawing cells, you write <strong>raw RGBA bytes</strong>. An
+                    <code>ImageData</code> holds a <code>Uint8ClampedArray</code> of 4 bytes per pixel.
+                    Write the material colours into it, <code>putImageData</code> it onto a
+                    <em>sim-resolution</em> offscreen canvas, then <code>drawImage</code> that offscreen
+                    canvas <em>scaled up</em> to the display — with <code>imageSmoothingEnabled = false</code>
+                    so the upscale stays crisp and pixelated.
+                </p>
+            </div>
+
+            <details>
+                <summary>📝 Click to see: the ImageData renderer</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Build a renderer for a W×H pixel grid, displayed on a larger canvas.
+function makeRenderer(canvas, W, H) {
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;             // crisp nearest-neighbour upscale
+
+    // An offscreen canvas at the SIMULATION resolution.
+    const off = document.createElement('canvas');
+    off.width = W; off.height = H;
+    const offCtx = off.getContext('2d');
+    const img = offCtx.createImageData(W, H);      // W*H*4 bytes, RGBA
+    const data = img.data;
+
+    return function render(grid) {
+        for (let i = 0; i &lt; grid.length; i++) {
+            const p = i &lt;&lt; 2;                       // byte offset = i * 4
+            const m = grid[i];
+            if (m === SAND)      { data[p] = 206; data[p+1] = 180; data[p+2] = 110; }
+            else if (m === WALL) { data[p] = 92;  data[p+1] = 96;  data[p+2] = 108; }
+            else                 { data[p] = 13;  data[p+1] = 17;  data[p+2] = 30;  }
+            data[p + 3] = 255;                     // opaque
+        }
+        offCtx.putImageData(img, 0, 0);
+        // Scale the sim-res image up to fill the display canvas.
+        ctx.drawImage(off, 0, 0, W, H, 0, 0, canvas.width, canvas.height);
+    };
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function makeRenderer(canvas: HTMLCanvasElement, W: number, H: number) {
+    const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
+    ctx.imageSmoothingEnabled = false;
+
+    const off = document.createElement('canvas');
+    off.width = W; off.height = H;
+    const offCtx = off.getContext('2d') as CanvasRenderingContext2D;
+    const img = offCtx.createImageData(W, H);
+    const data = img.data;
+
+    return function render(grid: Uint8Array): void {
+        for (let i = 0; i &lt; grid.length; i++) {
+            const p = i &lt;&lt; 2;
+            const m = grid[i];
+            if (m === SAND)      { data[p] = 206; data[p+1] = 180; data[p+2] = 110; }
+            else if (m === WALL) { data[p] = 92;  data[p+1] = 96;  data[p+2] = 108; }
+            else                 { data[p] = 13;  data[p+1] = 17;  data[p+2] = 30;  }
+            data[p + 3] = 255;
+        }
+        offCtx.putImageData(img, 0, 0);
+        ctx.drawImage(off, 0, 0, W, H, 0, 0, canvas.width, canvas.height);
+    };
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>36,000 pixels, all simulating</h3>
+            <p>Click and drag to pour sand. Every cell on screen is one simulation pixel.</p>
+            <div class="diagram">
+                <canvas id="noiEngine" width="720" height="450"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnEngineBrushS">Small brush</button>
+                <button id="btnEngineBrushM">Medium brush</button>
+                <button id="btnEngineBrushL">Large brush</button>
+                <button id="btnEngineClear">Clear</button>
+            </div>
+            <div id="noiEngineInfo" class="info-display">Click and drag to pour sand.</div>
+
+            <div class="key-point">
+                <strong>📖 Context:</strong> the broader "how to make terrain destructible" survey is
+                <a href="../../simulation.html#destructible-terrain">Fundamentals → Destructible
+                Terrain</a> — the cellular-pixel approach is the most extreme point on that spectrum.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- SAND RULE -->
+        <!-- ============================================ -->
+        <div id="sandrule" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>⏳ The Falling-Sand Rule</h2>
+
+            <p>
+                The whole engine is one rule applied to every sand cell: <strong>try to fall</strong>.
+                Straight down if you can; otherwise slide down-left or down-right. That's it — pile
+                formation, slopes, the angle of repose all <em>emerge</em> from those three options.
+            </p>
+
+            <div class="concept-box">
+                <h4>You've met this rule before — at tile scale</h4>
+                <p>
+                    The <a href="../terraria/intermediate.html#falling">Terraria Intermediate tier</a> ran
+                    the same down / down-diagonal rule on 16-pixel tiles, as <em>one</em> mechanic among
+                    many. Here it runs on single pixels as the <em>entire</em> world. Same rule, different
+                    granularity — and at this granularity the next section's subtlety (update order)
+                    suddenly matters a great deal.
+                </p>
+            </div>
+
+            <details data-demo-id="noi_rule" data-deps="">
+                <summary>📝 Click to see: stepSand</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Advance every sand cell one step, in place.
+function stepSand(grid, W, H, frame) {
+    // Sweep direction alternates each frame — see the next section.
+    const ltr = (frame &amp; 1) === 0;
+    // Bottom-up: visit a cell BEFORE the cell it would move into.
+    for (let y = H - 2; y &gt;= 0; y--) {
+        for (let k = 0; k &lt; W; k++) {
+            const x = ltr ? k : W - 1 - k;
+            const i = y * W + x;
+            if (grid[i] !== SAND) continue;
+
+            const below = i + W;
+            if (grid[below] === AIR) {                 // 1. straight down
+                grid[i] = AIR; grid[below] = SAND;
+                continue;
+            }
+            const canL = x &gt; 0     &amp;&amp; grid[below - 1] === AIR;
+            const canR = x &lt; W - 1 &amp;&amp; grid[below + 1] === AIR;
+            if (canL || canR) {                        // 2. down-diagonal
+                const dir = (canL &amp;&amp; canR) ? (Math.random() &lt; 0.5 ? -1 : 1) : (canL ? -1 : 1);
+                grid[i] = AIR; grid[below + dir] = SAND;
+            }
+        }
+    }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function stepSand(grid: Uint8Array, W: number, H: number, frame: number): void {
+    const ltr = (frame &amp; 1) === 0;
+    for (let y = H - 2; y &gt;= 0; y--) {
+        for (let k = 0; k &lt; W; k++) {
+            const x = ltr ? k : W - 1 - k;
+            const i = y * W + x;
+            if (grid[i] !== SAND) continue;
+
+            const below = i + W;
+            if (grid[below] === AIR) {
+                grid[i] = AIR; grid[below] = SAND;
+                continue;
+            }
+            const canL = x &gt; 0     &amp;&amp; grid[below - 1] === AIR;
+            const canR = x &lt; W - 1 &amp;&amp; grid[below + 1] === AIR;
+            if (canL || canR) {
+                const dir = (canL &amp;&amp; canR) ? (Math.random() &lt; 0.5 ? -1 : 1) : (canL ? -1 : 1);
+                grid[i] = AIR; grid[below + dir] = SAND;
+            }
+        }
+    }
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>The rule, one Step at a time</h3>
+            <p>
+                A coarse, zoomed-in grid. Each arrow is a grain's <em>pending</em> move —
+                <span style="color:#ffd54f">↓ down</span> wins;
+                <span style="color:#ef5350">diagonal</span> only when down is blocked;
+                <span style="color:#ff9800">orange</span> means both diagonals are open (a coin flip).
+                <strong>Step</strong> executes one tick.
+            </p>
+            <div class="diagram">
+                <canvas id="noiRule" width="704" height="400"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnRuleStep">Step once</button>
+                <button id="btnRuleRun">Run</button>
+                <button id="btnRuleReset">Reset</button>
+            </div>
+            <div id="noiRuleInfo" class="info-display">Step the rule one tick at a time.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- UPDATE ORDER -->
+        <!-- ============================================ -->
+        <div id="updateorder" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🔀 Update Order &amp; Directional Bias</h2>
+
+            <p>
+                Here is the subtlety that pixel-scale forces you to confront. The grid is updated
+                <strong>in place</strong> — each cell reads and writes the <em>same</em> array. So the
+                <strong>order</strong> you visit cells in changes the result. Get it wrong and sand doesn't
+                fall — it <strong>teleports</strong>.
+            </p>
+
+            <div class="concept-box">
+                <h4>The top-down trap</h4>
+                <p>
+                    Scan rows <em>top to bottom</em>: you move a grain from row 5 down to row 6 — then the
+                    scan <em>continues downward</em>, reaches that same grain at row 6, and moves it again
+                    to row 7… and again… The grain falls the entire column in a single frame. No animation,
+                    just an instant snap to the floor.
+                </p>
+                <p>
+                    <strong>The fix:</strong> scan <em>bottom to top</em>. Now a grain is visited
+                    <em>before</em> the cell below it, so it moves exactly one row per frame — and you see
+                    it fall. A second, subtler bias is horizontal: always sweeping left-to-right nudges
+                    piles sideways, so we <strong>alternate</strong> the sweep direction each frame.
+                </p>
+            </div>
+
+            <details>
+                <summary>📝 Click to see: the WRONG way (kept to demonstrate the bug)</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// BUGGY ON PURPOSE — a top-down scan. A grain moved down is re-visited
+// lower in the SAME pass and moved again, so it teleports to the floor.
+function stepSandNaive(grid, W, H) {
+    for (let y = 0; y &lt; H - 1; y++) {            // top-down — this is the bug
+        for (let x = 0; x &lt; W; x++) {
+            const i = y * W + x;
+            if (grid[i] !== SAND) continue;
+            const below = i + W;
+            if (grid[below] === AIR) { grid[i] = AIR; grid[below] = SAND; }
+        }
+    }
+}
+
+// The fix is simply the loop bound: `for (let y = H - 2; y >= 0; y--)`.
+// A grain is then visited before the cell it falls into — one row per frame.</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// BUGGY ON PURPOSE — top-down scan teleports grains to the floor.
+function stepSandNaive(grid: Uint8Array, W: number, H: number): void {
+    for (let y = 0; y &lt; H - 1; y++) {            // top-down — this is the bug
+        for (let x = 0; x &lt; W; x++) {
+            const i = y * W + x;
+            if (grid[i] !== SAND) continue;
+            const below = i + W;
+            if (grid[below] === AIR) { grid[i] = AIR; grid[below] = SAND; }
+        }
+    }
+}
+
+// The fix is the loop bound: `for (let y = H - 2; y >= 0; y--)`.</code></pre>
+                </div>
+            </details>
+
+            <h3>See the bug, then fix it</h3>
+            <p>
+                A steady stream of sand pours from the top. <strong>Toggle the scan mode:</strong> in
+                <span style="color:#ef5350">naive (top-down)</span> the sand vanishes from the source and
+                reappears as a flat layer on the floor — it never <em>falls</em>. Switch to
+                <span style="color:#66bb6a">correct (bottom-up)</span> and the falling stream appears.
+            </p>
+            <div class="diagram">
+                <canvas id="noiOrder" width="720" height="450"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnOrderToggle">Scan: CORRECT (bottom-up)</button>
+                <button id="btnOrderReset">Reset</button>
+            </div>
+            <div id="noiOrderInfo" class="info-display">Toggle the scan mode and watch the difference.</div>
+
+            <div class="challenge-box">
+                <h4>🎯 Why this matters more later</h4>
+                <p>
+                    Bottom-up scanning fixes <em>falling</em>. But the Intermediate tier's water moves
+                    <em>sideways and upward</em> too — and no single scan direction is correct for all of
+                    them at once. That's when engines reach for <strong>double buffering</strong> (read
+                    from one grid, write to another) — the fully general answer to update order.
+                </p>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- BUCKET -->
+        <!-- ============================================ -->
+        <div id="bucket" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🪣 Mini-Project: Bucket of Sand</h2>
+
+            <p>
+                Everything together: a paint tool for <strong>sand</strong> and immovable
+                <strong>walls</strong>, plus erase. Walls need no rule of their own — the sand rule only
+                ever moves a grain into an <code>AIR</code> cell, so a wall is an obstacle for free.
+            </p>
+
+            <div class="concept-box">
+                <h4>Walls are "sand that never runs"</h4>
+                <p>
+                    There is no <code>stepWall</code>. A wall is just a material the falling-sand rule
+                    can't move into. Carve a container out of walls, pour sand in, and it settles inside —
+                    the bucket "works" without a single line of code about buckets.
+                </p>
+            </div>
+
+            <details data-demo-id="noi_bucket" data-deps="">
+                <summary>📝 Click to see: the disc brush</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Stamp a filled disc of material into the grid — the painting brush.
+function paintDisc(grid, W, H, cx, cy, r, mat) {
+    for (let dy = -r; dy &lt;= r; dy++)
+        for (let dx = -r; dx &lt;= r; dx++) {
+            if (dx * dx + dy * dy &gt; r * r) continue;   // circular, not square
+            const x = cx + dx, y = cy + dy;
+            if (x &lt; 0 || x &gt;= W || y &lt; 0 || y &gt;= H) continue;
+            grid[y * W + x] = mat;
+        }
+}
+
+// The sand brush only fills AIR (so it doesn't paint over walls); the wall
+// and erase brushes overwrite anything.</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function paintDisc(grid: Uint8Array, W: number, H: number,
+                   cx: number, cy: number, r: number, mat: number): void {
+    for (let dy = -r; dy &lt;= r; dy++)
+        for (let dx = -r; dx &lt;= r; dx++) {
+            if (dx * dx + dy * dy &gt; r * r) continue;
+            const x = cx + dx, y = cy + dy;
+            if (x &lt; 0 || x &gt;= W || y &lt; 0 || y &gt;= H) continue;
+            grid[y * W + x] = mat;
+        }
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>Fill the bucket</h3>
+            <p>
+                A wall bucket is pre-built. Pick <strong>Sand</strong> and drag to pour it in; pick
+                <strong>Wall</strong> to reshape the container; <strong>Erase</strong> to clear.
+            </p>
+            <div class="diagram">
+                <canvas id="noiBucket" width="720" height="480"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnBucketSand">🟡 Sand</button>
+                <button id="btnBucketWall">⬜ Wall</button>
+                <button id="btnBucketErase">🧽 Erase</button>
+                <button id="btnBucketClear">Reset bucket</button>
+            </div>
+            <div id="noiBucketInfo" class="info-display">Pick a tool and drag on the canvas.</div>
+
+            <div class="example-box">
+                <h4>🎮 What you just built</h4>
+                <p>
+                    A complete falling-sand engine — a pixel grid, an ImageData renderer, a one-rule
+                    cellular automaton with correct update order, and a paint UI. It's small because the
+                    behaviour is <em>emergent</em>: piles, slopes and containers all fall out of one rule.
+                </p>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- RECAP -->
+        <!-- ============================================ -->
+        <div id="recap" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🧭 Tier Recap</h2>
+
+            <p>You can now:</p>
+            <ul>
+                <li>Render a large pixel grid through an <strong>ImageData</strong> buffer</li>
+                <li>Run a <strong>per-pixel cellular automaton</strong> — one rule, every cell, every frame</li>
+                <li>Write the <strong>falling-sand rule</strong>: down → down-left / down-right</li>
+                <li>Get <strong>update order</strong> right — bottom-up scan, alternating sweep</li>
+                <li>Compose a paint UI with sand and immovable walls into a sandbox</li>
+            </ul>
+
+            <div class="example-box">
+                <h4>🎮 What you just built</h4>
+                <p>
+                    The Noita engine's foundation. The Intermediate tier adds the materials that make it
+                    come alive — water that flows and pools, gases that rise, fire that spreads and consumes
+                    fuel, and reaction rules where two materials touching transform into others.
+                </p>
+            </div>
+        </div>
+
+        <!-- Next Steps -->
+        <div class="section" style="text-align: center;">
+            <h2>✅ Beginner Tier Complete</h2>
+            <p style="font-size: 1.1em; margin: 24px 0;">
+                Next: liquids, gases, fire, and material reactions — the rules that turn falling sand into
+                a living sandbox.
+            </p>
+            <a href="intermediate.html" class="nav-button" style="font-size: 1.2em; padding: 20px 40px;">
+                Continue to Intermediate →
+            </a>
+            <p style="margin-top: 20px;"><em>Intermediate isn't written yet — coming in the next phase. Track your progress on the <a href="index.html">sub-track index</a>.</em></p>
+        </div>
+    </div>
+
+    <!-- Scroll to Top Button -->
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <!-- Load shared utilities. Paths are relative to this two-deep subdirectory. -->
+    <script src="../../shared/utils.js"></script>
+    <script src="../../shared/code-tabs.js"></script>
+    <script src="beginner-demos.js"></script>
+    <script src="bundles-beginner.js"></script>
+    <script src="../../shared/export-demo.js"></script>
+</body>
+</html>

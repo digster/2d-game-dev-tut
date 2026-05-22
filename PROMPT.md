@@ -205,3 +205,16 @@ Simulations tier and marked the Terraria sub-track complete (5/5 tiers). Fixed
 a blank-canvas bug — a top-level `const lerp` collided with shared/utils.js's
 global `function lerp`, killing the whole demos file at instantiation. All
 browser-verified console-clean. README.md + ARCHITECTURE.md updated.
+
+## 2026-05-21 (pt.6) — Voxel Worlds: Noita Beginner tier
+
+> Okay. Work on the next iteration.
+
+Started the Noita sub-track with its Beginner tier ("Falling Sand from
+Scratch"): `noita/beginner.html` (4 sections + recap), `noita/beginner-demos.js`
+(4 demos — a 36k-pixel ImageData-rendered falling-sand engine, a coarse
+rule-stepper with decision arrows, a scan-order demo showing the top-down
+teleport bug live, and a paint-walls-and-pour-sand sandbox), and
+`noita/bundles-beginner.js`. Introduced ImageData/Uint8ClampedArray rendering
+(new technique for the track). Unlocked the Noita Beginner tier across all
+cross-tier links. All browser-verified console-clean. README.md updated.
