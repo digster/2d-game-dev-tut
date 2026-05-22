@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced — Terraria Voxels — Voxel Worlds Track</title>
+    <!-- Path note: two directories deep, so ../../shared/... and ../../<page>.html. -->
+    <link rel="stylesheet" href="../../shared/styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>🌲 Advanced — Persistence, AI &amp; Lighting Polish</h1>
+        <p class="subtitle">Make the generated world durable, populated, and fast — save it, hunt the player through it, cycle day into night, and render it all at speed.</p>
+
+        <!-- Navigation -->
+        <div class="nav">
+            <a href="../../index.html" class="nav-button">← Home</a>
+            <a href="../index.html" class="nav-button">← Voxel Worlds</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="expert.html" class="nav-button">← Expert</a>
+            <a href="advanced.html" class="nav-button active">Advanced</a>
+            <a href="simulations.html" class="nav-button">Simulations →</a>
+        </div>
+
+        <!-- Table of Contents -->
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#persistence">Save &amp; Load with RLE Compression</a></li>
+                <li><a href="#pathfinding">A* on a Destructible Grid</a></li>
+                <li><a href="#daynight">Day/Night Cycle &amp; Weather</a></li>
+                <li><a href="#performance">Offscreen-Canvas Tile Caching</a></li>
+                <li><a href="#capstone">Mini-Project: A Living World</a></li>
+                <li><a href="#recap">Tier Recap</a></li>
+            </ul>
+        </div>
+
+        <div class="key-point">
+            <strong>💡 Where we left off:</strong> the <a href="expert.html">Expert tier</a> grew a whole
+            world from a seed — terrain, caves, ore, liquids, light. This tier makes that world
+            <strong>durable</strong> (save/load), <strong>dangerous</strong> (an enemy that pathfinds
+            through it), <strong>atmospheric</strong> (day/night), and <strong>fast</strong> (render
+            caching) — the difference between a tech demo and a game.
+        </div>
+
+        <!-- ============================================ -->
+        <!-- PERSISTENCE -->
+        <!-- ============================================ -->
+        <div id="persistence" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>💾 Save &amp; Load with RLE Compression</h2>
+
+            <p>
+                A world the player can't keep isn't a world. Saving is just
+                <strong>serialising the tile array</strong> — but a raw dump is wasteful: a voxel world is
+                mostly enormous stretches of identical tiles (sky, then stone). <strong>Run-length
+                encoding</strong> exploits exactly that: store each <em>run</em> of identical tiles as a
+                <code>[value, count]</code> pair.
+            </p>
+
+            <div class="concept-box">
+                <h4>Why RLE wins here</h4>
+                <p>
+                    A 1000-tile-wide band of sky is 1000 bytes raw — but just <em>two</em> numbers as a run.
+                    Real generated worlds compress 10–50×. The cap of 255 per run keeps every count inside a
+                    single byte; longer runs simply split into several pairs.
+                </p>
+            </div>
+
+            <details data-demo-id="vox_persist" data-deps="vox_colors,vox_materials,vox_clearCanvas,vox_hash2D,vox_drawTile,vox_TileWorld,vox_screenToTile">
+                <summary>📝 Click to see: rleEncode &amp; rleDecode</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Encode a tile array as [value, runLength, value, runLength, ...].
+// Runs cap at 255 so each count fits one byte.
+function rleEncode(tiles) {
+    const out = [];
+    let i = 0;
+    while (i &lt; tiles.length) {
+        const v = tiles[i];
+        let run = 1;
+        while (i + run &lt; tiles.length &amp;&amp; tiles[i + run] === v &amp;&amp; run &lt; 255) run++;
+        out.push(v, run);
+        i += run;
+    }
+    return out;
+}
+
+// Expand the run pairs back into a flat tile array.
+function rleDecode(rle, length) {
+    const tiles = new Uint8Array(length);
+    let pos = 0;
+    for (let i = 0; i &lt; rle.length; i += 2) {
+        const v = rle[i], run = rle[i + 1];
+        for (let k = 0; k &lt; run; k++) tiles[pos++] = v;
+    }
+    return tiles;
+}
+
+// Save / load through localStorage (wrap in try/catch — it can be disabled).
+function saveWorld(world) {
+    const blob = { w: world.width, h: world.height, rle: rleEncode(world.tiles) };
+    try { localStorage.setItem('my-world', JSON.stringify(blob)); } catch (e) {}
+    return blob;
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function rleEncode(tiles: Uint8Array): number[] {
+    const out: number[] = [];
+    let i = 0;
+    while (i &lt; tiles.length) {
+        const v = tiles[i];
+        let run = 1;
+        while (i + run &lt; tiles.length &amp;&amp; tiles[i + run] === v &amp;&amp; run &lt; 255) run++;
+        out.push(v, run);
+        i += run;
+    }
+    return out;
+}
+
+function rleDecode(rle: number[], length: number): Uint8Array {
+    const tiles = new Uint8Array(length);
+    let pos = 0;
+    for (let i = 0; i &lt; rle.length; i += 2) {
+        const v = rle[i], run = rle[i + 1];
+        for (let k = 0; k &lt; run; k++) tiles[pos++] = v;
+    }
+    return tiles;
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>Save, edit, reload</h3>
+            <p>
+                Edit the world (<strong>left-click</strong> mines, <strong>right-click</strong> places),
+                hit <strong>Save</strong>, then change it more and hit <strong>Load</strong> to roll back.
+                The save also survives a full page reload — it's in <code>localStorage</code>.
+            </p>
+            <div class="diagram">
+                <canvas id="voxPersist" width="720" height="360"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnPersistSave">💾 Save</button>
+                <button id="btnPersistLoad">📂 Load</button>
+                <button id="btnPersistClear">🌱 Fresh world</button>
+            </div>
+            <div id="voxPersistInfo" class="info-display">Edit the world, then Save.</div>
+
+            <div class="challenge-box">
+                <h4>🎯 Try this</h4>
+                <p>
+                    Save, then carve a big cavern, then reload the page. The cavern is gone — the page
+                    restored your <em>saved</em> world. Watch the RLE byte count: a freshly generated world
+                    compresses far smaller than one you've riddled with random holes, because holes break
+                    up the long runs.
+                </p>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- PATHFINDING -->
+        <!-- ============================================ -->
+        <div id="pathfinding" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🧭 A* on a Destructible Grid</h2>
+
+            <p>
+                An enemy that hunts the player needs to <strong>navigate</strong> the world.
+                <strong>A*</strong> finds a shortest path across the tile grid — and because in a voxel game
+                the grid <em>is</em> the world, "re-plan when the terrain changes" is almost free: mining a
+                tile literally edits the navigation graph.
+            </p>
+
+            <div class="concept-box">
+                <h4>A* in one breath</h4>
+                <p>
+                    A* explores tiles cheapest-first, where a tile's cost is
+                    <code>g + h</code>: <code>g</code> = steps taken so far, <code>h</code> = a
+                    <em>heuristic</em> estimate of steps remaining (here, Manhattan distance to the goal).
+                    The heuristic is what makes A* beat a blind flood fill — it pulls the search toward the
+                    goal instead of spreading evenly in all directions.
+                </p>
+            </div>
+
+            <details data-demo-id="vox_pathfind" data-deps="vox_colors,vox_materials,vox_clearCanvas,vox_hash2D,vox_drawTile,vox_isSolid,vox_TileWorld,vox_screenToTile">
+                <summary>📝 Click to see: aStar</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Shortest path of non-solid tiles, start -> goal (4-neighbour).
+// Returns { path, visited }; path is null if the goal is unreachable.
+function aStar(world, start, goal) {
+    const W = world.width;
+    const key = (x, y) =&gt; y * W + x;
+    const h = (x, y) =&gt; Math.abs(x - goal.x) + Math.abs(y - goal.y);
+    const open = [{ x: start.x, y: start.y }];
+    const gScore = new Map([[key(start.x, start.y), 0]]);
+    const fScore = new Map([[key(start.x, start.y), h(start.x, start.y)]]);
+    const cameFrom = new Map();
+    const closed = new Set();
+    const visited = [];
+
+    while (open.length) {
+        // Pop the open tile with the lowest f = g + h.
+        let bi = 0;
+        for (let i = 1; i &lt; open.length; i++)
+            if (fScore.get(key(open[i].x, open[i].y)) &lt; fScore.get(key(open[bi].x, open[bi].y))) bi = i;
+        const cur = open.splice(bi, 1)[0];
+        const ck = key(cur.x, cur.y);
+
+        if (cur.x === goal.x &amp;&amp; cur.y === goal.y) {        // reached — rebuild the path
+            const path = [cur];
+            let k = ck;
+            while (cameFrom.has(k)) { const p = cameFrom.get(k); path.unshift(p); k = key(p.x, p.y); }
+            return { path, visited };
+        }
+        closed.add(ck);
+        visited.push(cur);
+
+        for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+            const nx = cur.x + dx, ny = cur.y + dy;
+            if (nx &lt; 0 || nx &gt;= W || ny &lt; 0 || ny &gt;= world.height) continue;
+            if (isSolid(world.get(nx, ny))) continue;       // walls block the path
+            const nk = key(nx, ny);
+            if (closed.has(nk)) continue;
+            const tentative = gScore.get(ck) + 1;
+            if (!gScore.has(nk) || tentative &lt; gScore.get(nk)) {
+                cameFrom.set(nk, cur);
+                gScore.set(nk, tentative);
+                fScore.set(nk, tentative + h(nx, ny));
+                if (!open.some(o =&gt; o.x === nx &amp;&amp; o.y === ny)) open.push({ x: nx, y: ny });
+            }
+        }
+    }
+    return { path: null, visited };   // no route exists
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">type Pt = { x: number; y: number };
+
+function aStar(world: TileWorld, start: Pt, goal: Pt):
+        { path: Pt[] | null; visited: Pt[] } {
+    const W = world.width;
+    const key = (x: number, y: number): number =&gt; y * W + x;
+    const h = (x: number, y: number): number =&gt; Math.abs(x - goal.x) + Math.abs(y - goal.y);
+    const open: Pt[] = [{ x: start.x, y: start.y }];
+    const gScore = new Map&lt;number, number&gt;([[key(start.x, start.y), 0]]);
+    const fScore = new Map&lt;number, number&gt;([[key(start.x, start.y), h(start.x, start.y)]]);
+    const cameFrom = new Map&lt;number, Pt&gt;();
+    const closed = new Set&lt;number&gt;();
+    const visited: Pt[] = [];
+
+    while (open.length) {
+        let bi = 0;
+        for (let i = 1; i &lt; open.length; i++)
+            if (fScore.get(key(open[i].x, open[i].y))! &lt; fScore.get(key(open[bi].x, open[bi].y))!) bi = i;
+        const cur = open.splice(bi, 1)[0];
+        const ck = key(cur.x, cur.y);
+
+        if (cur.x === goal.x &amp;&amp; cur.y === goal.y) {
+            const path: Pt[] = [cur];
+            let k = ck;
+            while (cameFrom.has(k)) { const p = cameFrom.get(k)!; path.unshift(p); k = key(p.x, p.y); }
+            return { path, visited };
+        }
+        closed.add(ck);
+        visited.push(cur);
+
+        for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+            const nx = cur.x + dx, ny = cur.y + dy;
+            if (nx &lt; 0 || nx &gt;= W || ny &lt; 0 || ny &gt;= world.height) continue;
+            if (isSolid(world.get(nx, ny))) continue;
+            const nk = key(nx, ny);
+            if (closed.has(nk)) continue;
+            const tentative = gScore.get(ck)! + 1;
+            if (!gScore.has(nk) || tentative &lt; gScore.get(nk)!) {
+                cameFrom.set(nk, cur);
+                gScore.set(nk, tentative);
+                fScore.set(nk, tentative + h(nx, ny));
+                if (!open.some(o =&gt; o.x === nx &amp;&amp; o.y === ny)) open.push({ x: nx, y: ny });
+            }
+        }
+    }
+    return { path: null, visited };
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>Watch it re-route</h3>
+            <p>
+                The red hunter walks the gold path toward the green goal; the blue tint shows every tile A*
+                examined. <strong>Left-click</strong> to mine, <strong>right-click</strong> to place a wall
+                — the path re-plans the instant the grid changes.
+            </p>
+            <div class="diagram">
+                <canvas id="voxPathfind" width="720" height="400"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnPathfindReset">🎲 New world</button>
+            </div>
+            <div id="voxPathfindInfo" class="info-display">Click to mine or place — the path re-routes.</div>
+
+            <div class="key-point">
+                <strong>📖 Deeper context:</strong> <a href="../../advanced.html#pathfinding">Fundamentals →
+                A* Pathfinding</a> covers the algorithm in depth — including the <strong>binary-heap
+                priority queue</strong> that replaces the linear "find lowest f" scan above for a real
+                performance win on large maps.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- DAY / NIGHT -->
+        <!-- ============================================ -->
+        <div id="daynight" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🌅 Day/Night Cycle &amp; Weather</h2>
+
+            <p>
+                The <a href="expert.html#lighting">Expert tier's flood-fill lighting</a> seeded every
+                sky-exposed tile at full brightness. A day/night cycle changes <em>one number</em>: the
+                <strong>skylight seed intensity</strong> becomes a function of the time of day. Torches stay
+                at full brightness — so at night the world goes dark <em>except</em> the pools of torchlight.
+            </p>
+
+            <div class="concept-box">
+                <h4>One cosine drives the whole sky</h4>
+                <p>
+                    Time <code>t</code> runs <code>0..1</code> over a day. A cosine turns it into a smooth
+                    <em>day factor</em> — 0 at midnight, 1 at noon — which scales both the skylight seed and
+                    the background colour. Weather is a cheap multiplier on top: rain clouds dim the
+                    skylight further.
+                </p>
+                <div class="formula">
+                    dayFactor&nbsp;&nbsp;= 0.5 − 0.5 · cos(2π · t)<br>
+                    skyIntensity = 0.06 + 0.94 · dayFactor&nbsp;&nbsp;(× 0.7 when raining)
+                </div>
+            </div>
+
+            <h3>Run a day</h3>
+            <p>
+                Drag the time slider, or tick <strong>Auto</strong> to let the day run. Tick
+                <strong>Rain</strong> for overcast, dimmer skies. Notice the torches hold their glow no
+                matter the hour.
+            </p>
+            <div class="diagram">
+                <canvas id="voxDayNight" width="720" height="396"></canvas>
+            </div>
+            <div class="controls">
+                <label style="display:inline-flex;align-items:center;gap:6px;">
+                    Time: <input type="range" id="voxDayNightTime" min="0" max="1000" step="1" value="350" style="width:220px;">
+                </label>
+                <label><input type="checkbox" id="voxDayNightAuto" checked> Auto</label>
+                <label><input type="checkbox" id="voxDayNightRain"> 🌧 Rain</label>
+            </div>
+            <div id="voxDayNightInfo" class="info-display">Drag the time slider or enable Auto.</div>
+
+            <div class="key-point">
+                <strong>📖 Deeper context:</strong> <a href="../../advanced.html#shadows">Fundamentals →
+                Shadow Casting &amp; Vision</a> — sharp directional shadows are the harder-edged cousin of
+                this soft, omnidirectional skylight.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- PERFORMANCE -->
+        <!-- ============================================ -->
+        <div id="performance" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>⚡ Offscreen-Canvas Tile Caching</h2>
+
+            <p>
+                Re-running a textured tile draw for thousands of visible tiles <em>every frame</em> burns
+                time on work that didn't change. The fix is a classic space-for-time trade: render the
+                static world <strong>once</strong> to an <strong>offscreen canvas</strong>, then each frame
+                just <code>drawImage</code> the visible slice of that bitmap — one call instead of thousands.
+            </p>
+
+            <div class="concept-box">
+                <h4>Cache, then blit</h4>
+                <p>
+                    Build the cache once into an off-DOM <code>&lt;canvas&gt;</code>. The per-frame cost
+                    collapses to a single blit. When a tile <em>does</em> change, you re-render only that
+                    tile's rectangle into the cache — never the whole world.
+                </p>
+            </div>
+
+            <details>
+                <summary>📝 Click to see: building &amp; blitting the cache</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Build the cache ONCE — the whole world rendered to an off-DOM canvas.
+const cache = document.createElement('canvas');
+cache.width  = world.width  * TILE;
+cache.height = world.height * TILE;
+const cctx = cache.getContext('2d');
+for (let y = 0; y &lt; world.height; y++)
+    for (let x = 0; x &lt; world.width; x++)
+        drawTileTextured(cctx, x * TILE, y * TILE, TILE, world.get(x, y), x, y);
+
+// Per frame: one blit of the visible region — no per-tile work at all.
+function render() {
+    ctx.drawImage(cache, camera.x, camera.y, viewW, viewH,
+                         0, 0, viewW, viewH);
+}
+
+// When a tile changes, patch just its rectangle back into the cache.
+function setTile(x, y, id) {
+    world.set(x, y, id);
+    cctx.clearRect(x * TILE, y * TILE, TILE, TILE);
+    drawTileTextured(cctx, x * TILE, y * TILE, TILE, id, x, y);
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const cache: HTMLCanvasElement = document.createElement('canvas');
+cache.width  = world.width  * TILE;
+cache.height = world.height * TILE;
+const cctx = cache.getContext('2d') as CanvasRenderingContext2D;
+for (let y = 0; y &lt; world.height; y++)
+    for (let x = 0; x &lt; world.width; x++)
+        drawTileTextured(cctx, x * TILE, y * TILE, TILE, world.get(x, y), x, y);
+
+function render(): void {
+    ctx.drawImage(cache, camera.x, camera.y, viewW, viewH,
+                         0, 0, viewW, viewH);
+}
+
+function setTile(x: number, y: number, id: number): void {
+    world.set(x, y, id);
+    cctx.clearRect(x * TILE, y * TILE, TILE, TILE);
+    drawTileTextured(cctx, x * TILE, y * TILE, TILE, id, x, y);
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>Measure the difference</h3>
+            <p>
+                A 160×60 world with a textured draw, camera auto-panning. Toggle caching and watch the
+                per-frame draw time — the cached blit is many times faster than redrawing every visible
+                tile.
+            </p>
+            <div class="diagram">
+                <canvas id="voxPerf" width="760" height="420"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnPerfToggle">Caching: ON</button>
+            </div>
+            <div id="voxPerfInfo" class="info-display">Toggle caching to compare draw times.</div>
+
+            <div class="key-point">
+                <strong>📖 Deeper context:</strong> caching is the same instinct as
+                <a href="../../expert.html#pooling">Fundamentals → Object Pooling</a> — don't repeat work —
+                and the per-frame measurement ties to <a href="../../expert.html#delta-time">Delta Time
+                &amp; Fixed Timestep</a>.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- CAPSTONE -->
+        <!-- ============================================ -->
+        <div id="capstone" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🏕️ Mini-Project: A Living World</h2>
+
+            <p>
+                Four tiers of systems, composed into one scene: a generated, chunk-free world you can mine;
+                a player with real physics; a ghost that <strong>A*-hunts you</strong> and re-routes when
+                you reshape the terrain; a <strong>day/night cycle</strong>; and full
+                <strong>flood-fill lighting</strong> — all on a camera that follows you.
+            </p>
+
+            <div class="concept-box">
+                <h4>Every frame, in order</h4>
+                <ol>
+                    <li><strong>Player physics</strong> — gravity + per-axis AABB collision (Intermediate).</li>
+                    <li><strong>Enemy AI</strong> — A* toward the player's tile, re-planned a few times a
+                    second so mining instantly changes its route (this tier).</li>
+                    <li><strong>Day/night</strong> — advance time, recompute the skylight (this tier).</li>
+                    <li><strong>Lighting</strong> — BFS flood fill from sky + torches (Expert).</li>
+                    <li><strong>Camera + render</strong> — follow the player, viewport-cull the draw
+                    (Beginner).</li>
+                </ol>
+            </div>
+
+            <h3>Play it</h3>
+            <p>
+                Click to focus. <strong>A / D</strong> move, <strong>W / Space</strong> jump,
+                <strong>click</strong> to mine. The ghost is always re-routing toward you — wall yourself
+                off, or carve an escape.
+            </p>
+            <div class="diagram">
+                <canvas id="voxCapstone" width="760" height="440" tabindex="0"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnCapstoneReset">🎲 New world</button>
+            </div>
+            <div id="voxCapstoneInfo" class="info-display">Click to focus · A/D move · W jump · click mines.</div>
+
+            <div class="example-box">
+                <h4>🎮 What you just built</h4>
+                <p>
+                    A persistent, lit, day/night voxel world with a physics-driven player and an AI hunter
+                    — the playable skeleton of a Terraria-like, assembled entirely from the systems of the
+                    four tiers. Everything still reads and writes one <code>TileWorld</code> grid.
+                </p>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- RECAP -->
+        <!-- ============================================ -->
+        <div id="recap" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🧭 Tier Recap</h2>
+
+            <p>You can now:</p>
+            <ul>
+                <li><strong>Save and load</strong> a world, compressed with run-length encoding</li>
+                <li>Run <strong>A*</strong> over the tile grid and re-plan instantly when terrain changes</li>
+                <li>Drive a <strong>day/night cycle</strong> (and weather) from the skylight seed</li>
+                <li>Cache rendering to an <strong>offscreen canvas</strong> for a big per-frame speed-up</li>
+                <li>Compose it all into a <strong>living world</strong> with a player and an AI hunter</li>
+            </ul>
+
+            <div class="example-box">
+                <h4>🎮 What you just built</h4>
+                <p>
+                    A complete Terraria-style core — generated, editable, persistent, populated, lit, and
+                    fast. The <a href="simulations.html">Simulations tier</a> steps back from gameplay to
+                    visualise the algorithms underneath: cave-carving, biome blending, light propagation,
+                    and liquid flow, as interactive deep dives.
+                </p>
+            </div>
+        </div>
+
+        <!-- Next Steps -->
+        <div class="section" style="text-align: center;">
+            <h2>✅ Advanced Tier Complete</h2>
+            <p style="font-size: 1.1em; margin: 24px 0;">
+                One tier left: interactive deep-dive visualisers for the algorithms behind the scenes.
+            </p>
+            <a href="simulations.html" class="nav-button" style="font-size: 1.2em; padding: 20px 40px;">
+                Continue to Simulations →
+            </a>
+            <p style="margin-top: 20px;"><em>Simulations isn't written yet — coming in the next phase. Track your progress on the <a href="index.html">sub-track index</a>.</em></p>
+        </div>
+    </div>
+
+    <!-- Scroll to Top Button -->
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <!-- Load shared utilities. Paths are relative to this two-deep subdirectory. -->
+    <script src="../../shared/utils.js"></script>
+    <script src="../../shared/code-tabs.js"></script>
+    <script src="advanced-demos.js"></script>
+    <script src="bundles-advanced.js"></script>
+    <script src="../../shared/export-demo.js"></script>
+</body>
+</html>

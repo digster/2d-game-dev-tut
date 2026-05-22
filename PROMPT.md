@@ -179,3 +179,15 @@ tile lighting, chunked infinite worlds), and `bundles-expert.js`. Unlocked the
 Expert tier across all cross-tier links. Fixed a torch-seeding weakness during
 verification (probe more columns so 4 torches reliably seed). All
 browser-verified console-clean. README.md updated.
+
+## 2026-05-21 (pt.4) — Voxel Worlds: Terraria Advanced tier
+
+> Okay, work on the next iteration.
+
+Built the Terraria sub-track Advanced tier (Persistence, AI & Lighting Polish):
+`advanced.html` (5 sections + recap), `advanced-demos.js` (5 demos — RLE
+save/load, A* on a destructible grid, day/night & weather, offscreen-canvas
+tile caching, a living-world capstone with a player + roaming A* hunter), and
+`bundles-advanced.js`. Unlocked the Advanced tier across all cross-tier links.
+Fixed a pathfinding demo that opened on "no path" (now guarantees a reachable
+goal). All browser-verified console-clean. README.md updated.

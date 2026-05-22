@@ -30,17 +30,21 @@ own subdirectory with a per-tier file structure mirroring the Fundamentals layou
   five-/three-tier file structure: `voxel-worlds/terraria/` (tile-grid voxels —
   block-discrete, player-edited) and `voxel-worlds/noita/` (cellular-pixel
   voxels — every pixel self-simulates). Currently scaffolded; the Terraria
-  **Beginner, Intermediate and Expert tiers are shipped.** Beginner (7 Canvas2D
-  demos): tile coords, flat-`Uint8Array` storage, sprite-less grid rendering
-  with a deterministic 2D hash, viewport culling, foreground/background wall
-  layers. Intermediate (5 demos): mouse-to-tile picking with Chebyshev tool
-  reach, mining/placing with a hotbar, a falling-sand cellular automaton,
-  per-axis AABB player-vs-grid collision, and a side-scroll digger
-  mini-project. Expert (6 demos): value-noise + fBm, surface-heightmap worldgen
-  with biome zones, noise-iso-band cave carving + depth-graded ore,
-  cellular-automaton water, BFS flood-fill tile lighting, and a chunked
-  infinite world. The Noita sub-track index deliberately covers only concepts
-  *not* in Terraria. Demo IDs and helper bundles are prefixed `vox_`.
+  **Beginner, Intermediate, Expert and Advanced tiers are shipped** (4 of 5).
+  Beginner (7 Canvas2D demos): tile coords, flat-`Uint8Array` storage,
+  sprite-less grid rendering with a deterministic 2D hash, viewport culling,
+  foreground/background wall layers. Intermediate (5 demos): mouse-to-tile
+  picking with Chebyshev tool reach, mining/placing with a hotbar, a
+  falling-sand cellular automaton, per-axis AABB player-vs-grid collision, and
+  a side-scroll digger mini-project. Expert (6 demos): value-noise + fBm,
+  surface-heightmap worldgen with biome zones, noise-iso-band cave carving +
+  depth-graded ore, cellular-automaton water, BFS flood-fill tile lighting, and
+  a chunked infinite world. Advanced (5 demos): run-length-encoded save/load,
+  A* pathfinding on a destructible grid, a day/night cycle driving the skylight
+  seed, offscreen-canvas render caching, and a "living world" capstone (player
+  + A* hunter + day/night + lighting). The Noita sub-track index deliberately
+  covers only concepts *not* in Terraria. Demo IDs and helper bundles are
+  prefixed `vox_`.
 - `shaders/` — learn WebGL / GLSL fragment shaders for 2D game effects.
   See `shaders/index.html` for the track roadmap. **Fully shipped — all 8
   tiers:** Beginner (Shader Foundations), Intermediate (Patterns, Noise &
