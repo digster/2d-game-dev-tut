@@ -167,3 +167,15 @@ digger mini-project), and `bundles-intermediate.js`. Unlocked the Intermediate
 tier across all cross-tier links. Caught and fixed a player-jitter bug during
 verification (AABB→tile-range off-by-one — `ceil(end)-1`, not `floor(end-1)`).
 All browser-verified console-clean. README.md updated.
+
+## 2026-05-21 (pt.3) — Voxel Worlds: Terraria Expert tier
+
+> Okay, work on the next iteration.
+
+Built the Terraria sub-track Expert tier (World Generation & Liquids):
+`expert.html` (6 sections + recap), `expert-demos.js` (6 demos — value-noise/fBm,
+surface+biome worldgen, caves & ore, cellular-automaton water, BFS flood-fill
+tile lighting, chunked infinite worlds), and `bundles-expert.js`. Unlocked the
+Expert tier across all cross-tier links. Fixed a torch-seeding weakness during
+verification (probe more columns so 4 torches reliably seed). All
+browser-verified console-clean. README.md updated.

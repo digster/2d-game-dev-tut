@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expert — Terraria Voxels — Voxel Worlds Track</title>
+    <!-- Path note: two directories deep, so ../../shared/... and ../../<page>.html. -->
+    <link rel="stylesheet" href="../../shared/styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>🌲 Expert — World Generation &amp; Liquids</h1>
+        <p class="subtitle">Stop hand-drawing the world. Grow it from noise — surfaces, biomes, caves, ore — then make it flow and glow.</p>
+
+        <!-- Navigation -->
+        <div class="nav">
+            <a href="../../index.html" class="nav-button">← Home</a>
+            <a href="../index.html" class="nav-button">← Voxel Worlds</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="intermediate.html" class="nav-button">← Intermediate</a>
+            <a href="expert.html" class="nav-button active">Expert</a>
+            <a href="advanced.html" class="nav-button">Advanced →</a>
+        </div>
+
+        <!-- Table of Contents -->
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#noise">Noise: the Terrain Primitive</a></li>
+                <li><a href="#worldgen">Surface Heightmaps &amp; Biomes</a></li>
+                <li><a href="#caves">Caves &amp; Ore Veins</a></li>
+                <li><a href="#water">Cellular-Automaton Liquids</a></li>
+                <li><a href="#lighting">Tile Lighting (Flood Fill)</a></li>
+                <li><a href="#chunks">Chunked Infinite Worlds</a></li>
+                <li><a href="#recap">Tier Recap</a></li>
+            </ul>
+        </div>
+
+        <div class="key-point">
+            <strong>💡 Where we left off:</strong> the <a href="intermediate.html">Intermediate tier</a> let the
+            player edit a <em>hand-authored</em> world. Real voxel games don't ship hand-authored worlds — they
+            ship a <strong>seed</strong> and a generator. This tier builds that generator, then adds the two
+            systems that make a generated world feel alive: flowing liquids and propagating light.
+        </div>
+
+        <!-- ============================================ -->
+        <!-- NOISE -->
+        <!-- ============================================ -->
+        <div id="noise" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🌊 Noise: the Terrain Primitive</h2>
+
+            <p>
+                Procedural worlds are built on <strong>noise</strong> — a function that turns coordinates into
+                smooth, random-looking values. Plain <code>Math.random()</code> is no good here: it has no
+                spatial structure (neighbours are unrelated) and isn't repeatable. We need a function that is
+                <strong>smooth</strong>, <strong>seedable</strong>, and a <strong>pure function of
+                position</strong> — same <code>(x, y)</code> always gives the same value.
+            </p>
+
+            <div class="concept-box">
+                <h4>Value noise + fBm</h4>
+                <p>
+                    <strong>Value noise</strong> hashes a random value at every integer lattice point, then
+                    smoothly interpolates between them — giving soft hills. One layer is too smooth to look
+                    natural, so we sum several: <strong>fractal Brownian motion (fBm)</strong> adds
+                    <em>octaves</em>, each at double the frequency and half the amplitude. Big octaves give
+                    the broad shape; small octaves add crags and detail.
+                </p>
+            </div>
+
+            <details>
+                <summary>📝 Click to see: smoothNoise2D &amp; fbm2D</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Smoothly-interpolated value noise. hash2D returns 0..1 per lattice point.
+function smoothNoise2D(x, y, seed) {
+    const x0 = Math.floor(x), y0 = Math.floor(y);
+    const fx = x - x0, fy = y - y0;
+    // smoothstep weights — removes the grid-aligned creasing of linear blend.
+    const sx = fx * fx * (3 - 2 * fx);
+    const sy = fy * fy * (3 - 2 * fy);
+    const n00 = hash2D(x0,     y0,     seed);
+    const n10 = hash2D(x0 + 1, y0,     seed);
+    const n01 = hash2D(x0,     y0 + 1, seed);
+    const n11 = hash2D(x0 + 1, y0 + 1, seed);
+    const nx0 = n00 + (n10 - n00) * sx;
+    const nx1 = n01 + (n11 - n01) * sx;
+    return nx0 + (nx1 - nx0) * sy;
+}
+
+// Fractal Brownian motion — sum octaves, doubling frequency, halving amplitude.
+function fbm2D(x, y, seed, octaves) {
+    let sum = 0, amp = 1, freq = 1, norm = 0;
+    for (let o = 0; o &lt; octaves; o++) {
+        sum += amp * smoothNoise2D(x * freq, y * freq, seed + o * 1013);
+        norm += amp;
+        amp *= 0.5;
+        freq *= 2;
+    }
+    return sum / norm;   // back to 0..1
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function smoothNoise2D(x: number, y: number, seed: number): number {
+    const x0 = Math.floor(x), y0 = Math.floor(y);
+    const fx = x - x0, fy = y - y0;
+    const sx = fx * fx * (3 - 2 * fx);
+    const sy = fy * fy * (3 - 2 * fy);
+    const n00 = hash2D(x0,     y0,     seed);
+    const n10 = hash2D(x0 + 1, y0,     seed);
+    const n01 = hash2D(x0,     y0 + 1, seed);
+    const n11 = hash2D(x0 + 1, y0 + 1, seed);
+    const nx0 = n00 + (n10 - n00) * sx;
+    const nx1 = n01 + (n11 - n01) * sx;
+    return nx0 + (nx1 - nx0) * sy;
+}
+
+function fbm2D(x: number, y: number, seed: number, octaves: number): number {
+    let sum = 0, amp = 1, freq = 1, norm = 0;
+    for (let o = 0; o &lt; octaves; o++) {
+        sum += amp * smoothNoise2D(x * freq, y * freq, seed + o * 1013);
+        norm += amp;
+        amp *= 0.5;
+        freq *= 2;
+    }
+    return sum / norm;
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>See octaves build detail</h3>
+            <p>
+                The grayscale field is 2D fBm; the green curve is a 1D slice of the same noise — that curve
+                <em>is</em> our terrain surface. Drag <strong>octaves</strong> from 1 upward and watch detail
+                accumulate.
+            </p>
+            <div class="diagram">
+                <canvas id="voxNoise" width="720" height="300"></canvas>
+            </div>
+            <div class="controls">
+                <label style="display:inline-flex;align-items:center;gap:6px;">
+                    Octaves: <input type="range" id="voxNoiseOctaves" min="1" max="6" step="1" value="4" style="width:130px;">
+                    <span id="voxNoiseOctavesValue">4</span>
+                </label>
+                <label style="display:inline-flex;align-items:center;gap:6px;">
+                    Scale: <input type="range" id="voxNoiseScale" min="10" max="90" step="5" value="30" style="width:130px;">
+                    <span id="voxNoiseScaleValue">0.030</span>
+                </label>
+                <label style="display:inline-flex;align-items:center;gap:6px;">
+                    Seed: <input type="range" id="voxNoiseSeed" min="0" max="40" step="1" value="7" style="width:110px;">
+                    <span id="voxNoiseSeedValue">7</span>
+                </label>
+            </div>
+            <div id="voxNoiseInfo" class="info-display">Drag the sliders.</div>
+
+            <div class="key-point">
+                <strong>📖 Deeper context:</strong> <a href="../../expert.html#noise">Fundamentals → Perlin
+                Noise &amp; Terrain Generation</a> covers gradient (Perlin) noise, which is smoother than the
+                value noise here. Value noise is simpler to implement and plenty for a tile world.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- WORLDGEN -->
+        <!-- ============================================ -->
+        <div id="worldgen" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🏔️ Surface Heightmaps &amp; Biomes</h2>
+
+            <p>
+                The simplest world generator is a <strong>heightmap</strong>: for each column, one fBm sample
+                gives the surface height; everything above is sky, everything below is dirt then stone. A
+                second, very-low-frequency noise carves wide <strong>biome</strong> zones that pick the
+                surface material — grass for forest, sand for desert, snow for tundra.
+            </p>
+
+            <div class="concept-box">
+                <h4>generateTile — a pure function of position</h4>
+                <p>
+                    The key design choice: the generator is <code>generateTile(wx, wy, seed)</code> — it
+                    returns the material at one tile, depending <em>only</em> on coordinates and the seed.
+                    No loops, no neighbours. That purity is what lets us generate the world in any order, or
+                    in independent chunks (see <a href="#chunks">below</a>) — every call agrees.
+                </p>
+            </div>
+
+            <details>
+                <summary>📝 Click to see: surfaceHeight &amp; generateTile</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Surface height at column wx — a 1D slice of fBm around a base level.
+function surfaceHeight(wx, seed, baseY, amp) {
+    const n = fbm2D(wx * 0.045, 13.7, seed, 4);
+    return Math.floor(baseY + (n - 0.5) * 2 * amp);
+}
+
+// Biome zones — a very-low-frequency noise makes wide bands.
+function biomeAt(wx, seed) {
+    const b = smoothNoise2D(wx * 0.012, 4.2, seed + 777);
+    return b &lt; 0.36 ? 'desert' : (b &gt; 0.66 ? 'tundra' : 'forest');
+}
+
+// The material at one tile — a PURE function of (wx, wy, seed).
+function generateTile(wx, wy, seed, opts) {
+    const surf = surfaceHeight(wx, seed, opts.baseY, opts.amp);
+    if (wy &lt; surf) return 0;                    // sky
+    const biome = biomeAt(wx, seed);
+    if (wy === surf) {
+        return biome === 'desert' ? SAND
+             : biome === 'tundra' ? SNOW : GRASS;
+    }
+    if (wy &lt; surf + 5) return biome === 'desert' ? SAND : DIRT;
+    return STONE;
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function surfaceHeight(wx: number, seed: number, baseY: number, amp: number): number {
+    const n = fbm2D(wx * 0.045, 13.7, seed, 4);
+    return Math.floor(baseY + (n - 0.5) * 2 * amp);
+}
+
+type Biome = 'desert' | 'forest' | 'tundra';
+function biomeAt(wx: number, seed: number): Biome {
+    const b = smoothNoise2D(wx * 0.012, 4.2, seed + 777);
+    return b &lt; 0.36 ? 'desert' : (b &gt; 0.66 ? 'tundra' : 'forest');
+}
+
+function generateTile(wx: number, wy: number, seed: number,
+                      opts: { baseY: number; amp: number }): number {
+    const surf = surfaceHeight(wx, seed, opts.baseY, opts.amp);
+    if (wy &lt; surf) return 0;
+    const biome = biomeAt(wx, seed);
+    if (wy === surf) {
+        return biome === 'desert' ? SAND
+             : biome === 'tundra' ? SNOW : GRASS;
+    }
+    if (wy &lt; surf + 5) return biome === 'desert' ? SAND : DIRT;
+    return STONE;
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>Generate a world</h3>
+            <p>Change the seed for a whole new world; raise the amplitude for more dramatic hills.</p>
+            <div class="diagram">
+                <canvas id="voxWorldgen" width="720" height="396"></canvas>
+            </div>
+            <div class="controls">
+                <label style="display:inline-flex;align-items:center;gap:6px;">
+                    Seed: <input type="range" id="voxWorldgenSeed" min="0" max="999" step="1" value="42" style="width:160px;">
+                    <span id="voxWorldgenSeedValue">42</span>
+                </label>
+                <label style="display:inline-flex;align-items:center;gap:6px;">
+                    Amplitude: <input type="range" id="voxWorldgenAmp" min="3" max="14" step="1" value="8" style="width:130px;">
+                    <span id="voxWorldgenAmpValue">8</span>
+                </label>
+                <button id="btnWorldgenRegen">🎲 Regenerate</button>
+            </div>
+            <div id="voxWorldgenInfo" class="info-display">Drag the sliders or regenerate.</div>
+
+            <div class="key-point">
+                <strong>📖 Deeper context:</strong> <a href="../../expert.html#procgen">Fundamentals →
+                Procedural Generation</a> covers generation strategies beyond heightmaps.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- CAVES -->
+        <!-- ============================================ -->
+        <div id="caves" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🕳️ Caves &amp; Ore Veins</h2>
+
+            <p>
+                Caves and ore are the same trick — <strong>thresholding 2D noise</strong> — applied two ways.
+                For <strong>caves</strong>, carve a tile to air when a 2D fBm sample lands in a thin band
+                around 0.5: <code>|fBm − 0.5| &lt; width</code>. That band is an <em>iso-line</em> of the
+                noise field, and iso-lines are long and connected — so the caves come out as winding tunnels,
+                not disconnected blobs.
+            </p>
+
+            <div class="concept-box">
+                <h4>Ore: threshold a different noise</h4>
+                <p>
+                    For <strong>ore</strong>, sample a separate high-frequency noise and place ore where it
+                    spikes above a threshold. Lower the threshold with depth and the deep rock fills with
+                    richer veins — the classic "dig deeper for better loot" gradient.
+                </p>
+                <div class="formula">
+                    isCave = |fbm2D(wx·f, wy·f) − 0.5| &lt; caveWidth<br>
+                    isOre&nbsp; = fbm2D(wx·g, wy·g) &gt; (0.84 − depthFraction · 0.13)
+                </div>
+            </div>
+
+            <h3>Carve and prospect</h3>
+            <p>
+                Widen the cave band to hollow out more of the rock; toggle ore to see depth-graded veins.
+            </p>
+            <div class="diagram">
+                <canvas id="voxCaves" width="720" height="396"></canvas>
+            </div>
+            <div class="controls">
+                <label style="display:inline-flex;align-items:center;gap:6px;">
+                    Cave width: <input type="range" id="voxCavesWidth" min="20" max="160" step="5" value="90" style="width:170px;">
+                    <span id="voxCavesWidthValue">0.090</span>
+                </label>
+                <label><input type="checkbox" id="voxCavesOre" checked> Show ore veins</label>
+                <button id="btnCavesRegen">🎲 Regenerate</button>
+            </div>
+            <div id="voxCavesInfo" class="info-display">Drag the cave-width slider.</div>
+
+            <div class="challenge-box">
+                <h4>🎯 Try this</h4>
+                <p>
+                    Drag cave width to its minimum — the caves shrink to thin threads, because the iso-band
+                    is razor-thin. Push it to the max and the band is so wide that most of the rock is
+                    carved away into one giant cavern. Terraria-like caves live around the middle.
+                </p>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- WATER -->
+        <!-- ============================================ -->
+        <div id="water" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>💧 Cellular-Automaton Liquids</h2>
+
+            <p>
+                Water is the falling-sand automaton from the <a href="intermediate.html#falling">Intermediate
+                tier</a> with <strong>one extra rule</strong>. Sand only moves down and down-diagonally, so it
+                <em>piles</em>. Water adds a <strong>sideways spread</strong> step — so instead of piling, it
+                flows out and <em>pools</em>, filling containers and spilling over walls.
+            </p>
+
+            <div class="concept-box">
+                <h4>Down → down-diagonal → sideways</h4>
+                <p>
+                    Each water tile, scanned bottom-up: fall straight down if it can; else slide
+                    down-diagonally; else — and this is the new part — move sideways into an open neighbour.
+                    The sideways step is what levels the surface.
+                </p>
+                <p>
+                    <strong>Honest limitation:</strong> this binary model (a cell is either water or not)
+                    can't represent <em>partial</em> fill, so a lone droplet on flat ground wanders rather
+                    than settling, and levels don't perfectly equalise. A "water amount per cell" model
+                    fixes that — see <a href="../../simulation.html#fluid-dynamics">Fundamentals → Fluid
+                    Dynamics</a> and the <a href="../noita/index.html">Noita sub-track</a>.
+                </p>
+            </div>
+
+            <details data-demo-id="vox_water" data-deps="vox_colors,vox_materials,vox_clearCanvas,vox_drawTile,vox_TileWorld,vox_screenToTile">
+                <summary>📝 Click to see: stepWater</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Advance every water tile one cell. Bottom-up scan = one cell per tick.
+function stepWater(world) {
+    for (let y = world.height - 2; y &gt;= 0; y--) {
+        for (let x = 0; x &lt; world.width; x++) {
+            if (world.get(x, y) !== WATER) continue;
+
+            // 1. straight down
+            if (world.get(x, y + 1) === 0) {
+                world.set(x, y, 0); world.set(x, y + 1, WATER); continue;
+            }
+            // 2. down-diagonal
+            const dl = world.get(x - 1, y + 1) === 0 &amp;&amp; world.get(x - 1, y) === 0;
+            const dr = world.get(x + 1, y + 1) === 0 &amp;&amp; world.get(x + 1, y) === 0;
+            if (dl || dr) {
+                const dx = (dl &amp;&amp; dr) ? (Math.random() &lt; 0.5 ? -1 : 1) : (dl ? -1 : 1);
+                world.set(x, y, 0); world.set(x + dx, y + 1, WATER); continue;
+            }
+            // 3. sideways spread — the rule that makes water POOL, not pile.
+            const sl = world.get(x - 1, y) === 0;
+            const sr = world.get(x + 1, y) === 0;
+            if (sl || sr) {
+                const dx = (sl &amp;&amp; sr) ? (Math.random() &lt; 0.5 ? -1 : 1) : (sl ? -1 : 1);
+                world.set(x, y, 0); world.set(x + dx, y, WATER);
+            }
+        }
+    }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function stepWater(world: TileWorld): void {
+    for (let y = world.height - 2; y &gt;= 0; y--) {
+        for (let x = 0; x &lt; world.width; x++) {
+            if (world.get(x, y) !== WATER) continue;
+
+            if (world.get(x, y + 1) === 0) {
+                world.set(x, y, 0); world.set(x, y + 1, WATER); continue;
+            }
+            const dl = world.get(x - 1, y + 1) === 0 &amp;&amp; world.get(x - 1, y) === 0;
+            const dr = world.get(x + 1, y + 1) === 0 &amp;&amp; world.get(x + 1, y) === 0;
+            if (dl || dr) {
+                const dx = (dl &amp;&amp; dr) ? (Math.random() &lt; 0.5 ? -1 : 1) : (dl ? -1 : 1);
+                world.set(x, y, 0); world.set(x + dx, y + 1, WATER); continue;
+            }
+            const sl = world.get(x - 1, y) === 0;
+            const sr = world.get(x + 1, y) === 0;
+            if (sl || sr) {
+                const dx = (sl &amp;&amp; sr) ? (Math.random() &lt; 0.5 ? -1 : 1) : (sl ? -1 : 1);
+                world.set(x, y, 0); world.set(x + dx, y, WATER);
+            }
+        }
+    }
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>Pour water</h3>
+            <p>
+                <strong>Click or drag</strong> to pour water into the tub. The middle wall is short — fill one
+                side past it and the water spills into the other. <strong>Step</strong> advances one tick.
+            </p>
+            <div class="diagram">
+                <canvas id="voxWater" width="720" height="396"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnWaterStep">Step once</button>
+                <button id="btnWaterRun">Run</button>
+                <button id="btnWaterReset">Reset</button>
+            </div>
+            <div id="voxWaterInfo" class="info-display">Click to pour water, then Step or Run.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- LIGHTING -->
+        <!-- ============================================ -->
+        <div id="lighting" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>💡 Tile Lighting (Flood Fill)</h2>
+
+            <p>
+                A generated cave is pitch black until we light it. Tile lighting is a
+                <strong>flood fill</strong>: brightness starts at full at every light source, then spreads
+                outward tile by tile, losing a little each step — more through solid rock, less through open
+                air. It's a breadth-first search, or equivalently a Dijkstra relaxation on the tile grid.
+            </p>
+
+            <div class="concept-box">
+                <h4>Seeds, then spread</h4>
+                <ul>
+                    <li><strong>Skylight</strong> — every tile exposed to the sky (air, with only air above
+                    it) starts at brightness 1.</li>
+                    <li><strong>Torches</strong> — every torch tile starts at brightness 1.</li>
+                    <li><strong>Spread</strong> — from the queue of lit tiles, push brightness to neighbours
+                    minus a per-tile attenuation. A neighbour is only updated (and re-queued) if the new
+                    value beats its current one. Because brightness only ever decreases, the flood halts.</li>
+                </ul>
+            </div>
+
+            <details data-demo-id="vox_light" data-deps="vox_colors,vox_materials,vox_clearCanvas,vox_hash2D,vox_drawTile,vox_isSolid,vox_TileWorld,vox_screenToTile">
+                <summary>📝 Click to see: computeLight (BFS flood fill)</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Fill `light` (0..1 per tile) by flooding out from sky tiles and torches.
+// A flat array used as a queue (head pointer) avoids Array.shift()'s O(n) cost.
+function computeLight(world, light) {
+    const W = world.width, H = world.height;
+    light.fill(0);
+    const queue = [];
+
+    // Seed 1: skylight — each column lit from the top until the first solid tile.
+    for (let x = 0; x &lt; W; x++) {
+        for (let y = 0; y &lt; H; y++) {
+            if (isSolid(world.get(x, y))) break;
+            light[y * W + x] = 1;
+            queue.push(x, y);
+        }
+    }
+    // Seed 2: torches.
+    for (let i = 0; i &lt; world.tiles.length; i++) {
+        if (world.tiles[i] === TORCH) {
+            light[i] = 1;
+            queue.push(i % W, (i / W) | 0);
+        }
+    }
+    // Spread: relax brightness outward. Halts because light only decreases.
+    let head = 0;
+    while (head &lt; queue.length) {
+        const x = queue[head++], y = queue[head++];
+        const lv = light[y * W + x];
+        const nb = [[1,0],[-1,0],[0,1],[0,-1]];
+        for (let k = 0; k &lt; 4; k++) {
+            const nx = x + nb[k][0], ny = y + nb[k][1];
+            if (nx &lt; 0 || nx &gt;= W || ny &lt; 0 || ny &gt;= H) continue;
+            const ni = ny * W + nx;
+            const atten = isSolid(world.get(nx, ny)) ? 0.24 : 0.10;
+            const nl = lv - atten;
+            if (nl &gt; light[ni]) {
+                light[ni] = nl;
+                queue.push(nx, ny);
+            }
+        }
+    }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function computeLight(world: TileWorld, light: Float32Array): void {
+    const W = world.width, H = world.height;
+    light.fill(0);
+    const queue: number[] = [];
+
+    for (let x = 0; x &lt; W; x++) {
+        for (let y = 0; y &lt; H; y++) {
+            if (isSolid(world.get(x, y))) break;
+            light[y * W + x] = 1;
+            queue.push(x, y);
+        }
+    }
+    for (let i = 0; i &lt; world.tiles.length; i++) {
+        if (world.tiles[i] === TORCH) {
+            light[i] = 1;
+            queue.push(i % W, (i / W) | 0);
+        }
+    }
+    let head = 0;
+    while (head &lt; queue.length) {
+        const x = queue[head++], y = queue[head++];
+        const lv = light[y * W + x];
+        const nb = [[1,0],[-1,0],[0,1],[0,-1]];
+        for (let k = 0; k &lt; 4; k++) {
+            const nx = x + nb[k][0], ny = y + nb[k][1];
+            if (nx &lt; 0 || nx &gt;= W || ny &lt; 0 || ny &gt;= H) continue;
+            const ni = ny * W + nx;
+            const atten = isSolid(world.get(nx, ny)) ? 0.24 : 0.10;
+            const nl = lv - atten;
+            if (nl &gt; light[ni]) {
+                light[ni] = nl;
+                queue.push(nx, ny);
+            }
+        }
+    }
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>Light the caves</h3>
+            <p>
+                The surface is lit by the sky; the caves are dark. <strong>Click an empty tile</strong> to
+                place a torch and watch the flood fill light up the cavern around it. Click a torch to
+                remove it.
+            </p>
+            <div class="diagram">
+                <canvas id="voxLight" width="720" height="396"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnLightClear">Clear torches</button>
+                <button id="btnLightReset">Reset world</button>
+            </div>
+            <div id="voxLightInfo" class="info-display">Click an empty tile to place a torch.</div>
+
+            <div class="key-point">
+                <strong>📖 Deeper context:</strong> <a href="../../advanced.html#shadows">Fundamentals →
+                Shadow Casting &amp; Vision</a> covers <em>directional</em> visibility (raycast shadows),
+                which is the sharper-edged cousin of this soft, omnidirectional flood-fill light.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- CHUNKS -->
+        <!-- ============================================ -->
+        <div id="chunks" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🧩 Chunked Infinite Worlds</h2>
+
+            <p>
+                A Terraria world is large; a <em>truly</em> infinite world can't fit in memory at all. The
+                answer is <strong>chunking</strong>: divide the world into fixed blocks (here 16×16 tiles),
+                and generate a chunk only the first time something touches it. Because
+                <code>generateTile</code> is a pure function of position, a chunk generated now is identical
+                to the same chunk generated an hour later — they always seam up.
+            </p>
+
+            <div class="concept-box">
+                <h4>Lazy generation, keyed by chunk coordinate</h4>
+                <p>
+                    A <code>Map</code> keyed by <code>"cx,cy"</code> holds the chunks that exist.
+                    <code>getChunk</code> returns the cached chunk, or generates + stores it on first
+                    access. The renderer just calls <code>world.get(wx, wy)</code> — chunks materialise as
+                    the camera reaches them.
+                </p>
+            </div>
+
+            <details>
+                <summary>📝 Click to see: ChunkedWorld</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// An infinite world stored as on-demand chunks.
+class ChunkedWorld {
+    constructor(chunkSize, seed, genOpts) {
+        this.cs = chunkSize;
+        this.seed = seed;
+        this.genOpts = genOpts;
+        this.chunks = new Map();   // "cx,cy" -> Uint8Array
+    }
+    getChunk(cx, cy) {
+        const key = cx + ',' + cy;
+        let c = this.chunks.get(key);
+        if (!c) {                                  // first touch -> generate
+            c = new Uint8Array(this.cs * this.cs);
+            for (let ly = 0; ly &lt; this.cs; ly++)
+                for (let lx = 0; lx &lt; this.cs; lx++)
+                    c[ly * this.cs + lx] = generateTile(
+                        cx * this.cs + lx, cy * this.cs + ly, this.seed, this.genOpts);
+            this.chunks.set(key, c);
+        }
+        return c;
+    }
+    get(wx, wy) {
+        const cx = Math.floor(wx / this.cs), cy = Math.floor(wy / this.cs);
+        const c = this.getChunk(cx, cy);
+        return c[(wy - cy * this.cs) * this.cs + (wx - cx * this.cs)];
+    }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">class ChunkedWorld {
+    cs: number;
+    seed: number;
+    genOpts: { baseY: number; amp: number; caves: boolean; caveWidth: number; ore: boolean };
+    chunks: Map&lt;string, Uint8Array&gt;;
+
+    constructor(chunkSize: number, seed: number, genOpts: ChunkedWorld['genOpts']) {
+        this.cs = chunkSize;
+        this.seed = seed;
+        this.genOpts = genOpts;
+        this.chunks = new Map();
+    }
+    getChunk(cx: number, cy: number): Uint8Array {
+        const key = cx + ',' + cy;
+        let c = this.chunks.get(key);
+        if (!c) {
+            c = new Uint8Array(this.cs * this.cs);
+            for (let ly = 0; ly &lt; this.cs; ly++)
+                for (let lx = 0; lx &lt; this.cs; lx++)
+                    c[ly * this.cs + lx] = generateTile(
+                        cx * this.cs + lx, cy * this.cs + ly, this.seed, this.genOpts);
+            this.chunks.set(key, c);
+        }
+        return c;
+    }
+    get(wx: number, wy: number): number {
+        const cx = Math.floor(wx / this.cs), cy = Math.floor(wy / this.cs);
+        const c = this.getChunk(cx, cy);
+        return c[(wy - cy * this.cs) * this.cs + (wx - cx * this.cs)];
+    }
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>Stream an infinite world</h3>
+            <p>
+                Click to focus, then pan with <strong>WASD</strong>. The chunk counter climbs only when you
+                scroll into fresh territory — and stops climbing if you backtrack, because those chunks are
+                already cached.
+            </p>
+            <div class="diagram">
+                <canvas id="voxChunks" width="760" height="420" tabindex="0"></canvas>
+            </div>
+            <div class="controls">
+                <label><input type="checkbox" id="voxChunksGrid" checked> Show chunk grid</label>
+            </div>
+            <div id="voxChunksInfo" class="info-display">Click to focus, then pan with WASD.</div>
+
+            <div class="key-point">
+                <strong>📖 Deeper context:</strong> chunking is a form of
+                <a href="../../expert.html#spatial">Fundamentals → Spatial Partitioning</a>, and the
+                visible-chunk render reuses the viewport culling from
+                <a href="beginner.html#camera">Beginner — Camera</a>.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- RECAP -->
+        <!-- ============================================ -->
+        <div id="recap" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🧭 Tier Recap</h2>
+
+            <p>You can now:</p>
+            <ul>
+                <li>Generate <strong>value noise + fBm</strong> — smooth, seedable, position-pure</li>
+                <li>Build a world from a <strong>surface heightmap</strong> with <strong>biome</strong> zones</li>
+                <li>Carve <strong>caves</strong> from a noise iso-band and seed depth-graded <strong>ore</strong></li>
+                <li>Flow <strong>cellular-automaton water</strong> that pools and spills</li>
+                <li>Light a world with a <strong>BFS flood fill</strong> from sky and torches</li>
+                <li>Stream an <strong>infinite world</strong> as lazily-generated chunks</li>
+            </ul>
+
+            <div class="example-box">
+                <h4>🎮 What you just built</h4>
+                <p>
+                    A complete world <em>generator</em> plus the two ambience systems — liquids and light —
+                    that turn raw terrain into a place. The Advanced tier makes it durable and populated:
+                    saving and loading worlds, an enemy that pathfinds through the caves you carved, a
+                    day/night cycle, and the performance work to scale it all up.
+                </p>
+            </div>
+        </div>
+
+        <!-- Next Steps -->
+        <div class="section" style="text-align: center;">
+            <h2>✅ Expert Tier Complete</h2>
+            <p style="font-size: 1.1em; margin: 24px 0;">
+                Next: persistence, AI, and lighting polish — save/load, an A* enemy on the destructible
+                grid, and a day/night cycle.
+            </p>
+            <a href="advanced.html" class="nav-button" style="font-size: 1.2em; padding: 20px 40px;">
+                Continue to Advanced →
+            </a>
+            <p style="margin-top: 20px;"><em>Advanced isn't written yet — coming in the next phase. Track your progress on the <a href="index.html">sub-track index</a>.</em></p>
+        </div>
+    </div>
+
+    <!-- Scroll to Top Button -->
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <!-- Load shared utilities. Paths are relative to this two-deep subdirectory. -->
+    <script src="../../shared/utils.js"></script>
+    <script src="../../shared/code-tabs.js"></script>
+    <script src="expert-demos.js"></script>
+    <script src="bundles-expert.js"></script>
+    <script src="../../shared/export-demo.js"></script>
+</body>
+</html>
