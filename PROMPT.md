@@ -232,3 +232,17 @@ demos), and `noita/bundles-intermediate.js`. Unlocked the Noita Intermediate
 tier across all cross-tier links. Fixed two demo issues found in verification
 (gas dissipating too fast; the fire structure's pillar being free-standing).
 All browser-verified console-clean. README.md updated.
+
+## 2026-05-21 (pt.8) — Voxel Worlds: Noita Advanced (WHOLE TRACK COMPLETE)
+
+> Okay, work on the next iteration.
+
+Built the final tier — Noita Advanced ("Performance, Material Library &
+Sandbox"): `noita/advanced.html` (4 sections + recap), `noita/advanced-demos.js`
+(a chunked CA engine, a registerMaterial / registerReaction library, a live
+CONFIG, and 4 demos including a 75,600-cell sandbox), and
+`noita/bundles-advanced.js`. Marked the Noita sub-track complete (3/3) and the
+whole Voxel Worlds track complete (8 tiers, 41 demos). During verification:
+made the chunking perf win measurable by reporting `step ms` alongside FPS
+(2.5× speedup at the test grid). All browser-verified console-clean. README.md
+updated.

@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced — Noita Voxels — Voxel Worlds Track</title>
+    <link rel="stylesheet" href="../../shared/styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>🔥 Advanced — Performance, Material Library &amp; Sandbox</h1>
+        <p class="subtitle">Make the engine fast and extensible: only simulate cells that need it, and turn materials into a proper library.</p>
+
+        <!-- Navigation -->
+        <div class="nav">
+            <a href="../../index.html" class="nav-button">← Home</a>
+            <a href="../index.html" class="nav-button">← Voxel Worlds</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="intermediate.html" class="nav-button">← Intermediate</a>
+            <a href="advanced.html" class="nav-button active">Advanced</a>
+        </div>
+
+        <!-- Table of Contents -->
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#chunks">Sleeping Chunks: Skip the Settled World</a></li>
+                <li><a href="#library">A Material Library</a></li>
+                <li><a href="#tuning">Live Rule Tuning</a></li>
+                <li><a href="#capstone">Mini-Project: a Performant Sandbox</a></li>
+                <li><a href="#recap">Tier &amp; Sub-Track Recap</a></li>
+            </ul>
+        </div>
+
+        <div class="key-point">
+            <strong>💡 Two problems to solve.</strong> The
+            <a href="intermediate.html">Intermediate engine</a> visits every cell every frame — fine at
+            36,000 cells, sluggish at 360,000. And new materials live in one big literal table — easy to
+            outgrow. This tier fixes both: <strong>sleeping chunks</strong> for performance, a
+            <strong>registerMaterial</strong> API for extensibility, and a <strong>live CONFIG</strong>
+            you can tune from sliders. With those, the same engine scales to a sandbox you'd actually ship.
+        </div>
+
+        <!-- ============================================ -->
+        <!-- CHUNKS -->
+        <!-- ============================================ -->
+        <div id="chunks" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>💤 Sleeping Chunks: Skip the Settled World</h2>
+
+            <p>
+                Most of a voxel world is <em>settled</em> at any moment — sand pile already piled, walls
+                inert, untouched air. Re-running the per-cell rule on those cells is wasted time. The fix:
+                partition the grid into fixed <strong>chunks</strong> (we use 32×32), track an
+                <strong>active</strong> counter per chunk, and step only chunks whose counter is non-zero.
+            </p>
+
+            <div class="concept-box">
+                <h4>The wake/sleep protocol</h4>
+                <ol>
+                    <li>Every cell movement <strong>wakes</strong> its chunk — counter = N (say 8 frames).</li>
+                    <li>Crucially, also wake the 8 <strong>neighbour</strong> chunks: motion crossing a
+                    chunk border must be visible to the chunk it enters.</li>
+                    <li>End of frame, decrement every chunk's counter. Zero → asleep next frame.</li>
+                    <li>Painting via mouse wakes the touched chunks too.</li>
+                </ol>
+                <p>
+                    Result: a calm world drops to a handful of awake chunks; a busy one wakes only the busy
+                    region. Per-frame work scales with <em>active</em> area, not total area.
+                </p>
+            </div>
+
+            <details data-demo-id="noi_advchunks" data-deps="">
+                <summary>📝 Click to see: the chunked step</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// World layout: grid + per-chunk activity counter.
+function makeWorld(W, H) {
+    const Wc = Math.ceil(W / CHUNK), Hc = Math.ceil(H / CHUNK);
+    return { W, H, Wc, Hc,
+             grid:        new Uint8Array(W * H),
+             chunkActive: new Uint8Array(Wc * Hc).fill(WAKE_FRAMES) };
+}
+
+// Any cell change wakes a 3×3 chunk neighbourhood. Cheap, and catches motion
+// crossing chunk borders.
+function wakeAt(w, x, y) {
+    const cx = Math.floor(x / CHUNK), cy = Math.floor(y / CHUNK);
+    for (let ny = Math.max(0, cy - 1); ny &lt;= Math.min(w.Hc - 1, cy + 1); ny++)
+        for (let nx = Math.max(0, cx - 1); nx &lt;= Math.min(w.Wc - 1, cx + 1); nx++)
+            w.chunkActive[ny * w.Wc + nx] = WAKE_FRAMES;
+}
+
+function step(w, frame) {
+    for (let cy = w.Hc - 1; cy &gt;= 0; cy--) {
+        for (let cx = 0; cx &lt; w.Wc; cx++) {
+            if (w.chunkActive[cy * w.Wc + cx] === 0) continue;   // skip sleeping
+            // ... step every cell in [cx*CHUNK, cy*CHUNK) … same per-cell logic
+            // as the Intermediate tier; every move calls wakeAt().
+        }
+    }
+    // Tick down quiet chunks — eventually they sleep.
+    for (let c = 0; c &lt; w.chunkActive.length; c++)
+        if (w.chunkActive[c] &gt; 0) w.chunkActive[c]--;
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">type World = {
+    W: number; H: number; Wc: number; Hc: number;
+    grid: Uint8Array; chunkActive: Uint8Array;
+};
+
+function makeWorld(W: number, H: number): World {
+    const Wc = Math.ceil(W / CHUNK), Hc = Math.ceil(H / CHUNK);
+    return { W, H, Wc, Hc,
+             grid:        new Uint8Array(W * H),
+             chunkActive: new Uint8Array(Wc * Hc).fill(WAKE_FRAMES) };
+}
+
+function wakeAt(w: World, x: number, y: number): void {
+    const cx = Math.floor(x / CHUNK), cy = Math.floor(y / CHUNK);
+    for (let ny = Math.max(0, cy - 1); ny &lt;= Math.min(w.Hc - 1, cy + 1); ny++)
+        for (let nx = Math.max(0, cx - 1); nx &lt;= Math.min(w.Wc - 1, cx + 1); nx++)
+            w.chunkActive[ny * w.Wc + nx] = WAKE_FRAMES;
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>See the chunks at work</h3>
+            <p>
+                A 360×210 grid (75,600 cells) — far more than the Intermediate sandbox. Green-tinted chunks
+                are awake; red-tinted ones sleep. Toggle <strong>Chunked: OFF</strong> to step every chunk
+                regardless and compare FPS.
+            </p>
+            <div class="diagram">
+                <canvas id="noiAdvChunks" width="720" height="420"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnAdvChunksForce">Chunked: ON</button>
+                <button id="btnAdvChunksSand">🟡 Sand</button>
+                <button id="btnAdvChunksWater">💧 Water</button>
+                <button id="btnAdvChunksWall">⬜ Wall</button>
+                <button id="btnAdvChunksErase">🧽 Erase</button>
+                <button id="btnAdvChunksReset">Reset</button>
+            </div>
+            <div id="noiAdvChunksInfo" class="info-display">Pour sand and watch the chunks light up.</div>
+
+            <div class="key-point">
+                <strong>📖 Context:</strong> this is <a href="../../expert.html#spatial">Fundamentals →
+                Spatial Partitioning</a> applied to <em>computation</em> rather than storage — a chunk's
+                "active" flag gates whether work happens, the way a quadtree's bounds gate whether
+                rendering does.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- LIBRARY -->
+        <!-- ============================================ -->
+        <div id="library" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>📚 A Material Library</h2>
+
+            <p>
+                In the <a href="intermediate.html#sandbox">Intermediate tier</a>'s engine, materials were a
+                literal array; new ones meant editing that array. Better: a tiny
+                <strong>registry</strong> — a <code>registerMaterial()</code> builder and a
+                <code>registerReaction()</code> builder. The engine never names a material directly. It
+                only ever asks for properties (<code>.kind</code>, <code>.density</code>,
+                <code>.flammable</code>, <code>.fuel</code>, <code>.color</code>).
+            </p>
+
+            <div class="concept-box">
+                <h4>Adding a material is a call site, not a code change</h4>
+                <p>
+                    Want acid? Call <code>registerMaterial({ name: 'acid', kind: 'liquid', density: 4,
+                    color: [120, 200, 80] })</code> and one <code>registerReaction()</code> for what it
+                    eats. The engine never learns the word "acid" — it just sees another liquid in the
+                    table and another row in the reaction list.
+                </p>
+            </div>
+
+            <details>
+                <summary>📝 Click to see: the library API</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// The registry — mutable, populated by registerMaterial calls.
+const MAT = [], REACTIONS = [];
+
+function registerMaterial(spec) {
+    const id = MAT.length;
+    MAT.push(Object.assign({ id }, spec));
+    return id;                       // hand back the id for use in reactions
+}
+function registerReaction(a, b, ra, rb) {
+    REACTIONS.push({ a, b, ra, rb });
+}
+
+// The standard ten — registered once at module load.
+const AIR   = registerMaterial({ name: 'air',   kind: 'air',    color: [13, 17, 30]  });
+const WATER = registerMaterial({ name: 'water', kind: 'liquid', density: 3, color: [60, 120, 210] });
+// …etc.
+registerReaction(WATER, LAVA, STEAM, STONE);
+
+// New material at the call site — no engine edit.
+const ACID = registerMaterial({
+    name: 'acid', kind: 'liquid', density: 4, color: [120, 200, 80]
+});
+registerReaction(ACID, STONE, SMOKE, AIR);   // acid dissolves stone</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">type MaterialSpec = {
+    name: string;
+    kind: 'air' | 'solid' | 'powder' | 'liquid' | 'gas' | 'fire';
+    color: [number, number, number];
+    density?: number;
+    flammable?: boolean;
+    fuel?: number;
+};
+
+const MAT: (MaterialSpec & { id: number })[] = [];
+const REACTIONS: { a: number; b: number; ra: number; rb: number }[] = [];
+
+function registerMaterial(spec: MaterialSpec): number {
+    const id = MAT.length;
+    MAT.push(Object.assign({ id }, spec));
+    return id;
+}
+function registerReaction(a: number, b: number, ra: number, rb: number): void {
+    REACTIONS.push({ a, b, ra, rb });
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>Acid dissolves stone</h3>
+            <p>
+                A stone block sits in the world; <strong>acid</strong> is paintable. Acid was added by a
+                single <code>registerMaterial()</code> call plus one <code>registerReaction()</code> — no
+                engine edit. Pour it on the stone and watch the registry pay off.
+            </p>
+            <div class="diagram">
+                <canvas id="noiAdvLibrary" width="720" height="450"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnAdvLibAcid">🟢 Acid</button>
+                <button id="btnAdvLibWater">💧 Water</button>
+                <button id="btnAdvLibStone">⬜ Stone</button>
+                <button id="btnAdvLibErase">🧽 Erase</button>
+                <button id="btnAdvLibReset">Reset</button>
+            </div>
+            <div id="noiAdvLibraryInfo" class="info-display">Pour acid on the stone.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- TUNING -->
+        <!-- ============================================ -->
+        <div id="tuning" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🎛️ Live Rule Tuning</h2>
+
+            <p>
+                A material's behaviour is partly the <em>code</em> of its rule, and partly a handful of
+                <strong>numbers</strong> — how fiercely fire ignites, how viscous lava is, how fast smoke
+                fades. Pulling those numbers into a live <code>CONFIG</code> object lets sliders adjust
+                them in real time.
+            </p>
+
+            <div class="concept-box">
+                <h4>One source of truth the engine reads each frame</h4>
+                <p>
+                    The step function calls into <code>CONFIG.fireIgnite</code>,
+                    <code>CONFIG.lavaViscosity</code>, <code>CONFIG.gasDissipate</code> rather than
+                    hard-coded constants. Drag a slider, the next frame already reflects it. This is the
+                    <em>"painter UI"</em> idea from the sub-track's roadmap — designing rules by feel.
+                </p>
+            </div>
+
+            <h3>Tune as it runs</h3>
+            <p>
+                A wood cluster is already burning on the left; a lava pool sits on the right. Sliders
+                change the rules underneath the running simulation.
+            </p>
+            <div class="diagram">
+                <canvas id="noiAdvTune" width="720" height="450"></canvas>
+            </div>
+            <div class="controls">
+                <label style="display:inline-flex;align-items:center;gap:6px;">
+                    Fire ignite prob: <input type="range" id="voxAdvIgnite" min="0" max="100" step="1" value="26" style="width:140px;">
+                    <span id="voxAdvIgniteValue">0.26</span>
+                </label>
+                <label style="display:inline-flex;align-items:center;gap:6px;">
+                    Lava viscosity: <input type="range" id="voxAdvVisc" min="0" max="95" step="5" value="45" style="width:140px;">
+                    <span id="voxAdvViscValue">0.45</span>
+                </label>
+                <label style="display:inline-flex;align-items:center;gap:6px;">
+                    Gas dissipate: <input type="range" id="voxAdvDiss" min="1" max="50" step="1" value="10" style="width:140px;">
+                    <span id="voxAdvDissValue">0.010</span>
+                </label>
+                <button id="btnAdvTuneReset">Reset scene</button>
+            </div>
+            <div id="noiAdvTuneInfo" class="info-display">Drag the sliders to retune the rules live.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- CAPSTONE -->
+        <!-- ============================================ -->
+        <div id="capstone" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🧪 Mini-Project: a Performant Sandbox</h2>
+
+            <p>
+                Everything composed. A 75,600-cell world stepped through the chunked engine, with the full
+                ten materials plus Acid (added by the library demo and still present in the registry).
+                FPS readout, awake-chunk count, every interaction emergent.
+            </p>
+
+            <div class="concept-box">
+                <h4>The whole stack in one glance</h4>
+                <ol>
+                    <li><strong>Library</strong> — materials in the registry, including a runtime-added one.</li>
+                    <li><strong>Engine</strong> — per-cell dispatch by <code>kind</code>, moved-flag-safe.</li>
+                    <li><strong>Chunks</strong> — only awake chunks step; the rest sleep.</li>
+                    <li><strong>CONFIG</strong> — rule parameters live, tunable.</li>
+                </ol>
+            </div>
+
+            <details data-demo-id="noi_advsandbox" data-deps="">
+                <summary>📝 Click to see: how it all wires together</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Build the registry first — standard materials + any custom ones.
+const AIR  = registerMaterial({ name: 'air',  kind: 'air',  color: [13,17,30] });
+// ...the rest...
+const ACID = registerMaterial({ name: 'acid', kind: 'liquid', density: 4,
+                                color: [120,200,80] });
+registerReaction(ACID, STONE, SMOKE, AIR);
+
+// Then make a world (grid + chunkActive) and run the loop.
+const w = makeWorld(360, 210);
+const render = makeRenderer(canvas, w.W, w.H);
+
+function frame(t) {
+    if (drawing) paint(w, mouse.x, mouse.y, 5, tool);
+    step(w, frame++);              // honours CONFIG; only awake chunks step
+    render(w.grid, frame);
+    requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const AIR  = registerMaterial({ name: 'air',  kind: 'air',  color: [13, 17, 30] });
+const ACID = registerMaterial({
+    name: 'acid', kind: 'liquid', density: 4, color: [120, 200, 80]
+});
+registerReaction(ACID, STONE, SMOKE, AIR);
+
+const w = makeWorld(360, 210);
+const render = makeRenderer(canvas, w.W, w.H);
+
+function frame(): void {
+    if (drawing) paint(w, mouse.x, mouse.y, 5, tool);
+    step(w, frameNum++);
+    render(w.grid, frameNum);
+    requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);</code></pre>
+                </div>
+            </details>
+
+            <h3>Build whatever you like</h3>
+            <p>Eight paintable materials, one chunked engine, 75,600 cells running at full speed.</p>
+            <div class="diagram">
+                <canvas id="noiAdvSandbox" width="720" height="420"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnAdvSbSand">🟡 Sand</button>
+                <button id="btnAdvSbWater">💧 Water</button>
+                <button id="btnAdvSbOil">🛢️ Oil</button>
+                <button id="btnAdvSbLava">🌋 Lava</button>
+                <button id="btnAdvSbWood">🟫 Wood</button>
+                <button id="btnAdvSbFire">🔥 Fire</button>
+                <button id="btnAdvSbWall">⬜ Wall</button>
+                <button id="btnAdvSbErase">🧽 Erase</button>
+                <button id="btnAdvSbClear">Clear</button>
+            </div>
+            <div id="noiAdvSandboxInfo" class="info-display">Paint and play.</div>
+
+            <div class="example-box">
+                <h4>🎮 What you just built</h4>
+                <p>
+                    A Noita-class falling-sand engine in tier-sized pieces — pixel grid + ImageData
+                    rendering, multi-material dispatch, density-ordered liquids, fire with fuel timers,
+                    reaction tables, sleeping-chunk performance, a registry. Each piece is small and
+                    teachable; the spectacle is what they compose into.
+                </p>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- RECAP -->
+        <!-- ============================================ -->
+        <div id="recap" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🧭 Tier &amp; Sub-Track Recap</h2>
+
+            <p>You can now:</p>
+            <ul>
+                <li>Partition a CA world into <strong>chunks</strong> and skip settled ones</li>
+                <li>Treat materials as a <strong>library</strong> — register at runtime, no engine edits</li>
+                <li>Drive rule parameters from a <strong>live CONFIG</strong> via sliders</li>
+                <li>Compose all the Noita pieces into a single performant sandbox</li>
+            </ul>
+
+            <div class="example-box">
+                <h4>🎉 The Noita sub-track is complete</h4>
+                <p>
+                    Three tiers, start to finish: falling sand from scratch → liquids/gases/fire/reactions
+                    → performance, library &amp; sandbox. Together with the
+                    <a href="../terraria/index.html">Terraria sub-track's five tiers</a> that's the entire
+                    Voxel Worlds track — both flavours of 2D voxel game, every system shown.
+                </p>
+            </div>
+        </div>
+
+        <!-- Done -->
+        <div class="section" style="text-align: center;">
+            <h2>✅ Noita Sub-Track Complete</h2>
+            <p style="font-size: 1.1em; margin: 24px 0;">
+                All three tiers shipped. The whole Voxel Worlds track is done.
+            </p>
+            <a href="../index.html" class="nav-button" style="font-size: 1.2em; padding: 20px 40px;">
+                ← Voxel Worlds Track Index
+            </a>
+        </div>
+    </div>
+
+    <!-- Scroll to Top Button -->
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <script src="../../shared/utils.js"></script>
+    <script src="../../shared/code-tabs.js"></script>
+    <script src="advanced-demos.js"></script>
+    <script src="bundles-advanced.js"></script>
+    <script src="../../shared/export-demo.js"></script>
+</body>
+</html>

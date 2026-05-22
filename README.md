@@ -24,7 +24,8 @@ own subdirectory with a per-tier file structure mirroring the Fundamentals layou
 - `isometric-strategy/` — build an AoE2 / Red Alert 2 style isometric RTS.
   See `isometric-strategy/index.html` for the track roadmap. Currently scaffolded;
   tier files are landing iteratively.
-- `voxel-worlds/` — learn 2D voxel worlds and manipulation, Terraria-style.
+- `voxel-worlds/` — **fully shipped — all 8 tiers across both sub-tracks.**
+  Learn 2D voxel worlds and manipulation, Terraria-style.
   See `voxel-worlds/index.html` for the track roadmap. This track is unique in
   having **two sub-tracks**, each its own nested subdirectory with its own
   five-/three-tier file structure: `voxel-worlds/terraria/` (tile-grid voxels —
@@ -47,18 +48,22 @@ own subdirectory with a per-tier file structure mirroring the Fundamentals layou
   a ring-by-ring BFS light stepper, a liquid-flow stepper with per-cell
   decision arrows, and an ore-by-depth histogram. Terraria demo IDs and helper
   bundles are prefixed `vox_`.
-  The **Noita sub-track has its Beginner and Intermediate tiers shipped**
-  (2 of 3). Beginner ("Falling Sand from Scratch", 4 demos): a 36,000-pixel
-  `ImageData`-rendered falling-sand engine, a coarse rule-stepper with
-  per-grain decision arrows, a scan-order demo that shows the top-down
-  "teleport" bug live, and a paint-walls-and-pour-sand sandbox — teaching what's
-  new vs Terraria: per-pixel cellular automata, `ImageData`/`Uint8ClampedArray`
-  rendering, and update-order correctness. Intermediate ("Liquids, Gases, Fire
-  & Reactions", 5 demos): a multi-material CA engine (10 materials, 5 behaviour
-  kinds dispatched from a table) — liquids with sideways flow and density
-  layering, gases with inverted gravity, probabilistic fire propagation with
-  burn timers, a data-driven reaction table, and a full material sandbox. Noita
-  demo IDs are prefixed `noi`. The Noita Advanced tier remains on the roadmap.
+  The **Noita sub-track is also complete — all 3 tiers shipped.** Beginner
+  ("Falling Sand from Scratch", 4 demos): a 36,000-pixel `ImageData`-rendered
+  falling-sand engine, a coarse rule-stepper with per-grain decision arrows, a
+  scan-order demo that shows the top-down "teleport" bug live, and a
+  paint-walls-and-pour-sand sandbox — teaching what's new vs Terraria: per-pixel
+  cellular automata, `ImageData`/`Uint8ClampedArray` rendering, and
+  update-order correctness. Intermediate ("Liquids, Gases, Fire & Reactions",
+  5 demos): a multi-material CA engine (10 materials, 5 behaviour kinds
+  dispatched from a table) — liquids with sideways flow and density layering,
+  gases with inverted gravity, probabilistic fire propagation with burn timers,
+  a data-driven reaction table, and a full material sandbox. Advanced
+  ("Performance, Material Library & Sandbox", 4 demos): sleeping-chunk
+  partitioning that skips settled regions (measurable step-time speedup), a
+  `registerMaterial()` library that adds materials at runtime without engine
+  edits, live rule tuning via a `CONFIG` object, and a 75,600-cell performant
+  sandbox capstone. Noita demo IDs are prefixed `noi`.
 - `shaders/` — learn WebGL / GLSL fragment shaders for 2D game effects.
   See `shaders/index.html` for the track roadmap. **Fully shipped — all 8
   tiers:** Beginner (Shader Foundations), Intermediate (Patterns, Noise &
