@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Intermediate — Terraria Voxels — Voxel Worlds Track</title>
+    <!-- Path note: two directories deep, so ../../shared/... and ../../<page>.html. -->
+    <link rel="stylesheet" href="../../shared/styles.css">
+    <!-- Prism.js Syntax Highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>🌲 Intermediate — Mining, Placement &amp; Player Physics</h1>
+        <p class="subtitle">Turn the static world from the Beginner tier into something the player can dig, build, and walk around in.</p>
+
+        <!-- Navigation -->
+        <div class="nav">
+            <a href="../../index.html" class="nav-button">← Home</a>
+            <a href="../index.html" class="nav-button">← Voxel Worlds</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="beginner.html" class="nav-button">← Beginner</a>
+            <a href="intermediate.html" class="nav-button active">Intermediate</a>
+            <a href="expert.html" class="nav-button">Expert →</a>
+        </div>
+
+        <!-- Table of Contents -->
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#picking">Mouse-to-Tile Picking &amp; Tool Reach</a></li>
+                <li><a href="#mine-place">Mining, Placing &amp; the Hotbar</a></li>
+                <li><a href="#falling">Falling Sand &amp; Gravel</a></li>
+                <li><a href="#player">A Player Avatar: AABB Collision</a></li>
+                <li><a href="#digger">Mini-Project: Side-Scroll Digger</a></li>
+                <li><a href="#recap">Tier Recap</a></li>
+            </ul>
+        </div>
+
+        <div class="key-point">
+            <strong>💡 Where we left off:</strong> the <a href="beginner.html">Beginner tier</a> gave us a
+            <code>TileWorld</code> stored in a flat <code>Uint8Array</code>, a render loop with viewport
+            culling, and foreground/background layers. Everything below <em>writes</em> to that grid — and
+            because the world is just an array, every interaction reduces to <code>world.set(x, y, id)</code>.
+        </div>
+
+        <!-- ============================================ -->
+        <!-- PICKING -->
+        <!-- ============================================ -->
+        <div id="picking" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🎯 Mouse-to-Tile Picking &amp; Tool Reach</h2>
+
+            <p>
+                Before the player can mine or place, the game has to answer one question every frame:
+                <strong>which tile is under the cursor, and can the player reach it?</strong> The first half
+                is the <code>screenToTile</code> function from the Beginner tier. The second half is new:
+                a <strong>tool reach</strong> limit, so the player can only edit tiles near themselves —
+                exactly like Terraria's pickaxe range.
+            </p>
+
+            <div class="concept-box">
+                <h4>Chebyshev distance — the "square" reach</h4>
+                <p>
+                    Terraria's reach is a <em>square</em> region, not a circle. The distance metric for a
+                    square is <strong>Chebyshev distance</strong>: <code>max(|dx|, |dy|)</code>. A tile is
+                    in reach when that value is ≤ the reach radius. (Use Euclidean
+                    <code>√(dx² + dy²)</code> instead if you want a circular reach.)
+                </p>
+                <div class="formula">
+                    inReach = max(|tileX − playerX|, |tileY − playerY|) ≤ reach
+                </div>
+            </div>
+
+            <details>
+                <summary>📝 Click to see: tileReachOk</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Is tile (tx, ty) within `reach` tiles of the player's tile (px, py)?
+// Chebyshev distance -> a square reach region (Terraria-style).
+function tileReachOk(px, py, tx, ty, reach) {
+    return Math.max(Math.abs(tx - px), Math.abs(ty - py)) &lt;= reach;
+}
+
+// Inside a mousemove handler — screenToTile is from the Beginner tier.
+canvas.addEventListener('mousemove', (e) =&gt; {
+    const r = canvas.getBoundingClientRect();
+    const t = screenToTile(e.clientX - r.left, e.clientY - r.top, TILE, camera.x, camera.y);
+    const reachable = tileReachOk(playerTile.x, playerTile.y, t.x, t.y, REACH);
+    // ...highlight green if reachable, red if not.
+});</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Is tile (tx, ty) within `reach` tiles of the player's tile (px, py)?
+function tileReachOk(
+    px: number,
+    py: number,
+    tx: number,
+    ty: number,
+    reach: number
+): boolean {
+    return Math.max(Math.abs(tx - px), Math.abs(ty - py)) &lt;= reach;
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>Hover to pick, drag the reach slider</h3>
+            <p>
+                The orange marker is the player. Hover anywhere — a reachable tile highlights
+                <span style="color:#66bb6a;">green</span>, an out-of-reach tile
+                <span style="color:#ef5350;">red</span>. The shaded square is the reach region.
+            </p>
+            <div class="diagram">
+                <canvas id="voxPicking" width="720" height="380"></canvas>
+            </div>
+            <div class="controls">
+                <label style="display: inline-flex; align-items: center; gap: 8px;">
+                    Tool reach:
+                    <input type="range" id="voxPickReach" min="2" max="9" step="1" value="5" style="width: 200px;">
+                    <span id="voxPickReachValue">5</span> tiles
+                </label>
+            </div>
+            <div id="voxPickingInfo" class="info-display">Hover over the grid.</div>
+
+            <div class="key-point">
+                <strong>📖 Builds on:</strong> <a href="beginner.html#tile-coords">Beginner — Tile
+                Coordinates</a> (the <code>screenToTile</code> transform) and
+                <a href="beginner.html#camera">Beginner — Camera</a> (picking through a camera offset).
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- MINE / PLACE -->
+        <!-- ============================================ -->
+        <div id="mine-place" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>⛏️ Mining, Placing &amp; the Hotbar</h2>
+
+            <p>
+                With picking solved, mining and placing are almost trivially short — that's the payoff of the
+                grid representation. <strong>Mining</strong> sets a solid tile to air.
+                <strong>Placing</strong> sets an air tile to the selected material. Both refuse to act on
+                out-of-reach tiles, and placing refuses to overwrite an existing solid tile.
+            </p>
+
+            <div class="concept-box">
+                <h4>Two guards keep edits sane</h4>
+                <ul>
+                    <li><strong>Reach guard</strong> — <code>tileReachOk(...)</code> from the last section.</li>
+                    <li><strong>Occupancy guard</strong> — mine only solid tiles; place only into air.
+                    Without it, a click would "place" dirt on top of dirt (a no-op that still feels buggy)
+                    or "mine" empty sky.</li>
+                </ul>
+            </div>
+
+            <details>
+                <summary>📝 Click to see: mineAt &amp; placeAt</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Mine: clear a solid tile to air (id 0). Returns true if something changed.
+function mineAt(world, tx, ty, playerTile, reach) {
+    if (!tileReachOk(playerTile.x, playerTile.y, tx, ty, reach)) return false;
+    const id = world.get(tx, ty);
+    if (id === 0) return false;                 // nothing to mine
+    if (!VOX_MATERIALS[id].solid) return false; // skip liquids/air
+    world.set(tx, ty, 0);
+    return true;
+}
+
+// Place: drop the selected material into an air tile. Returns true on success.
+function placeAt(world, tx, ty, materialId, playerTile, reach) {
+    if (!tileReachOk(playerTile.x, playerTile.y, tx, ty, reach)) return false;
+    if (world.get(tx, ty) !== 0) return false;  // occupied — don't overwrite
+    world.set(tx, ty, materialId);
+    return true;
+}
+
+// Wire it up. Left-click mines, right-click places.
+canvas.addEventListener('mousedown', (e) =&gt; {
+    const t = tileUnderMouse(e);
+    if (e.button === 0) mineAt(world, t.x, t.y, playerTile, REACH);
+    if (e.button === 2) placeAt(world, t.x, t.y, selectedMaterial, playerTile, REACH);
+});
+// Right-click would open the browser context menu — suppress it on the canvas.
+canvas.addEventListener('contextmenu', (e) =&gt; e.preventDefault());</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function mineAt(
+    world: TileWorld,
+    tx: number,
+    ty: number,
+    playerTile: { x: number; y: number },
+    reach: number
+): boolean {
+    if (!tileReachOk(playerTile.x, playerTile.y, tx, ty, reach)) return false;
+    const id: number = world.get(tx, ty);
+    if (id === 0) return false;
+    if (!VOX_MATERIALS[id].solid) return false;
+    world.set(tx, ty, 0);
+    return true;
+}
+
+function placeAt(
+    world: TileWorld,
+    tx: number,
+    ty: number,
+    materialId: number,
+    playerTile: { x: number; y: number },
+    reach: number
+): boolean {
+    if (!tileReachOk(playerTile.x, playerTile.y, tx, ty, reach)) return false;
+    if (world.get(tx, ty) !== 0) return false;
+    world.set(tx, ty, materialId);
+    return true;
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>Dig and build</h3>
+            <p>
+                <strong>Left-click</strong> (or drag) to mine, <strong>right-click</strong> to place. Pick a
+                material from the hotbar below or press keys <strong>1–5</strong>. Edits outside the reach
+                square are rejected.
+            </p>
+            <div class="diagram">
+                <canvas id="voxMinePlace" width="720" height="400"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnMatDirt" class="active">1 · Dirt</button>
+                <button id="btnMatStone">2 · Stone</button>
+                <button id="btnMatWood">3 · Wood</button>
+                <button id="btnMatSand">4 · Sand</button>
+                <button id="btnMinePlaceReset">Reset world</button>
+            </div>
+            <div id="voxMinePlaceInfo" class="info-display">Left-click mines · right-click places.</div>
+
+            <div class="example-box">
+                <h4>🎮 The whole edit loop, in one line each</h4>
+                <p>
+                    Mining is <code>world.set(x, y, 0)</code>. Placing is
+                    <code>world.set(x, y, id)</code>. Everything else — picking, reach, occupancy — is just
+                    guarding those two writes. That economy is why the tile-grid model scales to a whole
+                    game.
+                </p>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- FALLING SAND -->
+        <!-- ============================================ -->
+        <div id="falling" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>⏳ Falling Sand &amp; Gravel</h2>
+
+            <p>
+                Most tiles in Terraria are static — dirt doesn't move. But <strong>sand</strong> and
+                <strong>gravel</strong> obey gravity: mine the tile under a sand column and the whole column
+                drops. This is your first <strong>cellular automaton</strong> — a rule applied to every cell,
+                every frame.
+            </p>
+
+            <div class="concept-box">
+                <h4>The rule, and why scan order matters</h4>
+                <p>
+                    For each falling tile: if the cell <strong>below</strong> is empty, move down. Else try
+                    <strong>down-left</strong> / <strong>down-right</strong> so piles form natural slopes.
+                </p>
+                <p>
+                    The subtle part is the <strong>scan order</strong>. If you scan
+                    <em>top-to-bottom</em>, a sand tile moves down one cell, then the scan reaches that same
+                    tile again lower down and moves it <em>again</em> — it teleports the whole column in one
+                    frame. Scanning <strong>bottom-to-top</strong> fixes it: each tile is visited
+                    <em>before</em> the cell it would move into, so it moves exactly one cell per frame.
+                </p>
+            </div>
+
+            <details data-demo-id="vox_falling" data-deps="vox_colors,vox_materials,vox_clearCanvas,vox_drawTile,vox_TileWorld">
+                <summary>📝 Click to see: stepFalling (the cellular automaton)</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// A cell a falling tile can move INTO: only air, in-bounds.
+function isOpen(world, x, y) {
+    return world.inBounds(x, y) &amp;&amp; world.get(x, y) === 0;
+}
+
+// Advance every falling tile by one cell. Call once per simulation tick.
+function stepFalling(world) {
+    // Bottom-up scan: visit each tile BEFORE the cell below it, so a tile
+    // moves at most one cell per tick (no single-frame teleporting).
+    for (let y = world.height - 2; y &gt;= 0; y--) {
+        for (let x = 0; x &lt; world.width; x++) {
+            const id = world.get(x, y);
+            const m = VOX_MATERIALS[id];
+            if (!m || !m.falls) continue;          // dirt/stone never move
+
+            // 1. straight down
+            if (isOpen(world, x, y + 1)) {
+                world.set(x, y, 0);
+                world.set(x, y + 1, id);
+                continue;
+            }
+            // 2. down-left / down-right (randomize so piles aren't lopsided).
+            // The extra isOpen(x+dx, y) check stops sand tunnelling diagonally
+            // between two solid tiles.
+            const dirs = Math.random() &lt; 0.5 ? [-1, 1] : [1, -1];
+            for (const dx of dirs) {
+                if (isOpen(world, x + dx, y + 1) &amp;&amp; isOpen(world, x + dx, y)) {
+                    world.set(x, y, 0);
+                    world.set(x + dx, y + 1, id);
+                    break;
+                }
+            }
+        }
+    }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function isOpen(world: TileWorld, x: number, y: number): boolean {
+    return world.inBounds(x, y) &amp;&amp; world.get(x, y) === 0;
+}
+
+function stepFalling(world: TileWorld): void {
+    for (let y = world.height - 2; y &gt;= 0; y--) {
+        for (let x = 0; x &lt; world.width; x++) {
+            const id: number = world.get(x, y);
+            const m = VOX_MATERIALS[id];
+            if (!m || !m.falls) continue;
+
+            if (isOpen(world, x, y + 1)) {
+                world.set(x, y, 0);
+                world.set(x, y + 1, id);
+                continue;
+            }
+            const dirs: number[] = Math.random() &lt; 0.5 ? [-1, 1] : [1, -1];
+            for (const dx of dirs) {
+                if (isOpen(world, x + dx, y + 1) &amp;&amp; isOpen(world, x + dx, y)) {
+                    world.set(x, y, 0);
+                    world.set(x + dx, y + 1, id);
+                    break;
+                }
+            }
+        }
+    }
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>Watch sand settle</h3>
+            <p>
+                <strong>Click or drag</strong> on the canvas to drop sand. Use <strong>Step</strong> to
+                advance one tick at a time and watch the bottom-up scan work, or <strong>Run</strong> to let
+                it flow.
+            </p>
+            <div class="diagram">
+                <canvas id="voxFalling" width="720" height="400"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnFallingStep">Step once</button>
+                <button id="btnFallingRun">Run</button>
+                <button id="btnFallingReset">Reset</button>
+            </div>
+            <div id="voxFallingInfo" class="info-display">Click to drop sand, then Step or Run.</div>
+
+            <div class="key-point">
+                <strong>📖 Where this goes next:</strong> the same idea — a per-cell rule applied every
+                frame — taken to its extreme (every <em>pixel</em> simulated) is the entire
+                <a href="../noita/index.html">Noita sub-track</a>. The broader topic of grid simulations is
+                <a href="../../simulation.html#destructible-terrain">Fundamentals → Destructible Terrain</a>.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- PLAYER -->
+        <!-- ============================================ -->
+        <div id="player" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🏃 A Player Avatar: AABB Collision</h2>
+
+            <p>
+                The player is an <strong>axis-aligned bounding box</strong> (AABB) — a rectangle with a
+                position and a velocity. Gravity pulls it down each frame; it must <strong>not</strong> sink
+                through solid tiles or walk through walls. The technique that makes this robust is
+                <strong>per-axis resolution</strong>.
+            </p>
+
+            <div class="concept-box">
+                <h4>Move one axis at a time</h4>
+                <p>
+                    The naïve approach — move diagonally, then resolve — snags on flush tile seams (the
+                    player catches on the crack between two floor tiles). The fix:
+                </p>
+                <ol>
+                    <li>Move <strong>X</strong> only. Find every tile the box now overlaps; if any is solid,
+                    snap the box flush to that tile's edge and zero <code>vx</code>.</li>
+                    <li><em>Then</em> move <strong>Y</strong> only and resolve the same way. Landing on a
+                    floor (<code>vy &gt; 0</code> hit) also sets <code>onGround</code>.</li>
+                </ol>
+                <p>
+                    Resolving axes separately means a horizontal seam can never block horizontal motion —
+                    there is no diagonal step to catch.
+                </p>
+            </div>
+
+            <details data-demo-id="vox_player" data-deps="vox_colors,vox_materials,vox_clearCanvas,vox_drawTile,vox_TileWorld,vox_isSolid">
+                <summary>📝 Click to see: per-axis AABB collision</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Tile range the player's AABB (px,py,pw,ph in pixels) overlaps.
+// A half-open span [pos, pos+size) touches integer cells
+// floor(pos) .. ceil(pos+size)-1. The ceil()-1 form detects a
+// sub-pixel overlap the same frame, so a player nudged into the
+// floor by gravity snaps flush immediately — no jitter, stable onGround.
+function overlappingTiles(px, py, pw, ph, TILE) {
+    return {
+        x0: Math.floor(px / TILE),
+        x1: Math.ceil((px + pw) / TILE) - 1,
+        y0: Math.floor(py / TILE),
+        y1: Math.ceil((py + ph) / TILE) - 1
+    };
+}
+
+// Move horizontally, then snap out of any solid tile hit.
+function moveX(world, p, TILE) {
+    p.x += p.vx;
+    const r = overlappingTiles(p.x, p.y, p.w, p.h, TILE);
+    let hit = null;
+    for (let ty = r.y0; ty &lt;= r.y1; ty++) {
+        for (let tx = r.x0; tx &lt;= r.x1; tx++) {
+            if (!isSolid(world.get(tx, ty))) continue;
+            // moving right -&gt; snap to leftmost hit; left -&gt; rightmost hit
+            hit = hit === null ? tx : (p.vx &gt; 0 ? Math.min(hit, tx) : Math.max(hit, tx));
+        }
+    }
+    if (hit !== null) {
+        p.x = p.vx &gt; 0 ? hit * TILE - p.w : (hit + 1) * TILE;
+        p.vx = 0;
+    }
+}
+
+// Move vertically; landing (vy &gt; 0) also sets onGround.
+function moveY(world, p, TILE) {
+    p.y += p.vy;
+    p.onGround = false;
+    const r = overlappingTiles(p.x, p.y, p.w, p.h, TILE);
+    let hit = null;
+    for (let ty = r.y0; ty &lt;= r.y1; ty++) {
+        for (let tx = r.x0; tx &lt;= r.x1; tx++) {
+            if (!isSolid(world.get(tx, ty))) continue;
+            hit = hit === null ? ty : (p.vy &gt; 0 ? Math.min(hit, ty) : Math.max(hit, ty));
+        }
+    }
+    if (hit !== null) {
+        if (p.vy &gt; 0) { p.y = hit * TILE - p.h; p.onGround = true; }
+        else          { p.y = (hit + 1) * TILE; }
+        p.vy = 0;
+    }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">type Box = { x: number; y: number; w: number; h: number;
+             vx: number; vy: number; onGround: boolean };
+
+function overlappingTiles(px: number, py: number, pw: number, ph: number, TILE: number) {
+    // Half-open span [pos, pos+size) touches cells floor(pos)..ceil(pos+size)-1.
+    return {
+        x0: Math.floor(px / TILE),
+        x1: Math.ceil((px + pw) / TILE) - 1,
+        y0: Math.floor(py / TILE),
+        y1: Math.ceil((py + ph) / TILE) - 1
+    };
+}
+
+function moveX(world: TileWorld, p: Box, TILE: number): void {
+    p.x += p.vx;
+    const r = overlappingTiles(p.x, p.y, p.w, p.h, TILE);
+    let hit: number | null = null;
+    for (let ty = r.y0; ty &lt;= r.y1; ty++) {
+        for (let tx = r.x0; tx &lt;= r.x1; tx++) {
+            if (!isSolid(world.get(tx, ty))) continue;
+            hit = hit === null ? tx : (p.vx &gt; 0 ? Math.min(hit, tx) : Math.max(hit, tx));
+        }
+    }
+    if (hit !== null) {
+        p.x = p.vx &gt; 0 ? hit * TILE - p.w : (hit + 1) * TILE;
+        p.vx = 0;
+    }
+}
+
+function moveY(world: TileWorld, p: Box, TILE: number): void {
+    p.y += p.vy;
+    p.onGround = false;
+    const r = overlappingTiles(p.x, p.y, p.w, p.h, TILE);
+    let hit: number | null = null;
+    for (let ty = r.y0; ty &lt;= r.y1; ty++) {
+        for (let tx = r.x0; tx &lt;= r.x1; tx++) {
+            if (!isSolid(world.get(tx, ty))) continue;
+            hit = hit === null ? ty : (p.vy &gt; 0 ? Math.min(hit, ty) : Math.max(hit, ty));
+        }
+    }
+    if (hit !== null) {
+        if (p.vy &gt; 0) { p.y = hit * TILE - p.h; p.onGround = true; }
+        else          { p.y = (hit + 1) * TILE; }
+        p.vy = 0;
+    }
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>Walk, jump, land</h3>
+            <p>
+                Click the canvas to focus it, then move with <strong>A / D</strong> or
+                <strong>← / →</strong> and jump with <strong>W / ↑ / Space</strong>. The player can only
+                jump while standing on a solid tile.
+            </p>
+            <div class="diagram">
+                <canvas id="voxPlayer" width="720" height="384" tabindex="0"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnPlayerReset">Reset player</button>
+            </div>
+            <div id="voxPlayerInfo" class="info-display">Click canvas to focus, then A/D + W to jump.</div>
+
+            <div class="key-point">
+                <strong>📖 Builds on:</strong> <a href="../../intermediate.html#collision">Fundamentals →
+                Collision Detection</a> (the general AABB technique) and
+                <a href="../../beginner.html#vectors">Fundamentals → Vectors</a> (position + velocity).
+                Here we specialise AABB collision against a <em>tile grid</em>, which is cheaper than
+                general AABB-vs-AABB because the grid lets us look up exactly which tiles to test.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- DIGGER MINI-PROJECT -->
+        <!-- ============================================ -->
+        <div id="digger" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🛠️ Mini-Project: Side-Scroll Digger</h2>
+
+            <p>
+                Everything from this tier, composed into one playable scene: a player that walks and jumps
+                through a world bigger than the screen, a camera that follows them, a mining/placing cursor
+                with tool reach, and live falling sand. This is a small but complete Terraria-style core.
+            </p>
+
+            <div class="concept-box">
+                <h4>How the pieces fit together each frame</h4>
+                <ol>
+                    <li><strong>Input → player physics</strong> — gravity, <code>moveX</code>,
+                    <code>moveY</code> (the <code>#player</code> section).</li>
+                    <li><strong>Camera follow</strong> — centre the camera on the player, then clamp to
+                    world bounds (the <a href="beginner.html#camera">Beginner camera</a>).</li>
+                    <li><strong>Mouse edit</strong> — <code>mineAt</code> / <code>placeAt</code>, reach
+                    measured from the player's tile (the <code>#mine-place</code> section).</li>
+                    <li><strong>Falling sand</strong> — <code>stepFalling</code> every few frames so mined
+                    sand collapses realistically (the <code>#falling</code> section).</li>
+                    <li><strong>Render</strong> — viewport-culled draw, then the player and cursor on top.</li>
+                </ol>
+            </div>
+
+            <h3>Play it</h3>
+            <p>
+                Click to focus. <strong>A / D</strong> move, <strong>W / Space</strong> jumps.
+                <strong>Left-click</strong> mines, <strong>right-click</strong> places the hotbar material
+                (keys <strong>1–4</strong>). Try mining the dirt under a sand patch and watch it pour.
+            </p>
+            <div class="diagram">
+                <canvas id="voxDigger" width="760" height="420" tabindex="0"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnDigDirt" class="active">1 · Dirt</button>
+                <button id="btnDigStone">2 · Stone</button>
+                <button id="btnDigWood">3 · Wood</button>
+                <button id="btnDigSand">4 · Sand</button>
+                <button id="btnDigReset">Reset world</button>
+            </div>
+            <div id="voxDiggerInfo" class="info-display">Click to focus · A/D move · W jump · click mines · right-click places.</div>
+
+            <div class="example-box">
+                <h4>🎮 What you just built</h4>
+                <p>
+                    A side-scrolling, fully-destructible voxel world with a physics-driven player — the
+                    playable core of a Terraria-like, in one canvas. Every system here is a few dozen lines;
+                    the leverage comes entirely from everything reading and writing the same
+                    <code>TileWorld</code> grid.
+                </p>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- RECAP -->
+        <!-- ============================================ -->
+        <div id="recap" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🧭 Tier Recap</h2>
+
+            <p>You can now:</p>
+            <ul>
+                <li><strong>Pick the tile under the cursor</strong> through a camera offset, and gate edits
+                with a <strong>tool reach</strong> (Chebyshev distance)</li>
+                <li><strong>Mine and place</strong> tiles — guarded one-line writes to the grid</li>
+                <li>Drive a <strong>hotbar</strong> of materials by click or number key</li>
+                <li>Run a <strong>falling-sand cellular automaton</strong> with a correct bottom-up scan</li>
+                <li>Move a player with <strong>per-axis AABB collision</strong> against the tile grid</li>
+                <li>Compose all of it into a <strong>side-scrolling digger</strong> with a follow camera</li>
+            </ul>
+
+            <div class="example-box">
+                <h4>🎮 What you just built</h4>
+                <p>
+                    The interactive heart of a 2D voxel game. The Expert tier stops hand-authoring worlds and
+                    starts <em>generating</em> them — Perlin surface heights, carved caves, ore veins,
+                    chunked streaming — and upgrades falling sand into flowing liquids.
+                </p>
+            </div>
+        </div>
+
+        <!-- Next Steps -->
+        <div class="section" style="text-align: center;">
+            <h2>✅ Intermediate Tier Complete</h2>
+            <p style="font-size: 1.1em; margin: 24px 0;">
+                Next: procedural world generation and cellular-automaton liquids — the world stops being
+                hand-drawn and starts being grown from noise.
+            </p>
+            <a href="expert.html" class="nav-button" style="font-size: 1.2em; padding: 20px 40px;">
+                Continue to Expert →
+            </a>
+            <p style="margin-top: 20px;"><em>Expert isn't written yet — coming in the next phase. Track your progress on the <a href="index.html">sub-track index</a>.</em></p>
+        </div>
+    </div>
+
+    <!-- Scroll to Top Button -->
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <!-- Load shared utilities. Paths are relative to this two-deep subdirectory. -->
+    <script src="../../shared/utils.js"></script>
+    <!-- Code-tab toggle (JavaScript / TypeScript). -->
+    <script src="../../shared/code-tabs.js"></script>
+    <!-- Page-specific interactive demos. -->
+    <script src="intermediate-demos.js"></script>
+    <!-- Voxel-specific bundles for the Export button. -->
+    <script src="bundles-intermediate.js"></script>
+    <!-- Shared export-demo injector. -->
+    <script src="../../shared/export-demo.js"></script>
+</body>
+</html>

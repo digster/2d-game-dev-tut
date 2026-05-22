@@ -155,3 +155,15 @@ Terraria Beginner tier: 7 interactive Canvas2D demos (tile coords, flat-array
 storage, sprite-less rendering, viewport culling, fg/bg wall layers). Root
 `index.html` got a VOXEL nav button + two-level nested TOC. All browser-verified
 console-clean. README.md + ARCHITECTURE.md updated.
+
+## 2026-05-21 (pt.2) — Voxel Worlds: Terraria Intermediate tier
+
+> Okay, work on the next iteration.
+
+Built the Terraria sub-track Intermediate tier: `intermediate.html` (5 sections
++ recap), `intermediate-demos.js` (5 demos — picking & tool reach, mine/place &
+hotbar, falling-sand cellular automaton, player AABB collision, side-scroll
+digger mini-project), and `bundles-intermediate.js`. Unlocked the Intermediate
+tier across all cross-tier links. Caught and fixed a player-jitter bug during
+verification (AABB→tile-range off-by-one — `ceil(end)-1`, not `floor(end-1)`).
+All browser-verified console-clean. README.md updated.
