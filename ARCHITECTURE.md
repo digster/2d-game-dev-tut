@@ -125,6 +125,14 @@ export is a clean follow-up iteration.
   (`SIM_HEAD`, `SIM_LIB`, `AGENT_HEAD`, `AGENT_LIB`, `DEPOSIT_*`, …).
 - Demos are IIFEs that early-`return` if their canvas id is absent (one demos
   file is safely shared by a whole tier page).
+- **Each `<tier>-demos.js` is self-contained** — it re-declares the core
+  helpers it needs (palette, `TileWorld`, noise, …) rather than importing,
+  because only one tier's demos file loads per page. **Caveat:** a tier file's
+  *top-level* `const`/`let`/`class` must not shadow a global already defined by
+  `shared/utils.js` (e.g. `lerp`, `clamp`, `map`). A script-level `const lerp`
+  colliding with utils.js's `function lerp` throws an "already declared" error
+  at *instantiation* — silently killing the whole file (every IIFE included).
+  Such helpers must live *inside* an IIFE, or just reuse the utils.js global.
 - Harnesses degrade gracefully (`fail()` paints the error onto a 2D canvas)
   rather than throwing — feature gaps are a message, not a crash.
 - Other tracks (`isometric-strategy/`, `voxel-worlds/`) follow the same

@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulations — Terraria Voxels — Voxel Worlds Track</title>
+    <!-- Path note: two directories deep, so ../../shared/... and ../../<page>.html. -->
+    <link rel="stylesheet" href="../../shared/styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>🌲 Simulations — Deep Dives</h1>
+        <p class="subtitle">Interactive visualisers for the algorithms behind the gameplay — the noise field itself, the BFS frontier, each water cell's decision.</p>
+
+        <!-- Navigation -->
+        <div class="nav">
+            <a href="../../index.html" class="nav-button">← Home</a>
+            <a href="../index.html" class="nav-button">← Voxel Worlds</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="advanced.html" class="nav-button">← Advanced</a>
+            <a href="simulations.html" class="nav-button active">Simulations</a>
+        </div>
+
+        <!-- Table of Contents -->
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#caves">Cave-Carving Visualizer</a></li>
+                <li><a href="#biome">Biome Blend Playground</a></li>
+                <li><a href="#light">Light-Propagation Stepper</a></li>
+                <li><a href="#flow">Liquid-Flow Stepper</a></li>
+                <li><a href="#ore">Ore Distribution Generator</a></li>
+                <li><a href="#recap">Sub-Track Recap</a></li>
+            </ul>
+        </div>
+
+        <div class="key-point">
+            <strong>💡 A different kind of tier:</strong> the four gameplay tiers <em>hid</em> their
+            algorithms behind a fun result. This tier does the opposite — it <strong>exposes</strong> them.
+            Each demo is a diagnostic instrument: it draws the raw noise field, the breadth-first frontier
+            ring by ring, the move every water cell is about to make. Slow them down, step through them, and
+            the "magic" turns into mechanism.
+        </div>
+
+        <!-- ============================================ -->
+        <!-- CAVES -->
+        <!-- ============================================ -->
+        <div id="caves" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>🕳️ Cave-Carving Visualizer</h2>
+
+            <p>
+                The <a href="expert.html#caves">Expert tier</a> carved caves from a noise iso-band. Here you
+                can see the noise field <em>behind</em> the caves, and compare it to a completely different
+                carver — the <strong>worm-walk</strong>, where random walkers tunnel discs along a wandering
+                path.
+            </p>
+
+            <div class="concept-box">
+                <h4>Two carvers, two characters</h4>
+                <ul>
+                    <li><strong>Noise iso-band</strong> — caves are <code>|fBm − 0.5| &lt; width</code>.
+                    Toggle the noise overlay: the cyan tiles are exactly the band, and they <em>are</em> the
+                    caves. Caves connect because iso-lines of a smooth field are long and continuous.</li>
+                    <li><strong>Worm-walk</strong> — caves are the union of many random-walk tunnels. More
+                    controllable (you choose where worms start), but connectivity is down to luck.</li>
+                </ul>
+            </div>
+
+            <details>
+                <summary>📝 Click to see: the worm-walk carver</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Random walkers carve discs along a wandering path.
+function carveWorms(world, count, length) {
+    for (let w = 0; w &lt; count; w++) {
+        let x = 4 + Math.random() * (world.width - 8);
+        let y = world.height * 0.45 + Math.random() * (world.height * 0.45);
+        let angle = Math.random() * Math.PI * 2;
+        for (let s = 0; s &lt; length; s++) {
+            // carve a disc of radius 2 around (x, y)
+            for (let dy = -2; dy &lt;= 2; dy++)
+                for (let dx = -2; dx &lt;= 2; dx++)
+                    if (dx * dx + dy * dy &lt;= 4)
+                        world.set((x + dx) | 0, (y + dy) | 0, 0);
+            angle += (Math.random() - 0.5) * 0.7;   // wander the heading
+            x += Math.cos(angle);
+            y += Math.sin(angle) * 0.7;             // bias slightly horizontal
+        }
+    }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function carveWorms(world: TileWorld, count: number, length: number): void {
+    for (let w = 0; w &lt; count; w++) {
+        let x = 4 + Math.random() * (world.width - 8);
+        let y = world.height * 0.45 + Math.random() * (world.height * 0.45);
+        let angle = Math.random() * Math.PI * 2;
+        for (let s = 0; s &lt; length; s++) {
+            for (let dy = -2; dy &lt;= 2; dy++)
+                for (let dx = -2; dx &lt;= 2; dx++)
+                    if (dx * dx + dy * dy &lt;= 4)
+                        world.set((x + dx) | 0, (y + dy) | 0, 0);
+            angle += (Math.random() - 0.5) * 0.7;
+            x += Math.cos(angle);
+            y += Math.sin(angle) * 0.7;
+        }
+    }
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>Compare the carvers</h3>
+            <p>
+                Switch the method, drag the amount, and toggle the noise overlay to see the iso-band that
+                becomes the caves.
+            </p>
+            <div class="diagram">
+                <canvas id="voxSimCaves" width="720" height="396"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnSimCavesMethod">Method: noise iso-band</button>
+                <button id="btnSimCavesNoise">Noise overlay</button>
+                <label style="display:inline-flex;align-items:center;gap:6px;">
+                    Amount: <input type="range" id="voxSimCavesAmount" min="20" max="160" step="5" value="80" style="width:150px;">
+                    <span id="voxSimCavesAmountValue">0.080</span>
+                </label>
+                <button id="btnSimCavesRegen">🎲 Regenerate</button>
+            </div>
+            <div id="voxSimCavesInfo" class="info-display">Toggle the noise overlay.</div>
+
+            <div class="key-point">
+                <strong>📖 Builds on:</strong> <a href="../../expert.html#noise">Fundamentals → Perlin
+                Noise</a> and the <a href="expert.html#caves">Expert tier's caves</a>.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- BIOME -->
+        <!-- ============================================ -->
+        <div id="biome" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>🗺️ Biome Blend Playground</h2>
+
+            <p>
+                Biomes come from a single very-low-frequency noise: where it crosses a threshold, the
+                surface material changes. The top panel graphs that noise; the thresholds split it into
+                desert, forest, and tundra. The problem with raw thresholds is the <strong>hard seam</strong>
+                — an abrupt material change. <strong>Blending</strong> smooths it.
+            </p>
+
+            <div class="concept-box">
+                <h4>From hard step to smooth ramp</h4>
+                <p>
+                    A hard threshold is a step function: <code>b &lt; 0.36 ? desert : forest</code>.
+                    Replace the step with a <code>smoothstep</code> ramp of half-width <em>blend</em> around
+                    the threshold and the surface colour interpolates across the border instead of snapping.
+                </p>
+            </div>
+
+            <details>
+                <summary>📝 Click to see: biomeColor with smoothstep blending</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">const DESERT = [215,200,120], FOREST = [74,138,58], TUNDRA = [223,233,240];
+const T1 = 0.36, T2 = 0.66;   // biome thresholds
+
+// smoothstep — an S-curve ramp from 0 to 1 between edges a and b.
+function smoothstep(a, b, x) {
+    const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
+    return t * t * (3 - 2 * t);
+}
+
+// blend = 0 -> hard biome borders; blend > 0 -> colour ramps across them.
+function biomeColor(b, blend) {
+    if (blend &lt;= 0) return b &lt; T1 ? DESERT : (b &gt; T2 ? TUNDRA : FOREST);
+    const k1 = smoothstep(T1 - blend, T1 + blend, b);   // desert -&gt; forest
+    const k2 = smoothstep(T2 - blend, T2 + blend, b);   // forest -&gt; tundra
+    return lerp3(lerp3(DESERT, FOREST, k1), TUNDRA, k2);
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const DESERT = [215,200,120], FOREST = [74,138,58], TUNDRA = [223,233,240];
+const T1 = 0.36, T2 = 0.66;
+
+function smoothstep(a: number, b: number, x: number): number {
+    const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
+    return t * t * (3 - 2 * t);
+}
+
+function biomeColor(b: number, blend: number): number[] {
+    if (blend &lt;= 0) return b &lt; T1 ? DESERT : (b &gt; T2 ? TUNDRA : FOREST);
+    const k1 = smoothstep(T1 - blend, T1 + blend, b);
+    const k2 = smoothstep(T2 - blend, T2 + blend, b);
+    return lerp3(lerp3(DESERT, FOREST, k1), TUNDRA, k2);
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>Soften the seams</h3>
+            <p>Drag <strong>blend</strong> from 0 up — watch the desert/forest/tundra borders dissolve into gradients.</p>
+            <div class="diagram">
+                <canvas id="voxSimBiome" width="720" height="360"></canvas>
+            </div>
+            <div class="controls">
+                <label style="display:inline-flex;align-items:center;gap:6px;">
+                    Blend: <input type="range" id="voxSimBiomeBlend" min="0" max="160" step="5" value="0" style="width:200px;">
+                    <span id="voxSimBiomeBlendValue">0.000</span>
+                </label>
+                <button id="btnSimBiomeRegen">🎲 Regenerate</button>
+            </div>
+            <div id="voxSimBiomeInfo" class="info-display">Drag the blend slider.</div>
+
+            <div class="key-point">
+                <strong>📖 Builds on:</strong> <a href="../../expert.html#procgen">Fundamentals →
+                Procedural Generation</a>.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- LIGHT -->
+        <!-- ============================================ -->
+        <div id="light" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>💡 Light-Propagation Stepper</h2>
+
+            <p>
+                The <a href="expert.html#lighting">Expert tier</a> computed lighting with a flood fill — but
+                it ran instantly, so the <em>spreading</em> was invisible. Here it's slowed to one
+                <strong>BFS ring per Step</strong>: you watch brightness radiate out from the torch, one
+                tile of distance at a time, the orange outline marking the frontier about to be processed.
+            </p>
+
+            <div class="concept-box">
+                <h4>A flood fill is breadth-first search</h4>
+                <p>
+                    Keep a <em>frontier</em> — the tiles at the current distance. Each Step relaxes light
+                    into every unseen, non-solid neighbour of the frontier, and those neighbours become the
+                    next frontier. Walls aren't in the frontier, so light flows <em>around</em> them, never
+                    through — the cave fills, the rock stays dark.
+                </p>
+            </div>
+
+            <details data-demo-id="vox_simlight" data-deps="vox_colors,vox_materials,vox_clearCanvas,vox_hash2D,vox_drawTile,vox_isSolid,vox_TileWorld">
+                <summary>📝 Click to see: one BFS ring</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Advance the flood fill by ONE ring. `frontier` holds the current ring;
+// `seen` marks tiles already lit; brightness fades with ring distance.
+function step() {
+    if (!frontier.length) return;
+    const next = [];
+    const brightness = Math.max(0, 1 - (ring + 1) * FALLOFF);
+    for (const c of frontier) {
+        for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+            const nx = c.x + dx, ny = c.y + dy;
+            if (nx &lt; 0 || nx &gt;= W || ny &lt; 0 || ny &gt;= H) continue;
+            const ni = ny * W + nx;
+            if (seen[ni] || isSolid(world.get(nx, ny))) continue;  // walls block
+            seen[ni] = 1;
+            light[ni] = brightness;
+            next.push({ x: nx, y: ny });
+        }
+    }
+    frontier = next;   // the neighbours become the next ring
+    ring++;
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function step(): void {
+    if (!frontier.length) return;
+    const next: { x: number; y: number }[] = [];
+    const brightness = Math.max(0, 1 - (ring + 1) * FALLOFF);
+    for (const c of frontier) {
+        for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+            const nx = c.x + dx, ny = c.y + dy;
+            if (nx &lt; 0 || nx &gt;= W || ny &lt; 0 || ny &gt;= H) continue;
+            const ni = ny * W + nx;
+            if (seen[ni] || isSolid(world.get(nx, ny))) continue;
+            seen[ni] = 1;
+            light[ni] = brightness;
+            next.push({ x: nx, y: ny });
+        }
+    }
+    frontier = next;
+    ring++;
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>Step the flood</h3>
+            <p><strong>Step</strong> advances one ring; <strong>Run</strong> auto-steps. The orange outline is the frontier.</p>
+            <div class="diagram">
+                <canvas id="voxSimLight" width="714" height="392"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnSimLightStep">Step ring</button>
+                <button id="btnSimLightRun">Run</button>
+                <button id="btnSimLightReset">Reset</button>
+            </div>
+            <div id="voxSimLightInfo" class="info-display">Step the flood fill one ring at a time.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- FLOW -->
+        <!-- ============================================ -->
+        <div id="flow" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>💧 Liquid-Flow Stepper</h2>
+
+            <p>
+                The water automaton from the <a href="expert.html#water">Expert tier</a>, with its
+                <strong>decision-making made visible</strong>. Every water cell, every frame, asks the same
+                ordered question — can I go down? down-diagonally? sideways? — and an arrow drawn on each
+                cell shows the answer it's <em>about</em> to act on. Step, and the arrows become moves.
+            </p>
+
+            <div class="concept-box">
+                <h4>Rule precedence, colour-coded</h4>
+                <p>
+                    <span style="color:#ffd54f;">Yellow ↓</span> = falling straight down ·
+                    <span style="color:#ff9800;">orange</span> = sliding down-diagonally ·
+                    <span style="color:#ef5350;">red</span> = spreading sideways · a white dot = settled.
+                    The colours <em>are</em> the rule precedence: a cell only considers the next rule when
+                    the one before it fails.
+                </p>
+            </div>
+
+            <details data-demo-id="vox_simflow" data-deps="vox_colors,vox_materials,vox_clearCanvas,vox_drawTile,vox_TileWorld,vox_screenToTile">
+                <summary>📝 Click to see: the decision function</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Which rule WOULD this water cell apply this tick? Pure — no mutation,
+// so we can draw the decision as an arrow before Step executes it.
+function decision(world, x, y) {
+    if (world.get(x, y + 1) === 0) return 'down';
+
+    const dl = world.get(x - 1, y + 1) === 0 &amp;&amp; world.get(x - 1, y) === 0;
+    const dr = world.get(x + 1, y + 1) === 0 &amp;&amp; world.get(x + 1, y) === 0;
+    if (dl || dr) return 'diag';
+
+    const sl = world.get(x - 1, y) === 0;
+    const sr = world.get(x + 1, y) === 0;
+    if (sl || sr) return 'side';
+
+    return 'settled';
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">type WaterMove = 'down' | 'diag' | 'side' | 'settled';
+
+function decision(world: TileWorld, x: number, y: number): WaterMove {
+    if (world.get(x, y + 1) === 0) return 'down';
+
+    const dl = world.get(x - 1, y + 1) === 0 &amp;&amp; world.get(x - 1, y) === 0;
+    const dr = world.get(x + 1, y + 1) === 0 &amp;&amp; world.get(x + 1, y) === 0;
+    if (dl || dr) return 'diag';
+
+    const sl = world.get(x - 1, y) === 0;
+    const sr = world.get(x + 1, y) === 0;
+    if (sl || sr) return 'side';
+
+    return 'settled';
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>Watch the decisions</h3>
+            <p><strong>Click</strong> to pour water; the arrows show pending moves. <strong>Step</strong> executes one tick.</p>
+            <div class="diagram">
+                <canvas id="voxSimFlow" width="715" height="390"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnSimFlowStep">Step once</button>
+                <button id="btnSimFlowRun">Run</button>
+                <button id="btnSimFlowReset">Reset</button>
+            </div>
+            <div id="voxSimFlowInfo" class="info-display">Click to pour water, then Step.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- ORE -->
+        <!-- ============================================ -->
+        <div id="ore" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>💎 Ore Distribution Generator</h2>
+
+            <p>
+                Ore is noise-thresholding with a twist: the threshold <strong>drops with depth</strong>, so
+                deep rock spawns ore more readily. This demo pairs the world cross-section with a
+                <strong>histogram</strong> of how much ore landed at each depth — and the cyan line is the
+                threshold itself, so you can see cause and effect side by side.
+            </p>
+
+            <div class="concept-box">
+                <h4>Threshold as a function of depth</h4>
+                <div class="formula">
+                    oreThreshold = 0.84 − depthFraction × 0.13 − richness<br>
+                    place ore where&nbsp; fbm2D(x·g, y·g) &gt; oreThreshold
+                </div>
+                <p>
+                    As depth increases the threshold falls, so more of the noise field clears the bar — the
+                    histogram skews toward the bottom. The <em>richness</em> slider shifts the whole
+                    threshold down at once.
+                </p>
+            </div>
+
+            <h3>Generate &amp; measure</h3>
+            <p>Drag <strong>richness</strong> and watch the histogram bars grow — most strongly in the deep bands.</p>
+            <div class="diagram">
+                <canvas id="voxSimOre" width="720" height="396"></canvas>
+            </div>
+            <div class="controls">
+                <label style="display:inline-flex;align-items:center;gap:6px;">
+                    Richness: <input type="range" id="voxSimOreRich" min="0" max="22" step="1" value="6" style="width:200px;">
+                    <span id="voxSimOreRichValue">0.06</span>
+                </label>
+                <button id="btnSimOreRegen">🎲 Regenerate</button>
+            </div>
+            <div id="voxSimOreInfo" class="info-display">Drag the richness slider.</div>
+
+            <div class="key-point">
+                <strong>📖 Builds on:</strong> <a href="../../expert.html#noise">Fundamentals → Perlin
+                Noise</a> — ore is the same noise-threshold idea as caves, just with a depth-varying bar.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- RECAP -->
+        <!-- ============================================ -->
+        <div id="recap" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>🧭 Sub-Track Recap</h2>
+
+            <p>The Simulations tier turned five algorithms inside out:</p>
+            <ul>
+                <li>Caves are an <strong>iso-band of a noise field</strong> — or worm-walk tunnels</li>
+                <li>Biomes are <strong>thresholds on a low-frequency noise</strong>, softened by smoothstep</li>
+                <li>Lighting is a <strong>breadth-first flood fill</strong>, ring by ring</li>
+                <li>Liquids are a <strong>cellular automaton</strong> with a fixed rule precedence</li>
+                <li>Ore is <strong>depth-graded noise thresholding</strong></li>
+            </ul>
+
+            <div class="example-box">
+                <h4>🎉 The Terraria sub-track is complete</h4>
+                <p>
+                    Five tiers, start to finish: tile foundations → mining &amp; physics → world generation
+                    &amp; liquids → persistence, AI &amp; polish → these deep dives. You've built the entire
+                    core of a 2D tile-voxel game, and seen every algorithm underneath it.
+                </p>
+            </div>
+
+            <div class="key-point">
+                <strong>🔥 Where next:</strong> the <a href="../noita/index.html">Noita sub-track</a> takes
+                voxels to their extreme — every <em>pixel</em> simulating itself with cellular-automaton
+                rules: falling sand, flowing liquids, spreading fire, reacting materials. It assumes
+                everything you just learned and only teaches what's new.
+            </div>
+        </div>
+
+        <!-- Done -->
+        <div class="section" style="text-align: center;">
+            <h2>✅ Terraria Sub-Track Complete</h2>
+            <p style="font-size: 1.1em; margin: 24px 0;">
+                All five tiers shipped. Explore the cellular-pixel cousin next.
+            </p>
+            <a href="../noita/index.html" class="nav-button" style="font-size: 1.2em; padding: 20px 40px;">
+                → Noita Sub-Track
+            </a>
+        </div>
+    </div>
+
+    <!-- Scroll to Top Button -->
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <!-- Load shared utilities. Paths are relative to this two-deep subdirectory. -->
+    <script src="../../shared/utils.js"></script>
+    <script src="../../shared/code-tabs.js"></script>
+    <script src="simulations-demos.js"></script>
+    <script src="bundles-simulations.js"></script>
+    <script src="../../shared/export-demo.js"></script>
+</body>
+</html>

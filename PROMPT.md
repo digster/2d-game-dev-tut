@@ -191,3 +191,17 @@ tile caching, a living-world capstone with a player + roaming A* hunter), and
 `bundles-advanced.js`. Unlocked the Advanced tier across all cross-tier links.
 Fixed a pathfinding demo that opened on "no path" (now guarantees a reachable
 goal). All browser-verified console-clean. README.md updated.
+
+## 2026-05-21 (pt.5) — Voxel Worlds: Terraria Simulations tier (sub-track complete)
+
+> Yes, continue with the next iteration.
+
+Built the Terraria sub-track Simulations tier — the 5th and final tier:
+`simulations.html` (5 sections + recap), `simulations-demos.js` (5 deep-dive
+visualisers — cave-carving noise/worm comparison, biome blend playground,
+ring-by-ring BFS light stepper, liquid-flow stepper with per-cell decision
+arrows, ore-by-depth histogram), and `bundles-simulations.js`. Unlocked the
+Simulations tier and marked the Terraria sub-track complete (5/5 tiers). Fixed
+a blank-canvas bug — a top-level `const lerp` collided with shared/utils.js's
+global `function lerp`, killing the whole demos file at instantiation. All
+browser-verified console-clean. README.md + ARCHITECTURE.md updated.
