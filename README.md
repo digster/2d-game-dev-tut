@@ -89,7 +89,7 @@ own subdirectory with a per-tier file structure mirroring the Fundamentals layou
   see `ARCHITECTURE.md` for the harness-contract extension seam.
 - `racing-sim/` — build a sim-leaning top-down 2D racing game from first principles.
   See `racing-sim/index.html` for the full five-tier roadmap (Beginner +
-  Intermediate + Advanced Ready; Expert / Simulations on the roadmap).
+  Intermediate + Advanced + Expert Ready; Simulations on the roadmap).
   Beginner (5 demos): car-state slider diagram, kinematic WASD drive,
   dt-correct vs per-frame integrator comparison, rotating sprite, and a
   parking-lot sandbox with persistent offscreen-canvas skid marks.
@@ -104,7 +104,18 @@ own subdirectory with a per-tier file structure mirroring the Fundamentals layou
   velocity arrows, ordered-checkpoint lap counting on a fixed oval, a
   draggable-target steering-seek visualiser, and a headline race-against-AI
   mini-project (player WASD vs look-ahead-seek AI on the same physics, lap
-  counting, walls bounce both cars, first to 3 laps wins).** Demo IDs reserve
+  counting, walls bounce both cars, first to 3 laps wins). **Expert (6 demos):
+  an interactive simplified Pacejka tire-curve plot (slip-angle slider plus
+  B/C/D shape knobs, hard-clamp overlay for comparison), a weight-transfer
+  visualiser (four wheel-load circles that grow/shrink as you toggle
+  throttle/brake + steering), a race state-machine + lights animation
+  (PRE_RACE → COUNTDOWN → RACING → FINISHED with an F1-style lights bar),
+  a follow-camera side-by-side (rigid vs lerp vs lerp+lead, sliders for
+  smoothness and lead time), a gamepad-API probe (live left-stick X + LT/RT
+  bars), and a hot-lap mini-project on a world-scrolled track with the
+  Pacejka integrator, follow-camera with lead, race state machine, gamepad-
+  or-keyboard input, and a telemetry HUD (current / last / best lap times,
+  live slip angle, throttle/brake bars).** Demo IDs reserve
   the `rac_` namespace for the future per-tier bundles file. Tracks the
   established "one tier per commit" cadence used by voxel-worlds.
 

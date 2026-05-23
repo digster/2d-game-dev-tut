@@ -327,3 +327,37 @@ Flipped the Advanced roadmap card to Ready on `racing-sim/index.html`.
 Removed the "(coming soon)" marker from the root TOC's Advanced link.
 README, PROMPT, and memory/2026-05-23.md updated. ARCHITECTURE.md still
 unchanged.
+
+## 2026-05-23 (pt.4) — Racing Sim: Expert tier (Sim Polish)
+
+> Okay, work on the next iteration.
+
+Fourth iteration on racing-sim. Topics fixed by the landing-page Expert
+tier card: simplified Pacejka tire curve, weight transfer, counter-steer,
+race state machine, smooth follow camera with lead, gamepad API, hot-lap
+mini-project with telemetry.
+
+The central pivot: `integrateWithPacejka` replaces the Intermediate hard
+grip clamp with a smooth slip-angle → lateral-force lookup using
+F = D·sin(C·atan(B·α)). Same surface tables work (gripLimit becomes the
+peak factor D). Counter-steer becomes a meaningful action because the
+curve falls past peak — pushing harder makes things worse.
+
+Delivered: `racing-sim/expert.html` (8 sections + recap),
+`racing-sim/expert-demos.js` (6 IIFE demos + pacejka() helper +
+integrateWithPacejka + readGamepad + all track/wall/checkpoint helpers
+carried forward verbatim).
+
+Demos: interactive Pacejka curve plot (α slider + B/C/D shape knobs +
+hard-clamp overlay for comparison), weight-transfer visualiser (4 wheel
+load circles, throttle/brake + steer buttons), race state-machine with
+F1 lights animation, follow-camera side-by-side (rigid vs lerp vs
+lerp+lead with smoothness + lead-time sliders), live gamepad probe
+(left-stick X + LT/RT bars + pad name), hot-lap with world-scrolling
+camera, race state machine, telemetry HUD (current/last/best lap times,
+slip-angle gauge, throttle/brake bars), 3-lap race.
+
+Flipped the Expert roadmap card to Ready on `racing-sim/index.html`.
+Removed the "(coming soon)" marker from the root TOC's Expert link.
+README, PROMPT, and memory/2026-05-23.md updated. ARCHITECTURE.md still
+unchanged.

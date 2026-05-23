@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expert — Top-Down Racing Sim Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <!-- Prism.js Syntax Highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+    <style>
+        .slider-row {
+            display: grid;
+            grid-template-columns: 200px 1fr 80px;
+            gap: 14px;
+            align-items: center;
+            margin: 10px 0;
+        }
+        .slider-row label { color: #c9d1d9; font-weight: 500; }
+        .slider-row input[type="range"] { width: 100%; accent-color: #4fc3f7; }
+        .slider-row .value { color: #4fc3f7; font-family: monospace; font-weight: bold; text-align: right; }
+
+        /* Telemetry HUD inside the hot-lap demo. Same look as the Advanced
+           race HUD; promote to shared/styles.css once a third page reuses it. */
+        .lap-hud {
+            display: flex;
+            gap: 18px;
+            justify-content: center;
+            margin-top: 8px;
+            color: #c9d1d9;
+            font-family: monospace;
+            font-size: 1.05em;
+            flex-wrap: wrap;
+        }
+        .lap-hud strong { color: #4fc3f7; }
+        .lap-hud .pill {
+            background: #1a1f3a;
+            padding: 4px 12px;
+            border-radius: 14px;
+            min-width: 140px;
+            text-align: center;
+        }
+        .lap-hud .pill.best { background: #1e3a2f; }
+        .lap-hud .pill.warn { background: #3d2817; }
+
+        /* Race-state diagram (a tiny graphviz-flavoured thing built from divs). */
+        .state-diagram {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 16px;
+            margin: 18px 0;
+            flex-wrap: wrap;
+        }
+        .state-node {
+            border: 2px solid #2d3354;
+            border-radius: 12px;
+            padding: 10px 18px;
+            min-width: 130px;
+            text-align: center;
+            font-family: monospace;
+            color: #c9d1d9;
+            background: #252b4a;
+            transition: border-color 0.2s, background 0.2s;
+        }
+        .state-node.active {
+            border-color: #66bb6a;
+            background: #1e3a2f;
+            color: #fff;
+        }
+        .state-arrow {
+            color: #4fc3f7;
+            font-size: 1.4em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏁 Expert — Sim Polish</h1>
+        <p class="subtitle">The Pacejka tire curve, weight transfer, race lights, a follow camera, gamepad input, and a polished hot-lap.</p>
+
+        <!-- Navigation -->
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="advanced.html" class="nav-button">← Advanced</a>
+            <a href="expert.html" class="nav-button active">Expert</a>
+            <a href="simulations.html" class="nav-button">Simulations →</a>
+        </div>
+
+        <!-- Table of Contents -->
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#intro">What "Sim Polish" Means</a></li>
+                <li><a href="#pacejka">The Pacejka Tire Curve</a></li>
+                <li><a href="#weight-transfer">Weight Transfer Under Brake &amp; Throttle</a></li>
+                <li><a href="#counter-steer">Counter-Steer &amp; the Drift Save</a></li>
+                <li><a href="#state-machine">Race State Machine — Lights, Green, Finish</a></li>
+                <li><a href="#camera">Smooth Follow Camera with Lead</a></li>
+                <li><a href="#gamepad">Gamepad API Input</a></li>
+                <li><a href="#mini-project">Mini-Project: Hot-Lap with Telemetry</a></li>
+            </ul>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- INTRO -->
+        <!-- ============================================ -->
+        <div id="intro" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>✨ What "Sim Polish" Means</h2>
+
+            <p>
+                Up through Advanced we had a working racing game — track, walls, laps, AI. But every
+                veteran of <em>iRacing</em> or <em>Gran Turismo</em> would smell a hobby project in five
+                seconds: the cars snap from grip to slide with no warning, the camera is bolted to the
+                world, and the race just <em>starts</em> with no countdown. This tier closes those gaps.
+            </p>
+
+            <div class="concept-box">
+                <h4>📐 The six polish steps</h4>
+                <ol>
+                    <li><strong>Pacejka tire curve</strong> — replace the hard grip clamp with a smooth
+                        force-vs-slip-angle curve that <em>peaks then drops</em>. Suddenly slide is
+                        controllable.</li>
+                    <li><strong>Weight transfer</strong> — when you brake, the front loads up (more grip);
+                        when you accelerate, the rear does. Visual indicator only at this tier; full
+                        two-axle physics lands in Simulations.</li>
+                    <li><strong>Counter-steer</strong> — once Pacejka is in, the steering wheel can
+                        meaningfully oppose the slide. We show why and how.</li>
+                    <li><strong>Race state machine</strong> — formal PRE_RACE → COUNTDOWN → RACING → FINISHED.
+                        Same pattern from <a href="../advanced.html#state-machines">Fundamentals</a>.</li>
+                    <li><strong>Follow camera with lead</strong> — the camera lerps toward the car
+                        <em>plus</em> a velocity-based lead offset. Plays like Forza, not like Atari.</li>
+                    <li><strong>Gamepad input</strong> — the Gamepad API gives you analog steering and
+                        triggers for free. We fall back to WASD when no pad is connected.</li>
+                </ol>
+            </div>
+
+            <div class="key-point">
+                <strong>💡 What stays the same:</strong> every previous tier's code keeps working. The
+                Pacejka integrator is a strict superset of the grip-clamp integrator (set the right
+                coefficients and you recover the Intermediate behaviour). The hot-lap demo at the
+                bottom of this page is the Advanced race demo + these six polish layers, not a rewrite.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- PACEJKA -->
+        <!-- ============================================ -->
+        <div id="pacejka" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🛞 The Pacejka Tire Curve</h2>
+
+            <p>
+                The grip clamp from Intermediate (cancel up to <code>gripLimit·dt</code> of lateral
+                velocity; anything beyond survives) is a step function. Real tires aren't step functions
+                — they produce a <strong>force that depends on slip</strong>, with a clear peak. The
+                most common model is Hans Pacejka's <strong>Magic Formula</strong>:
+            </p>
+
+            <div class="concept-box">
+                <h4>🧮 The Magic Formula (simplified)</h4>
+                <div class="formula">
+                    F<sub>lateral</sub> = D · sin(C · arctan(B · α))
+                </div>
+                <p>where:</p>
+                <ul>
+                    <li><strong>α</strong> (alpha) — the <em>slip angle</em>, in radians: the angle
+                        between the velocity vector and the heading. Zero when gripping perfectly;
+                        positive or negative once you start sliding.</li>
+                    <li><strong>B</strong> — stiffness factor: how steep the curve climbs from zero.
+                        Higher B = sharper response, lower peak slip.</li>
+                    <li><strong>C</strong> — shape factor: controls how the curve falls past the peak.
+                        Values around 1.3–1.6 give the "rising then falling" shape that lets tires
+                        snap.</li>
+                    <li><strong>D</strong> — peak factor: the maximum force the tire can generate at the
+                        optimal slip angle. This is what surface preset adjusts in our model.</li>
+                </ul>
+                <p>The peak sits at <code>α_peak = tan(π/(2·C)) / B</code>. With <code>B=8, C=1.5</code>
+                    that's <code>tan(π/3)/8 ≈ <strong>12.4°</strong></code>. Real street tyres tend to
+                    peak around 6–10°; if you want a tighter peak, raise B (try B=15 → peak ≈ 6.6°).</p>
+            </div>
+
+            <h3>See the curve</h3>
+            <p>
+                Drag the slip-angle slider. Watch the force the tire produces (blue dot on the curve)
+                rise toward the peak, then fall away. The dashed grey line is the Intermediate tier's
+                hard clamp for comparison — note how that one has no peak, just a saturation.
+            </p>
+            <div class="diagram">
+                <canvas id="pacejkaCurveCanvas" width="800" height="380"></canvas>
+            </div>
+            <div class="controls">
+                <div class="slider-row">
+                    <label for="pacSlipAngle">slip angle α (degrees)</label>
+                    <input type="range" id="pacSlipAngle" min="-30" max="30" step="0.1" value="2">
+                    <span class="value" id="pacSlipAngleVal">2°</span>
+                </div>
+                <div class="slider-row">
+                    <label for="pacB">B (stiffness)</label>
+                    <input type="range" id="pacB" min="2" max="20" step="0.5" value="8">
+                    <span class="value" id="pacBVal">8</span>
+                </div>
+                <div class="slider-row">
+                    <label for="pacC">C (shape)</label>
+                    <input type="range" id="pacC" min="1" max="2.5" step="0.05" value="1.5">
+                    <span class="value" id="pacCVal">1.50</span>
+                </div>
+                <div class="slider-row">
+                    <label for="pacD">D (peak force, normalised)</label>
+                    <input type="range" id="pacD" min="0.3" max="1.5" step="0.05" value="1.0">
+                    <span class="value" id="pacDVal">1.00</span>
+                </div>
+            </div>
+            <div id="pacejkaCurveCanvasInfo" class="info-display">Drag α. Tweak B/C/D to reshape the curve.</div>
+
+            <details>
+                <summary>📝 Click to see: the simplified Pacejka formula in code</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// alpha in radians; returns a force in [-D, +D].
+function pacejka(alpha, B = 8, C = 1.5, D = 1.0) {
+    return D * Math.sin(C * Math.atan(B * alpha));
+}
+
+// In an integrator: convert lateral velocity to slip angle, then look up
+// the force the tyre generates, then apply that force to v_lateral.
+function applyPacejkaLateral(vForward, vLateral, gripLimit, dt, B, C, D) {
+    // Slip angle relative to forward velocity. Guard against zero forward speed.
+    const fwd = Math.max(Math.abs(vForward), 1e-3);
+    const alpha = Math.atan2(vLateral, fwd);  // radians
+    // Pacejka gives a normalised force in [-D, +D]; scale by gripLimit so the
+    // peak matches the surface's grip budget.
+    const force = pacejka(alpha, B, C, D) * gripLimit;
+    // The force opposes lateral velocity, so we *subtract* (force has the same
+    // sign as alpha, which has the same sign as vLateral).
+    return vLateral - force * dt;
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function pacejka(alpha: number, B: number = 8, C: number = 1.5, D: number = 1.0): number {
+    return D * Math.sin(C * Math.atan(B * alpha));
+}
+
+function applyPacejkaLateral(
+    vForward: number,
+    vLateral: number,
+    gripLimit: number,
+    dt: number,
+    B: number,
+    C: number,
+    D: number
+): number {
+    const fwd = Math.max(Math.abs(vForward), 1e-3);
+    const alpha = Math.atan2(vLateral, fwd);
+    const force = pacejka(alpha, B, C, D) * gripLimit;
+    return vLateral - force * dt;
+}</code></pre>
+                </div>
+            </details>
+
+            <div class="thinking-prompt">
+                <h4>🤔 Why does the curve <em>fall</em> past the peak?</h4>
+                <p>
+                    A tyre sliding past its peak slip angle is partially airborne — the contact patch
+                    starts to skim instead of grip. Less rubber on the road means less force. This
+                    falling slope is the entire physics of "losing the back end" — once you exceed
+                    peak, more steering makes things <em>worse</em>, not better. That's what makes
+                    real cars hard to catch, and what counter-steer (next section) tries to undo.
+                </p>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- WEIGHT TRANSFER -->
+        <!-- ============================================ -->
+        <div id="weight-transfer" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>⚖️ Weight Transfer Under Brake &amp; Throttle</h2>
+
+            <p>
+                A real car's weight is split (roughly) 50/50 front/rear when coasting. The moment you
+                brake, that weight shifts <em>forward</em> — the front tyres press harder into the
+                road and find more grip; the rears lighten and find less. Throttle does the opposite.
+                Cornering shifts weight to the outside tyres. This is why pro drivers brake while
+                turning in (<em>trail braking</em>) — the front grip surplus from braking helps the
+                front tyre bite into the corner.
+            </p>
+
+            <div class="concept-box">
+                <h4>📐 The simplest model</h4>
+                <p>
+                    Real weight transfer involves CG height, wheelbase, and load shift formulas. For
+                    a top-down sim that's overkill. A useful approximation:
+                </p>
+                <div class="formula">
+                    frontLoad = 0.5 − k · a<sub>longitudinal</sub> / a<sub>max</sub><br>
+                    rearLoad  = 1 − frontLoad
+                </div>
+                <p>
+                    where <code>k</code> is a single tunable in roughly [0.1, 0.3]. Positive <code>a</code>
+                    (accelerating) reduces front load; negative <code>a</code> (braking) increases it.
+                    Both <code>frontLoad</code> and <code>rearLoad</code> become multipliers on the
+                    relevant tyres' peak force <code>D</code> in the Pacejka curve.
+                </p>
+            </div>
+
+            <h3>Visualize the load shift</h3>
+            <p>
+                Press <strong>Throttle</strong> or <strong>Brake</strong>. The four wheel-load circles
+                grow or shrink to show where the car's weight has moved. With <strong>Brake + Turn
+                left</strong> held together you'll see the classic trail-braking pattern: front-right
+                wheel maximally loaded.
+            </p>
+            <div class="diagram">
+                <canvas id="weightTransferCanvas" width="800" height="360"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnWtThrottle">🚀 Throttle</button>
+                <button id="btnWtBrake">🛑 Brake</button>
+                <button id="btnWtCoast" class="active">Coast</button>
+                <span style="color:#9e9e9e; margin: 0 14px;">|</span>
+                <button id="btnWtSteerNone" class="active">Straight</button>
+                <button id="btnWtSteerLeft">↰ Turn left</button>
+                <button id="btnWtSteerRight">↱ Turn right</button>
+            </div>
+            <div id="weightTransferCanvasInfo" class="info-display">Press throttle, brake, or coast. Add a turn to see lateral transfer.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- COUNTER-STEER -->
+        <!-- ============================================ -->
+        <div id="counter-steer" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>↩️ Counter-Steer &amp; the Drift Save</h2>
+
+            <p>
+                With the Pacejka curve in place, drift becomes a controllable state. If the back end
+                starts to come around (slip angle past peak), the falling side of the curve means
+                <em>more</em> steering INTO the original turn makes the slide worse. The fix is
+                <strong>counter-steer</strong> — turn the wheels the <em>other</em> way, briefly,
+                until slip drops back below the peak. Then you can steer normally again.
+            </p>
+
+            <div class="concept-box">
+                <h4>📐 What the Pacejka curve is telling you</h4>
+                <p>
+                    The slip angle is <code>atan2(v_lateral, v_forward)</code>. To bring it down, you
+                    need to either reduce <code>v_lateral</code> or increase <code>v_forward</code>.
+                    Counter-steer rotates the car so its heading lines up with where it's
+                    <em>already going</em> — which directly reduces the slip angle without needing
+                    the tyres to do impossible work.
+                </p>
+                <p>
+                    In our hot-lap demo, the HUD shows live slip angle in degrees. Watch it during a
+                    deliberate drift: it climbs past 12°, the back swings out, you tap the opposite
+                    direction, and the slip angle drops back below peak as the heading catches up
+                    with the velocity vector.
+                </p>
+            </div>
+
+            <div class="thinking-prompt">
+                <h4>🤔 Why this isn't taught in the Intermediate tier</h4>
+                <p>
+                    The Intermediate grip clamp doesn't have a peak. Once you're past the threshold,
+                    the lateral velocity decays linearly back toward zero — the slide is
+                    "self-correcting" because nothing makes it worse. Without a peak, counter-steer
+                    is a no-op. The Pacejka curve <em>creates</em> the need for counter-steer, and
+                    that's what makes it the real sim model.
+                </p>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- STATE MACHINE -->
+        <!-- ============================================ -->
+        <div id="state-machine" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🚦 Race State Machine — Lights, Green, Finish</h2>
+
+            <p>
+                Up to now the race just <em>was</em> — reset, drive, win. A real race has phases. We
+                model the lifecycle with a tiny state machine — formally the same pattern as
+                <a href="../advanced.html#state-machines">State Machines</a> in Fundamentals.
+            </p>
+
+            <div class="concept-box">
+                <h4>📐 The four states</h4>
+                <ol>
+                    <li><strong>PRE_RACE</strong> — track laid out, car at the line, no input accepted.</li>
+                    <li><strong>COUNTDOWN</strong> — red lights light up one per second, then all go
+                        green. Input still locked.</li>
+                    <li><strong>RACING</strong> — timer started, input live, lap timer accumulating.</li>
+                    <li><strong>FINISHED</strong> — final lap completed, timer frozen, banner up,
+                        input ignored.</li>
+                </ol>
+                <p>
+                    Each state has an <strong>enter()</strong>, an <strong>update(dt)</strong>, and an
+                    <strong>exit condition</strong>. The race machine drives <em>everything</em> —
+                    the input layer reads its state to know whether to forward throttle to the
+                    integrator, the HUD reads it to render lights vs lap timer, the camera reads it
+                    to decide whether to centre on the lights or follow the car.
+                </p>
+            </div>
+
+            <h3>Watch the lights sequence</h3>
+            <p>
+                Click <strong>▶ Start race</strong>. The state diagram below highlights the active
+                state. The light bar above the diagram does its red → red+amber → all-green
+                animation (the F1 start light pattern, simplified). After 5 seconds of "RACING" the
+                demo auto-transitions to FINISHED for the loop.
+            </p>
+            <div class="diagram">
+                <canvas id="raceStateMachineCanvas" width="800" height="200"></canvas>
+            </div>
+            <div class="state-diagram">
+                <div id="stateNodePre"    class="state-node active">PRE_RACE</div>
+                <div class="state-arrow">→</div>
+                <div id="stateNodeCount"  class="state-node">COUNTDOWN</div>
+                <div class="state-arrow">→</div>
+                <div id="stateNodeRace"   class="state-node">RACING</div>
+                <div class="state-arrow">→</div>
+                <div id="stateNodeFinish" class="state-node">FINISHED</div>
+            </div>
+            <div class="controls">
+                <button id="btnStateStart">▶ Start race</button>
+                <button id="btnStateReset">Reset</button>
+            </div>
+            <div id="raceStateMachineCanvasInfo" class="info-display">PRE_RACE → COUNTDOWN (3 lights → green) → RACING → FINISHED.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- CAMERA -->
+        <!-- ============================================ -->
+        <div id="camera" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>📷 Smooth Follow Camera with Lead</h2>
+
+            <p>
+                A good follow camera does three things: <strong>follow</strong> the car (don't lock to
+                the world), <strong>smooth</strong> the follow (don't be twitchy), and <strong>look
+                ahead</strong> (anticipate where the car is going so the player sees the next corner,
+                not the corner they just left).
+            </p>
+
+            <div class="concept-box">
+                <h4>📐 The three camera flavours</h4>
+                <ul>
+                    <li><strong>Rigid</strong>: <code>camera.position = car.position</code>. Twitchy,
+                        no anticipation. Used in 1980s Atari arcade games.</li>
+                    <li><strong>Lerp</strong>: <code>camera.position = lerp(camera.position, car.position,
+                        smoothness · dt)</code>. Smooth follow; lags slightly behind so corners read
+                        well. Good for top-down racers.</li>
+                    <li><strong>Lerp + lead</strong>: target the car's position
+                        <em>plus</em> a velocity-based offset:
+                        <code>target = car.position + car.velocity · leadTime</code>. Then lerp toward
+                        that. Anticipates corners by pushing the camera in the direction of travel.</li>
+                </ul>
+                <p>
+                    The lerp is mathematically a damped spring (cross-link:
+                    <a href="../intermediate.html#spring">Spring Physics &amp; Damping</a>) without
+                    the overshoot — exactly what you want for a camera.
+                </p>
+            </div>
+
+            <h3>Side-by-side comparison</h3>
+            <p>
+                Drag the white dot (the "car") around the canvas. Three camera dots track it using
+                the three rules above. Notice how lerp+lead is always slightly ahead of the car when
+                you move quickly — that's the lead.
+            </p>
+            <div class="diagram">
+                <canvas id="followCameraCanvas" width="800" height="400"></canvas>
+            </div>
+            <div class="controls">
+                <div class="slider-row">
+                    <label for="camSmooth">smoothness (1/s)</label>
+                    <input type="range" id="camSmooth" min="1" max="10" step="0.2" value="4">
+                    <span class="value" id="camSmoothVal">4.0</span>
+                </div>
+                <div class="slider-row">
+                    <label for="camLead">lead time (seconds)</label>
+                    <input type="range" id="camLead" min="0" max="0.6" step="0.02" value="0.25">
+                    <span class="value" id="camLeadVal">0.25</span>
+                </div>
+            </div>
+            <div id="followCameraCanvasInfo" class="info-display">Drag the white dot. White = car · red = rigid · orange = lerp · cyan = lerp+lead.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- GAMEPAD -->
+        <!-- ============================================ -->
+        <div id="gamepad" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🎮 Gamepad API Input</h2>
+
+            <p>
+                The browser's <a href="https://developer.mozilla.org/en-US/docs/Web/API/Gamepad_API" target="_blank" rel="noopener">Gamepad API</a>
+                gives you analog input — exactly what driving wants. Left stick X for steering, right
+                trigger for throttle, left trigger for brake. We poll on every frame
+                (<code>navigator.getGamepads()</code>) — there is no event API for sticks/triggers
+                because they're sampled continuously.
+            </p>
+
+            <div class="concept-box">
+                <h4>📐 The poll loop, in five lines</h4>
+                <p>
+                    Plug a controller in, then press anything on it — the browser only exposes pads
+                    that have produced input recently.
+                </p>
+            </div>
+
+            <details>
+                <summary>📝 Click to see: reading a gamepad each frame</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Returns { throttle, steer, connected, name } for the first gamepad found,
+// or null when none is connected. Apply a small dead-zone so resting sticks
+// don't drift.
+function readGamepad(deadZone = 0.08) {
+    const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+    for (const pad of pads) {
+        if (!pad) continue;
+        let steer    =  pad.axes[0] || 0;           // left stick X
+        let throttle =  pad.buttons[7]?.value || 0; // right trigger
+        let brake    =  pad.buttons[6]?.value || 0; // left trigger
+        if (Math.abs(steer) &lt; deadZone) steer = 0;
+        // Combine throttle and brake into a single [-1, +1] axis. Brake wins.
+        const net = brake &gt; 0.1 ? -brake : throttle;
+        return { throttle: net, steer, connected: true, name: pad.id };
+    }
+    return { throttle: 0, steer: 0, connected: false, name: null };
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface PadState {
+    throttle: number;
+    steer: number;
+    connected: boolean;
+    name: string | null;
+}
+
+function readGamepad(deadZone: number = 0.08): PadState {
+    const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+    for (const pad of pads) {
+        if (!pad) continue;
+        let steer    =  pad.axes[0] || 0;
+        let throttle =  pad.buttons[7]?.value || 0;
+        let brake    =  pad.buttons[6]?.value || 0;
+        if (Math.abs(steer) &lt; deadZone) steer = 0;
+        const net = brake &gt; 0.1 ? -brake : throttle;
+        return { throttle: net, steer, connected: true, name: pad.id };
+    }
+    return { throttle: 0, steer: 0, connected: false, name: null };
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>Live pad readout</h3>
+            <p>
+                If you have a controller plugged in, press anything on it to make the browser surface
+                it. The bars below mirror left-stick-X and the triggers. The hot-lap demo at the
+                bottom will use the pad if it's connected, falling back to WASD otherwise.
+            </p>
+            <div class="diagram">
+                <canvas id="gamepadProbeCanvas" width="800" height="240"></canvas>
+            </div>
+            <div id="gamepadProbeCanvasInfo" class="info-display">No gamepad detected yet. Plug one in and press a button.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- MINI-PROJECT -->
+        <!-- ============================================ -->
+        <div id="mini-project" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🏆 Mini-Project: Hot-Lap with Telemetry</h2>
+
+            <p>
+                The capstone. A single car on a closed Bézier track. The race state machine drives the
+                lights → green → finish sequence. The follow camera tracks you with velocity lead. The
+                Pacejka integrator gives a smooth slip-to-grip transition. The telemetry HUD shows
+                live speed, slip angle, brake/throttle bars, current lap time, last lap, and best
+                lap. Three laps and the race ends.
+            </p>
+
+            <div class="concept-box">
+                <h4>🎮 What to try</h4>
+                <ul>
+                    <li><strong>Hold the wheel into a corner:</strong> watch the slip-angle gauge
+                        climb. Push past ~12° and you'll see the back step out — the curve has
+                        peaked.</li>
+                    <li><strong>Tap the opposite direction:</strong> classic counter-steer save. The
+                        slip-angle gauge falls back toward zero as the heading catches up with the
+                        velocity vector.</li>
+                    <li><strong>Trail-brake:</strong> brake while still steering into the corner.
+                        Front grip is up, so you can turn-in much sharper than under coast.</li>
+                    <li><strong>Compare laps:</strong> the best-lap pill turns green when you set a
+                        new personal best.</li>
+                </ul>
+            </div>
+
+            <h3>The hot-lap</h3>
+            <div class="diagram">
+                <canvas id="hotLapCanvas" width="800" height="500" tabindex="0"></canvas>
+            </div>
+            <div class="lap-hud">
+                <span class="pill" id="hotState">PRE-RACE</span>
+                <span class="pill">⏱️ current: <strong id="hotCurrent">--:--.---</strong></span>
+                <span class="pill">last: <strong id="hotLast">--:--.---</strong></span>
+                <span class="pill best">🏁 best: <strong id="hotBest">--:--.---</strong></span>
+                <span class="pill">slip α: <strong id="hotSlip">0.0°</strong></span>
+            </div>
+            <div class="controls" style="margin-top: 12px;">
+                <button id="btnHotStart">▶ Start race</button>
+                <button id="btnHotReset">Reset</button>
+                <span style="color: #9e9e9e; margin-left: 14px;">Input: <strong id="hotInputMode">keyboard</strong></span>
+            </div>
+            <div id="hotLapCanvasInfo" class="info-display">Click the canvas, then ▶ Start race. WASD or gamepad to drive once the lights go green.</div>
+
+            <div class="example-box">
+                <h4>🎮 What you just built</h4>
+                <p>
+                    A small-but-sim-grade top-down racer. Same building blocks as
+                    <em>Race Driver: GRID</em>'s overhead camera modes — Pacejka curve, weight
+                    transfer, follow camera with lead, formal race state machine, gamepad input.
+                    What's left for Simulations is the deep stuff that doesn't change gameplay but
+                    that sim purists care about: slip ratio vs slip angle, tyre heat, suspension as
+                    spring-damper, aero downforce, telemetry traces, procedural track generation.
+                </p>
+            </div>
+
+            <div class="key-point">
+                <strong>💡 What's next:</strong> the <a href="simulations.html">Simulations tier</a> is
+                the deep-dive playground — standalone toys for the topics that don't change moment-to-moment
+                gameplay but that any sim purist will look for.
+            </div>
+        </div>
+
+        <!-- Next Steps -->
+        <div class="section" style="text-align: center;">
+            <h2>✅ Expert Tier Complete</h2>
+            <p style="font-size: 1.1em; margin: 24px 0;">
+                You've gone from "a car that drives" to a polished sim — smooth slip-to-grip
+                transition, weight transfer, counter-steer, a formal race lifecycle, a follow
+                camera, and gamepad input. That's the whole feature surface of an early-2000s
+                top-down sim.
+            </p>
+            <a href="simulations.html" class="nav-button" style="font-size: 1.2em; padding: 20px 40px;">
+                Continue to Simulations →
+            </a>
+            <p style="margin-top: 20px;"><em>Simulations isn't written yet — coming in the next phase. Track your progress on the <a href="index.html">track index</a>.</em></p>
+        </div>
+    </div>
+
+    <!-- Scroll to Top Button -->
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <!-- Load shared utilities. -->
+    <script src="../shared/utils.js"></script>
+    <script src="../shared/code-tabs.js"></script>
+    <script src="expert-demos.js"></script>
+    <script src="../shared/export-demo.js"></script>
+</body>
+</html>
