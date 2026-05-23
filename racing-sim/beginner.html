@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beginner — Top-Down Racing Sim Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <!-- Prism.js Syntax Highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>🏁 Beginner — Car Foundations</h1>
+        <p class="subtitle">A car is just three numbers — and a parking lot is the smallest game world that proves it.</p>
+
+        <!-- Navigation -->
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="beginner.html" class="nav-button active">Beginner</a>
+            <a href="intermediate.html" class="nav-button">Intermediate →</a>
+        </div>
+
+        <!-- Table of Contents -->
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#intro">What is a Top-Down Racing Sim?</a></li>
+                <li><a href="#car-state">A Car = Position + Heading + Velocity</a></li>
+                <li><a href="#input">Throttle and Steering as Input</a></li>
+                <li><a href="#kinematic-drive">Putting It Together — Drive a Car</a></li>
+                <li><a href="#delta-time">Why We Multiply by <code>dt</code></a></li>
+                <li><a href="#drawing-the-car">Drawing a Rotating Car Sprite</a></li>
+                <li><a href="#mini-project">Mini-Project: Parking-Lot Sandbox</a></li>
+            </ul>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- INTRO -->
+        <!-- ============================================ -->
+        <div id="intro" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🏎️ What is a Top-Down Racing Sim?</h2>
+
+            <p>
+                A <strong>top-down racing sim</strong> is the simplest possible vehicle game — the camera looks
+                straight down, the car is a small rectangle that points somewhere, and the math of how it moves
+                is the entire show. There's no 3D, no perspective tricks, no shaders to hide behind.
+                That makes it the perfect place to learn how cars <em>actually</em> move.
+            </p>
+
+            <div class="example-box">
+                <h4>🕹️ Games that lean on this loop</h4>
+                <ul>
+                    <li><strong>Micro Machines</strong> — the granddaddy of top-down racers</li>
+                    <li><strong>Death Rally / Mashed</strong> — top-down arcade racing with weapons</li>
+                    <li><strong>Race Driver: GRID</strong> and many indie sims — overhead camera modes</li>
+                    <li><strong>The original Need For Speed</strong> — early demo modes used top-down for pace cars</li>
+                    <li><strong>REDLINE</strong> (Sega 1999) — an early sim-leaning top-down racer</li>
+                </ul>
+            </div>
+
+            <h3>Sim vs arcade — what we're choosing</h3>
+            <p>Two design extremes:</p>
+            <ul>
+                <li><strong>Arcade:</strong> the car turns instantly, accelerates linearly, never slides.
+                Fun in 30 seconds, hides all the physics.</li>
+                <li><strong>Sim:</strong> the car has separate <em>heading</em> (where it's pointed) and
+                <em>velocity</em> (where it's going), and they only line up when the tires grip. Slides happen
+                when grip runs out. Acceleration depends on what tires can transmit.</li>
+            </ul>
+            <p>
+                This track picks <strong>sim</strong>. We start gentle — the Beginner tier has no friction or
+                slip yet — but every choice we make in the integration loop is made with the sim future in mind.
+                You won't have to throw anything away when grip arrives in Intermediate.
+            </p>
+
+            <div class="key-point">
+                <strong>💡 The whole game is one loop:</strong> read input → update car state → draw car.
+                Once we have those three pieces working, every later tier slots into <em>"update car state"</em>
+                — friction goes there, walls go there, the AI driver goes there.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- CAR STATE -->
+        <!-- ============================================ -->
+        <div id="car-state" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>📐 A Car = Position + Heading + Velocity</h2>
+
+            <p>
+                Forget cars for a moment. From the simulator's point of view, a car is just three numbers — well,
+                three pieces of state — that evolve over time:
+            </p>
+
+            <ul>
+                <li><strong>Position</strong> — a 2D vector <code>(x, y)</code> in pixels. Where the car <em>is</em>.</li>
+                <li><strong>Heading</strong> — a single angle in radians. Where the car is <em>pointed</em>.</li>
+                <li><strong>Velocity</strong> — a 2D vector in pixels-per-second. Where the car is <em>moving</em>.</li>
+            </ul>
+
+            <div class="concept-box">
+                <h4>🤔 Why separate heading and velocity?</h4>
+                <p>
+                    In an arcade game, "facing" and "moving" are the same — the car always goes where it points.
+                    In a sim, they diverge. A car drifting through a corner is pointed at the apex but moving
+                    sideways; that's the whole drama of grip. Even in this Beginner tier where we don't simulate
+                    grip yet, we keep them separate so adding it later is one variable, not a rewrite.
+                </p>
+            </div>
+
+            <h3>See the three numbers</h3>
+            <p>
+                Move the sliders. The car arrow on the canvas changes — that's the entire visible state.
+                Notice how heading rotates the arrow without moving it, and speed lengthens it without
+                rotating it. Position just slides everything.
+            </p>
+            <div class="diagram">
+                <canvas id="carStateCanvas" width="800" height="400"></canvas>
+            </div>
+            <div class="controls">
+                <label style="color: #c9d1d9; display: inline-flex; align-items: center; gap: 8px;">
+                    pos.x <input type="range" id="carStatePosX" min="50" max="750" value="400" style="width: 140px;">
+                </label>
+                <label style="color: #c9d1d9; display: inline-flex; align-items: center; gap: 8px;">
+                    pos.y <input type="range" id="carStatePosY" min="50" max="350" value="200" style="width: 140px;">
+                </label>
+                <label style="color: #c9d1d9; display: inline-flex; align-items: center; gap: 8px;">
+                    heading <input type="range" id="carStateHeading" min="0" max="360" value="0" style="width: 140px;">
+                </label>
+                <label style="color: #c9d1d9; display: inline-flex; align-items: center; gap: 8px;">
+                    speed <input type="range" id="carStateSpeed" min="0" max="400" value="120" style="width: 140px;">
+                </label>
+            </div>
+            <div id="carStateCanvasInfo" class="info-display">Drag the sliders — position, heading, speed fully determine the picture.</div>
+
+            <h3>The state in code</h3>
+            <p>A racing-sim car class starts as little as this:</p>
+
+            <details>
+                <summary>📝 Click to see: a minimal <code>Car</code> class</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// The three pieces of state every racing sim needs.
+// Heading is in radians; velocity is in pixels-per-second.
+class Car {
+    constructor(x = 0, y = 0) {
+        this.position = new Vector2D(x, y);   // px
+        this.velocity = new Vector2D(0, 0);   // px/s
+        this.heading  = 0;                    // rad (0 = facing +X = "right")
+    }
+
+    // Speed is just |velocity|. Worth a getter so demos can show it cheaply.
+    get speed() {
+        return this.velocity.length();
+    }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// The three pieces of state every racing sim needs.
+// Heading is in radians; velocity is in pixels-per-second.
+class Car {
+    public position: Vector2D;
+    public velocity: Vector2D;
+    public heading: number;
+
+    constructor(x: number = 0, y: number = 0) {
+        this.position = new Vector2D(x, y);   // px
+        this.velocity = new Vector2D(0, 0);   // px/s
+        this.heading  = 0;                    // rad (0 = facing +X = "right")
+    }
+
+    get speed(): number {
+        return this.velocity.length();
+    }
+}</code></pre>
+                </div>
+                <div class="key-point">
+                    <strong>💡 Reusing <code>Vector2D</code>:</strong> the shared <code>Vector2D</code> from
+                    <code>shared/utils.js</code> already gives us add, multiply, length, normalize — everything
+                    a car body needs. We don't redefine vector math per track.
+                </div>
+            </details>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- INPUT -->
+        <!-- ============================================ -->
+        <div id="input" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🎮 Throttle and Steering as Input</h2>
+
+            <p>
+                Player input maps to two numbers per frame: <strong>throttle</strong> in the range
+                <code>[-1, +1]</code> (forward / brake-or-reverse) and <strong>steering</strong> in the range
+                <code>[-1, +1]</code> (left / right). On a keyboard:
+            </p>
+
+            <ul>
+                <li><kbd>W</kbd> or <kbd>↑</kbd> → throttle = +1</li>
+                <li><kbd>S</kbd> or <kbd>↓</kbd> → throttle = −1 (brake; reverses once you're stopped)</li>
+                <li><kbd>A</kbd> or <kbd>←</kbd> → steering = −1</li>
+                <li><kbd>D</kbd> or <kbd>→</kbd> → steering = +1</li>
+                <li>Nothing pressed → 0</li>
+            </ul>
+
+            <div class="concept-box">
+                <h4>📐 The integration loop, in words</h4>
+                <p>Every frame we do these four things in order, multiplying every rate by <code>dt</code>:</p>
+                <ol>
+                    <li>Convert <strong>steering</strong> into a change in <em>heading</em> (<code>heading += steer · steerRate · dt</code>).
+                    But: only when the car is actually moving. Cars can't pivot in place.</li>
+                    <li>Convert <strong>throttle</strong> into an acceleration along the car's heading,
+                    and add that to <em>velocity</em>.</li>
+                    <li>Move <em>position</em> by <em>velocity × dt</em>.</li>
+                    <li>Clamp <em>velocity</em> to a maximum speed so the demo doesn't run off the canvas.</li>
+                </ol>
+                <p>That's the whole loop. Friction, walls, AI — everything later in the track adds one more
+                line in there.</p>
+            </div>
+
+            <details>
+                <summary>📝 Click to see: the integration loop in code</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Tunables. We pick numbers that look right at 800x500 canvas size.
+const MAX_SPEED = 280;     // px/s
+const MAX_ACCEL = 220;     // px/s^2
+const MAX_STEER_RATE = 2.4; // rad/s at full lock
+
+// dt is in seconds. Pass throttle and steer as normalized [-1, 1] values.
+function update(car, throttle, steer, dt) {
+    // 1. Steering changes heading — but only when the car is moving.
+    //    Below ~30 px/s, response ramps from 0 to full. Stops "pivot in place" feel.
+    const steerScale = clamp(car.speed / 30, 0, 1);
+    car.heading += steer * MAX_STEER_RATE * steerScale * dt;
+
+    // 2. Throttle adds acceleration along the car's heading.
+    const ax = Math.cos(car.heading) * throttle * MAX_ACCEL;
+    const ay = Math.sin(car.heading) * throttle * MAX_ACCEL;
+    car.velocity.x += ax * dt;
+    car.velocity.y += ay * dt;
+
+    // 3. Move position by velocity. (Position is in px, velocity is in px/s.)
+    car.position.x += car.velocity.x * dt;
+    car.position.y += car.velocity.y * dt;
+
+    // 4. Clamp speed.
+    const sp = car.velocity.length();
+    if (sp > MAX_SPEED) car.velocity.multiply(MAX_SPEED / sp);
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Tunables. We pick numbers that look right at 800x500 canvas size.
+const MAX_SPEED: number = 280;       // px/s
+const MAX_ACCEL: number = 220;       // px/s^2
+const MAX_STEER_RATE: number = 2.4;  // rad/s at full lock
+
+function update(car: Car, throttle: number, steer: number, dt: number): void {
+    const steerScale: number = clamp(car.speed / 30, 0, 1);
+    car.heading += steer * MAX_STEER_RATE * steerScale * dt;
+
+    const ax: number = Math.cos(car.heading) * throttle * MAX_ACCEL;
+    const ay: number = Math.sin(car.heading) * throttle * MAX_ACCEL;
+    car.velocity.x += ax * dt;
+    car.velocity.y += ay * dt;
+
+    car.position.x += car.velocity.x * dt;
+    car.position.y += car.velocity.y * dt;
+
+    const sp: number = car.velocity.length();
+    if (sp > MAX_SPEED) car.velocity.multiply(MAX_SPEED / sp);
+}</code></pre>
+                </div>
+            </details>
+
+            <div class="thinking-prompt">
+                <h4>🤔 Notice what's missing</h4>
+                <p>
+                    There's no friction. If you stop pressing throttle, the car coasts forever — Newton's first
+                    law, no air, no tires sticking. The next tier adds friction. Right now we want you to
+                    feel <em>the bare loop</em> so you appreciate what friction adds.
+                </p>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- KINEMATIC DRIVE -->
+        <!-- ============================================ -->
+        <div id="kinematic-drive" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🚗 Putting It Together — Drive a Car</h2>
+
+            <p>
+                Click the canvas to focus it, then drive with <kbd>W</kbd>/<kbd>A</kbd>/<kbd>S</kbd>/<kbd>D</kbd>
+                or the arrow keys. The grid scrolls under you so you always have a reference for how fast you're
+                going. The info panel shows live speed and heading.
+            </p>
+
+            <div class="diagram">
+                <canvas id="kinematicCanvas" width="800" height="500" tabindex="0"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnKinematicReset">Reset</button>
+            </div>
+            <div id="kinematicCanvasInfo" class="info-display">Click the canvas, then drive with WASD or arrows.</div>
+
+            <div class="key-point">
+                <strong>💡 No friction yet:</strong> release throttle and you'll coast forever. That's not a
+                bug — friction is a deliberate Intermediate-tier topic. Feeling the
+                coast-forever weirdness now makes the friction lesson land harder later.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- DELTA TIME -->
+        <!-- ============================================ -->
+        <div id="delta-time" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>⏱️ Why We Multiply by <code>dt</code></h2>
+
+            <p>
+                The single most important word in every line of the integration loop is <code>dt</code>.
+                It's the time elapsed since the previous frame, measured in seconds. <code>requestAnimationFrame</code>
+                fires roughly 60 times per second on a healthy laptop — so <code>dt</code> is roughly
+                <code>1/60 ≈ 0.0167s</code> — but it varies. Tab in the background? <code>dt</code> spikes.
+                Hot GPU? Frame drops. A 144Hz monitor? <code>dt</code> halves.
+            </p>
+
+            <p>
+                If you forgot the <code>* dt</code> and wrote <code>position.x += velocity.x</code> instead, your
+                car would move <em>per frame</em> rather than <em>per second</em>. Result: it'd literally drive
+                twice as fast on a 144Hz monitor as on a 60Hz one. The demo below proves it. The two cars
+                share the same throttle and steering input; the only difference is one multiplies by
+                <code>dt</code> and one doesn't.
+            </p>
+
+            <div class="diagram">
+                <canvas id="dtCompareCanvas" width="800" height="420"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnDtCap30">Cap at 30 fps</button>
+                <button id="btnDtCap60" class="active">Cap at 60 fps</button>
+                <button id="btnDtUncap">Unthrottled</button>
+                <button id="btnDtReset">Reset</button>
+            </div>
+            <div id="dtCompareCanvasInfo" class="info-display">Both cars start at the same position with the same input. Watch them diverge as you change frame rate.</div>
+
+            <div class="key-point">
+                <strong>💡 The rule:</strong> every line that says "per second" gets a <code>* dt</code>.
+                Position uses velocity (px/s) so <code>position += velocity * dt</code>. Velocity uses
+                acceleration (px/s²) so <code>velocity += accel * dt</code>. Heading uses angular velocity
+                (rad/s) so <code>heading += angVel * dt</code>. Whenever you add a new mechanic — friction,
+                spring forces, anything — read its units and you'll know where <code>dt</code> goes.
+                Deep dive in the Fundamentals: <a href="../expert.html#delta-time">Delta Time &amp; Fixed Timestep</a>.
+            </div>
+
+            <details>
+                <summary>📝 Click to see: clamping <code>dt</code> on tab refocus</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// When you tab away and come back, requestAnimationFrame can deliver
+// a "dt" of 0.5s or more. Without a clamp, the car teleports across the
+// canvas (and possibly through walls in later tiers).
+const MAX_DT = 0.05; // seconds; ~20fps worst-case
+
+let lastTime = performance.now();
+function frame(now) {
+    const rawDt = (now - lastTime) / 1000;
+    const dt = Math.min(rawDt, MAX_DT);
+    lastTime = now;
+    update(car, throttle, steer, dt);
+    render();
+    requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const MAX_DT: number = 0.05;
+
+let lastTime: number = performance.now();
+function frame(now: number): void {
+    const rawDt: number = (now - lastTime) / 1000;
+    const dt: number = Math.min(rawDt, MAX_DT);
+    lastTime = now;
+    update(car, throttle, steer, dt);
+    render();
+    requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);</code></pre>
+                </div>
+            </details>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- DRAWING THE CAR -->
+        <!-- ============================================ -->
+        <div id="drawing-the-car" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🎨 Drawing a Rotating Car Sprite</h2>
+
+            <p>
+                Drawing the car body is two canvas calls: <code>translate</code> to move the origin to the car,
+                then <code>rotate</code> to spin the world around it. Any shape you draw after that — a rectangle,
+                a polygon, an imported sprite — comes out rotated about the car's center, exactly the way you'd
+                expect a car to look when steering.
+            </p>
+
+            <div class="concept-box">
+                <h4>📐 The two-line pattern</h4>
+                <p>
+                    <code>ctx.translate</code> shifts the entire coordinate system; subsequent draws happen
+                    relative to that shifted origin. <code>ctx.rotate</code> applies a rotation to the same
+                    system. <strong>Order matters:</strong> translate first, then rotate. Reverse them and
+                    you get a car that orbits the canvas origin like a planet.
+                </p>
+                <p>
+                    Under the hood it's a 2D matrix multiplication on the canvas state.
+                    Refresher: <a href="../beginner.html#matrices">Matrix Transformations</a>.
+                </p>
+            </div>
+
+            <details>
+                <summary>📝 Click to see: <code>drawCar</code></summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Draws a top-down car body of size w x h, centered on the car's position
+// and rotated so its long axis points along `heading`.
+function drawCar(ctx, car, w = 28, h = 14) {
+    ctx.save();
+    ctx.translate(car.position.x, car.position.y);
+    ctx.rotate(car.heading);
+
+    // Body — a rounded rectangle works as a visible "car" silhouette.
+    ctx.fillStyle = '#ef5350';
+    ctx.beginPath();
+    ctx.roundRect(-w / 2, -h / 2, w, h, 3);
+    ctx.fill();
+
+    // Windshield — a darker rectangle near the front to show which way is forward.
+    ctx.fillStyle = '#263238';
+    ctx.fillRect(w / 6, -h / 2 + 2, w / 4, h - 4);
+
+    ctx.restore();
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function drawCar(
+    ctx: CanvasRenderingContext2D,
+    car: Car,
+    w: number = 28,
+    h: number = 14
+): void {
+    ctx.save();
+    ctx.translate(car.position.x, car.position.y);
+    ctx.rotate(car.heading);
+
+    ctx.fillStyle = '#ef5350';
+    ctx.beginPath();
+    ctx.roundRect(-w / 2, -h / 2, w, h, 3);
+    ctx.fill();
+
+    ctx.fillStyle = '#263238';
+    ctx.fillRect(w / 6, -h / 2 + 2, w / 4, h - 4);
+
+    ctx.restore();
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>Try it</h3>
+            <p>Drag the heading slider and watch the car rotate around its own center. Bonus:
+            <code>cos(heading)</code> and <code>sin(heading)</code> give you the "forward" direction —
+            shown as the orange arrow.</p>
+            <div class="diagram">
+                <canvas id="rotatedCarCanvas" width="800" height="320"></canvas>
+            </div>
+            <div class="controls">
+                <label style="color: #c9d1d9; display: inline-flex; align-items: center; gap: 8px;">
+                    heading <input type="range" id="rotatedCarHeading" min="0" max="360" value="0" style="width: 220px;">
+                </label>
+            </div>
+            <div id="rotatedCarCanvasInfo" class="info-display">Rotate the heading slider. The forward vector is <code>(cos h, sin h)</code>.</div>
+
+            <div class="thinking-prompt">
+                <h4>🤔 Try this yourself</h4>
+                <p>
+                    Why is the forward direction <code>(cos heading, sin heading)</code>? Because heading is the
+                    angle from the +X axis, and standard polar-to-cartesian conversion is exactly that. If you
+                    came from a tutorial that uses <code>(sin, -cos)</code> for forward, that tutorial is
+                    measuring heading from the +Y axis (compass north) instead — a different convention, same math.
+                    Refresher: <a href="../beginner.html#trigonometry">Trigonometry for Game Developers</a>.
+                </p>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- MINI-PROJECT -->
+        <!-- ============================================ -->
+        <div id="mini-project" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🏎️ Mini-Project: Parking-Lot Sandbox</h2>
+
+            <p>
+                Time to put it all together. The mini-project combines everything from this tier into one
+                playable sandbox: a top-down car, a parking-lot floor, and <strong>persistent skid marks</strong>
+                that record where the rear of the car has been. Drive in circles, do figure-eights, scribble
+                your initials.
+            </p>
+
+            <div class="concept-box">
+                <h4>🎨 The skid-mark trick</h4>
+                <p>
+                    The skid marks are drawn to a <strong>separate offscreen canvas</strong> the same size as
+                    the main canvas. Each frame we draw two small dots at the car's rear wheels onto the
+                    offscreen layer, then composite the offscreen onto the main canvas <em>before</em> drawing
+                    the car. The offscreen never resets unless you press <strong>Clear skid marks</strong>,
+                    so marks persist across frames cheaply — no array of points growing forever.
+                </p>
+                <p>
+                    A subtle fade (<code>globalAlpha 0.995</code> on a transparent black overlay every few frames)
+                    means very old marks gracefully dissolve, which doubles as a nicer look.
+                </p>
+            </div>
+
+            <details>
+                <summary>📝 Click to see: the offscreen skid-mark layer</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Build the offscreen canvas once. It's the same size as the visible one.
+const skidLayer = document.createElement('canvas');
+skidLayer.width  = canvas.width;
+skidLayer.height = canvas.height;
+const skidCtx = skidLayer.getContext('2d');
+
+// Compute the world positions of the two rear wheels.
+// The car's local rear-wheel offsets are (-w/2, +/- h/2). We rotate by heading.
+function stampSkidMarks(car, w = 28, h = 14) {
+    const cos = Math.cos(car.heading);
+    const sin = Math.sin(car.heading);
+    for (const side of [-1, +1]) {
+        const lx = -w / 2;
+        const ly = side * (h / 2);
+        const wx = car.position.x + lx * cos - ly * sin;
+        const wy = car.position.y + lx * sin + ly * cos;
+        skidCtx.fillStyle = 'rgba(20, 20, 20, 0.4)';
+        skidCtx.beginPath();
+        skidCtx.arc(wx, wy, 1.6, 0, Math.PI * 2);
+        skidCtx.fill();
+    }
+}
+
+// In the render loop:
+function render() {
+    clearCanvas(ctx, canvas.width, canvas.height); // background asphalt
+    drawParkingLot(ctx);
+    ctx.drawImage(skidLayer, 0, 0);                // composite the persistent layer
+    drawCar(ctx, car);
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const skidLayer: HTMLCanvasElement = document.createElement('canvas');
+skidLayer.width  = canvas.width;
+skidLayer.height = canvas.height;
+const skidCtx: CanvasRenderingContext2D = skidLayer.getContext('2d')!;
+
+function stampSkidMarks(car: Car, w: number = 28, h: number = 14): void {
+    const cos: number = Math.cos(car.heading);
+    const sin: number = Math.sin(car.heading);
+    for (const side of [-1, +1] as const) {
+        const lx: number = -w / 2;
+        const ly: number = side * (h / 2);
+        const wx: number = car.position.x + lx * cos - ly * sin;
+        const wy: number = car.position.y + lx * sin + ly * cos;
+        skidCtx.fillStyle = 'rgba(20, 20, 20, 0.4)';
+        skidCtx.beginPath();
+        skidCtx.arc(wx, wy, 1.6, 0, Math.PI * 2);
+        skidCtx.fill();
+    }
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>The sandbox</h3>
+            <div class="diagram">
+                <canvas id="parkingLotCanvas" width="800" height="500" tabindex="0"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnParkingReset">Reset</button>
+                <button id="btnParkingClearSkid">Clear skid marks</button>
+            </div>
+            <div id="parkingLotCanvasInfo" class="info-display">Click the canvas, then drive with WASD or arrows.</div>
+
+            <div class="example-box">
+                <h4>🎮 What you just built</h4>
+                <p>
+                    A fully playable top-down racing sandbox in roughly 100 lines of JavaScript. You have the
+                    bare integration loop, a rotating sprite, and a cheap persistent paint layer for skid marks.
+                    That's the visual + math foundation of every later tier — Intermediate adds friction and
+                    drift, Advanced adds walls and tracks, Expert adds the race loop and AI.
+                </p>
+            </div>
+
+            <div class="key-point">
+                <strong>💡 What's next:</strong> the <a href="intermediate.html">Intermediate tier</a> introduces
+                friction, drag, and the grip threshold — the moment your car stops feeling like a hover-disc and
+                starts feeling like a car. We'll separate longitudinal and lateral velocity so you can drift.
+            </div>
+        </div>
+
+        <!-- Next Steps -->
+        <div class="section" style="text-align: center;">
+            <h2>✅ Beginner Tier Complete</h2>
+            <p style="font-size: 1.1em; margin: 24px 0;">
+                You can now model a car as three pieces of state, integrate them dt-correctly, render a rotated
+                sprite, and run a playable sandbox. That's the bare engine every later tier sits on.
+            </p>
+            <a href="intermediate.html" class="nav-button" style="font-size: 1.2em; padding: 20px 40px;">
+                Continue to Intermediate →
+            </a>
+            <p style="margin-top: 20px;"><em>Intermediate isn't written yet — coming in the next phase. Track your progress on the <a href="index.html">track index</a>.</em></p>
+        </div>
+    </div>
+
+    <!-- Scroll to Top Button -->
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <!-- Load shared utilities. Paths are relative to this subdirectory. -->
+    <script src="../shared/utils.js"></script>
+
+    <!-- Code-tab toggle (JavaScript / TypeScript). Same script the Fundamentals pages use. -->
+    <script src="../shared/code-tabs.js"></script>
+
+    <!-- Page-specific interactive demos. -->
+    <script src="beginner-demos.js"></script>
+
+    <!-- Shared export-demo injector. Looks for <details data-demo-id="...">
+         and attaches a 📋 Export button that copies a runnable HTML to the clipboard.
+         No racing-sim/bundles-beginner.js yet, and intentionally none of our <details>
+         carry data-demo-id — so the injector finds zero registered demos and stays silent. -->
+    <script src="../shared/export-demo.js"></script>
+</body>
+</html>

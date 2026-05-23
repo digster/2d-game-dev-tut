@@ -246,3 +246,29 @@ whole Voxel Worlds track complete (8 tiers, 41 demos). During verification:
 made the chunking perf win measurable by reporting `step ms` alongside FPS
 (2.5× speedup at the test grid). All browser-verified console-clean. README.md
 updated.
+
+## 2026-05-23 — New track: Racing Sim (scaffold + Beginner tier)
+
+> Add a new game track for a top-down 2D racing simulation
+
+Plan mode → approved. Clarified with the user:
+- Style: **sim-leaning** (real driving math — vehicle state separated from
+  velocity, dt-correct integration, ramps toward grip/slip in later tiers, a
+  simplified Pacejka tire curve in Expert/Sims). Not arcade.
+- Scope: **Beginner tier only this iteration** + landing page with the full
+  five-tier roadmap visible (Intermediate→Sims as `.locked` "Coming soon"
+  cards). Mirrors how voxel-worlds and shaders were built — one tier per PR.
+- Directory: `racing-sim/`.
+
+Delivered: `racing-sim/index.html` (landing with 5 tier cards), `racing-sim/
+beginner.html` (7 sections + recap), `racing-sim/beginner-demos.js` (5 IIFE
+demos: car-state slider diagram, kinematic WASD drive, dt-correct vs
+per-frame integrator comparison, rotating sprite, parking-lot sandbox with
+offscreen-canvas skid marks). Root `index.html` gained a 4th Game Tracks
+nav-button (RACE / level-expert badge) + a fourth Game Tracks TOC entry with
+five tier links (only Beginner exists; the other four 404 intentionally
+until each tier ships). README.md updated. ARCHITECTURE.md unchanged —
+racing-sim is a flat 5-tier track, which is the pattern already documented;
+no new structural shape. `racing-sim/bundles-beginner.js` deferred to a
+future Export commit (matches iso track's history); the export-demo script
+is still wired in beginner.html and stays silent without bundles.

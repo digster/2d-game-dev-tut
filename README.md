@@ -87,6 +87,14 @@ own subdirectory with a per-tier file structure mirroring the Fundamentals layou
   runs on a second sibling harness, `makeMeshToy` (a real grid mesh + user
   vertex shader), alongside `makeAgentSim` and the gather-only `makeSim`;
   see `ARCHITECTURE.md` for the harness-contract extension seam.
+- `racing-sim/` — build a sim-leaning top-down 2D racing game from first principles.
+  See `racing-sim/index.html` for the full five-tier roadmap (Beginner Ready;
+  Intermediate / Advanced / Expert / Simulations on the roadmap). **Currently
+  shipped: Beginner tier only — five demos (car-state slider diagram, kinematic
+  WASD drive, dt-correct vs per-frame integrator comparison, rotating sprite,
+  and a parking-lot sandbox with persistent offscreen-canvas skid marks).**
+  Demo IDs reserve the `rac_` namespace for the future per-tier bundles file.
+  Tracks the established "one tier per commit" cadence used by voxel-worlds.
 
 ## Shared assets
 
