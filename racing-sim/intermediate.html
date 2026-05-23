@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Intermediate — Top-Down Racing Sim Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <!-- Prism.js Syntax Highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+    <style>
+        /* Slider rows for the grip / friction demos. Same shape as the iso
+           Intermediate tier — promote to shared/styles.css if a third page reuses it. */
+        .slider-row {
+            display: grid;
+            grid-template-columns: 200px 1fr 80px;
+            gap: 14px;
+            align-items: center;
+            margin: 10px 0;
+        }
+        .slider-row label { color: #c9d1d9; font-weight: 500; }
+        .slider-row input[type="range"] { width: 100%; accent-color: #4fc3f7; }
+        .slider-row .value { color: #4fc3f7; font-family: monospace; font-weight: bold; text-align: right; }
+
+        /* Surface-picker buttons used by the mini-project. Tinted to match
+           their physical analog so the active button reads "what surface". */
+        .surface-pick {
+            display: inline-flex;
+            gap: 8px;
+            margin-right: 14px;
+        }
+        .surface-pick button {
+            min-width: 90px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏁 Intermediate — Driving Feel</h1>
+        <p class="subtitle">Friction, the grip threshold, and the moment your car stops feeling like a hover-disc.</p>
+
+        <!-- Navigation -->
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="beginner.html" class="nav-button">← Beginner</a>
+            <a href="intermediate.html" class="nav-button active">Intermediate</a>
+            <a href="advanced.html" class="nav-button">Advanced →</a>
+        </div>
+
+        <!-- Table of Contents -->
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#intro">From Hover-Disc to Car</a></li>
+                <li><a href="#friction">Friction &amp; Drag</a></li>
+                <li><a href="#velocity-decomp">Lateral vs Longitudinal Velocity</a></li>
+                <li><a href="#grip-threshold">The Grip Threshold &amp; Onset of Slip</a></li>
+                <li><a href="#oversteer-understeer">Oversteer vs Understeer</a></li>
+                <li><a href="#surfaces">Surface Presets — Tarmac, Gravel, Ice</a></li>
+                <li><a href="#mini-project">Mini-Project: Drift Pad</a></li>
+            </ul>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- INTRO -->
+        <!-- ============================================ -->
+        <div id="intro" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🛞 From Hover-Disc to Car</h2>
+
+            <p>
+                The Beginner tier built a kinematic car that coasts forever. That's fine for proving the
+                integration loop, but it doesn't feel like driving — release throttle and you glide; turn
+                hard and you pirouette without any sense of inertia. This tier fixes both.
+            </p>
+
+            <div class="concept-box">
+                <h4>📐 The whole tier in one sentence</h4>
+                <p>
+                    We split the car's velocity into <strong>two components</strong> — along the heading
+                    (forward / reverse) and perpendicular to it (sideways / lateral) — and apply
+                    <strong>different rules</strong> to each. Forward gets friction (slows you down).
+                    Lateral gets <em>grip</em> (the tires try to cancel sideways motion, up to a per-surface
+                    limit; beyond that limit you slide).
+                </p>
+            </div>
+
+            <h3>What changes in the integrator</h3>
+            <p>The Beginner integrator looked like this (paraphrased):</p>
+            <ul>
+                <li>Steer → heading.</li>
+                <li>Throttle × heading → acceleration → velocity.</li>
+                <li>Velocity × dt → position. Clamp to MAX_SPEED.</li>
+            </ul>
+            <p>The Intermediate integrator adds two new steps:</p>
+            <ul>
+                <li>Project velocity onto <strong>forward</strong> and <strong>lateral</strong> basis vectors.</li>
+                <li>Apply rolling drag to forward; apply the grip clamp to lateral. Recombine.</li>
+            </ul>
+
+            <div class="key-point">
+                <strong>💡 The win:</strong> with these two extra steps, every later mechanic in the track
+                falls out for free. Drift = "lateral velocity exceeded grip". Oversteer = "rear grip ran
+                out before front grip did". Ice = "small <code>gripLimit</code>". Same integrator, different
+                surface numbers — that's the whole story.
+                Deeper friction theory in the Fundamentals: <a href="../intermediate.html#friction">Friction &amp; Drag Systems</a>.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- FRICTION & DRAG -->
+        <!-- ============================================ -->
+        <div id="friction" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🔄 Friction &amp; Drag</h2>
+
+            <p>
+                "Friction" in a top-down racer means two distinct things that we lump together for the math:
+                <strong>rolling friction</strong> (tire deformation, bearing drag — proportional to speed)
+                and <strong>aerodynamic drag</strong> (air resistance — proportional to <em>speed squared</em>).
+                In a sim-leaning Beginner+Intermediate game, a single linear-in-speed term captures both
+                well enough that you don't notice the difference; we'll separate them in the Expert tier.
+            </p>
+
+            <div class="concept-box">
+                <h4>📐 The math, as one line</h4>
+                <div class="formula">
+                    v_forward ← v_forward × (1 − dragRate × dt)
+                </div>
+                <p>
+                    This is <strong>multiplicative decay</strong> — every frame, we keep <code>(1 − dragRate·dt)</code>
+                    of the current forward velocity. Two reasons this beats <code>v -= dragRate·dt</code>:
+                </p>
+                <ul>
+                    <li><strong>Always stops eventually</strong> — no risk of overshooting zero into negative
+                    speed (you'd see a stopped car suddenly creep backwards otherwise).</li>
+                    <li><strong>Scales with speed naturally</strong> — at 200 px/s you lose proportionally
+                    more than at 20 px/s, which is what real air drag feels like.</li>
+                </ul>
+            </div>
+
+            <details>
+                <summary>📝 Click to see: applying friction along forward only</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// surface.rollingDrag is a per-second decay rate. Tarmac ~ 0.5, gravel ~ 1.5,
+// ice ~ 0.2 (almost no rolling drag — the car keeps gliding).
+function applyDrag(vForward, surface, dt) {
+    return vForward * (1 - surface.rollingDrag * dt);
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function applyDrag(
+    vForward: number,
+    surface: { rollingDrag: number },
+    dt: number
+): number {
+    return vForward * (1 - surface.rollingDrag * dt);
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>Coast-down comparison</h3>
+            <p>
+                Three cars start at the same speed with throttle <strong>off</strong>. Each rolls on a
+                different surface. Watch them stop at different rates — ice barely decelerates, gravel
+                stops fastest.
+            </p>
+            <div class="diagram">
+                <canvas id="coastdownCanvas" width="800" height="320"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnCoastStart">▶ Release throttle</button>
+                <button id="btnCoastReset">Reset</button>
+            </div>
+            <div id="coastdownCanvasInfo" class="info-display">Three cars, same start speed, three rolling-drag values.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- VELOCITY DECOMPOSITION -->
+        <!-- ============================================ -->
+        <div id="velocity-decomp" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>📐 Lateral vs Longitudinal Velocity</h2>
+
+            <p>
+                A car's velocity vector lives in 2D, but its <em>physics</em> is best understood in the
+                car's own frame: along the heading (forward), and perpendicular to it (lateral). A
+                gripping car has nearly zero lateral velocity — it's pointed where it's going. A drifting
+                car has lots of lateral velocity — it's pointed somewhere and travelling somewhere else.
+            </p>
+
+            <div class="concept-box">
+                <h4>🧮 Projection in two lines</h4>
+                <p>
+                    The <strong>forward</strong> basis vector is <code>(cos h, sin h)</code> — same as the
+                    Beginner tier. The <strong>lateral</strong> basis vector is perpendicular to it:
+                    <code>(−sin h, cos h)</code> (rotate forward by 90°).
+                </p>
+                <div class="formula">
+                    v_forward = v · (cos h,  sin h)<br>
+                    v_lateral = v · (−sin h, cos h)
+                </div>
+                <p>
+                    Both are <strong>dot products</strong>. The result is a single scalar each — how fast
+                    the car is going forward, and how fast it's drifting sideways. The Fundamentals
+                    refresher on the dot product is at
+                    <a href="../beginner.html#vector-operations">Essential Vector Operations</a>.
+                </p>
+            </div>
+
+            <details>
+                <summary>📝 Click to see: decompose / recombine</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Forward + lateral basis vectors. Heading is in radians.
+function carBasis(heading) {
+    const fx = Math.cos(heading), fy = Math.sin(heading);
+    return {
+        forward: { x:  fx, y: fy },   // unit vector along the car
+        lateral: { x: -fy, y: fx }    // unit vector to the car's left
+    };
+}
+
+// Project a velocity vector onto the car's frame.
+function decompose(velocity, basis) {
+    return {
+        vForward: velocity.x * basis.forward.x + velocity.y * basis.forward.y,
+        vLateral: velocity.x * basis.lateral.x + velocity.y * basis.lateral.y
+    };
+}
+
+// Recombine (inverse of decompose).
+function recombine(vForward, vLateral, basis) {
+    return {
+        x: vForward * basis.forward.x + vLateral * basis.lateral.x,
+        y: vForward * basis.forward.y + vLateral * basis.lateral.y
+    };
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">type V = { x: number; y: number };
+type Basis = { forward: V; lateral: V };
+
+function carBasis(heading: number): Basis {
+    const fx: number = Math.cos(heading);
+    const fy: number = Math.sin(heading);
+    return {
+        forward: { x:  fx, y: fy },
+        lateral: { x: -fy, y: fx }
+    };
+}
+
+function decompose(velocity: V, basis: Basis): { vForward: number; vLateral: number } {
+    return {
+        vForward: velocity.x * basis.forward.x + velocity.y * basis.forward.y,
+        vLateral: velocity.x * basis.lateral.x + velocity.y * basis.lateral.y
+    };
+}
+
+function recombine(vForward: number, vLateral: number, basis: Basis): V {
+    return {
+        x: vForward * basis.forward.x + vLateral * basis.lateral.x,
+        y: vForward * basis.forward.y + vLateral * basis.lateral.y
+    };
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>See the decomposition</h3>
+            <p>
+                Drag the velocity arrow's tip on the canvas. The orange (forward) and cyan (lateral) arrows
+                are the projections — they always add back up to the white velocity arrow. Rotate the car
+                with the heading slider and watch the projections re-balance.
+            </p>
+            <div class="diagram">
+                <canvas id="velocityDecomposeCanvas" width="800" height="360"></canvas>
+            </div>
+            <div class="controls">
+                <div class="slider-row">
+                    <label for="velDecomposeHeading">heading (degrees)</label>
+                    <input type="range" id="velDecomposeHeading" min="0" max="360" value="0">
+                    <span class="value" id="velDecomposeHeadingVal">0°</span>
+                </div>
+            </div>
+            <div id="velocityDecomposeCanvasInfo" class="info-display">Drag the white arrow tip. Forward = orange. Lateral = cyan. They always sum back to the white arrow.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- GRIP THRESHOLD -->
+        <!-- ============================================ -->
+        <div id="grip-threshold" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🛞 The Grip Threshold &amp; Onset of Slip</h2>
+
+            <p>
+                Real tires can only generate so much sideways force per second before they break loose. We
+                model this with one number per surface: <strong><code>gripLimit</code></strong>, the maximum
+                lateral velocity (in px/s) the tires can cancel <em>per second</em>. Below that, the car
+                grips — lateral velocity goes to zero each frame. Above it, the excess survives as
+                <em>slide</em>.
+            </p>
+
+            <div class="concept-box">
+                <h4>📐 The grip clamp, in one line</h4>
+                <p>If <code>|v_lateral| ≤ gripLimit × dt</code>, the car grips:</p>
+                <div class="formula">
+                    v_lateral ← 0
+                </div>
+                <p>Otherwise, the tires shave off as much as they can:</p>
+                <div class="formula">
+                    v_lateral ← v_lateral − sign(v_lateral) × gripLimit × dt
+                </div>
+                <p>
+                    That's it. No PID controller, no Pacejka curve (we save that for Expert) — just one
+                    clamp. The "drift" you feel comes for free.
+                </p>
+            </div>
+
+            <details>
+                <summary>📝 Click to see: the grip clamp</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">function applyGrip(vLateral, surface, dt) {
+    const maxKill = surface.gripLimit * dt;
+    if (Math.abs(vLateral) &lt;= maxKill) return 0;
+    return vLateral - Math.sign(vLateral) * maxKill;
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function applyGrip(
+    vLateral: number,
+    surface: { gripLimit: number },
+    dt: number
+): number {
+    const maxKill: number = surface.gripLimit * dt;
+    if (Math.abs(vLateral) &lt;= maxKill) return 0;
+    return vLateral - Math.sign(vLateral) * maxKill;
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>Watch the clamp in action</h3>
+            <p>
+                The left bar is the lateral velocity coming in. The right bar is the lateral velocity coming
+                out after one frame of grip. As long as the input bar stays inside the green band the car
+                fully grips; once it overshoots, only the excess survives.
+            </p>
+            <div class="diagram">
+                <canvas id="gripThresholdCanvas" width="800" height="320"></canvas>
+            </div>
+            <div class="controls">
+                <div class="slider-row">
+                    <label for="gripInputLat">lateral velocity in (px/s)</label>
+                    <input type="range" id="gripInputLat" min="-400" max="400" value="100">
+                    <span class="value" id="gripInputLatVal">100</span>
+                </div>
+                <div class="slider-row">
+                    <label for="gripLimitSlider">grip limit (px/s²)</label>
+                    <input type="range" id="gripLimitSlider" min="40" max="800" value="320">
+                    <span class="value" id="gripLimitSliderVal">320</span>
+                </div>
+            </div>
+            <div id="gripThresholdCanvasInfo" class="info-display">Input lateral velocity, grip limit, output after one frame.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- OVERSTEER vs UNDERSTEER -->
+        <!-- ============================================ -->
+        <div id="oversteer-understeer" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>↩️ Oversteer vs Understeer</h2>
+
+            <p>
+                Real cars have <em>two</em> sets of tires, front and back. When their grip limits differ,
+                you get the most fundamental tuning knob in motorsport:
+            </p>
+
+            <ul>
+                <li><strong>Understeer</strong> — front grip runs out first. The car wants to plow straight
+                    when you ask it to turn. Predictable but slow. Most road cars.</li>
+                <li><strong>Oversteer</strong> — rear grip runs out first. The back end swings out, the car
+                    rotates faster than you steered for. Fast lap times if you can catch it, an instant
+                    spin if you can't. Drift cars, classic muscle cars, anything rear-wheel-drive.</li>
+                <li><strong>Neutral</strong> — front and rear grip match. The car slides as a whole when
+                    you exceed grip. Theoretical ideal; rare in practice.</li>
+            </ul>
+
+            <div class="concept-box">
+                <h4>🎯 How we model it on one car</h4>
+                <p>
+                    In a sim-leaning Beginner+Intermediate game we don't simulate two axles separately —
+                    that lands in the Expert tier. Instead we approximate the feel with one trick:
+                    when the <em>rear</em> loses grip, the car gains a <strong>yaw kick</strong>
+                    (heading turns extra). When the <em>front</em> loses grip, the steering input
+                    contributes less (the wheels skate sideways). One <code>grip-balance</code> tunable
+                    in [-1, +1] gives the whole spectrum.
+                </p>
+            </div>
+
+            <h3>Side-by-side test</h3>
+            <p>
+                Two cars driving the same scripted figure-eight. One understeer-tuned, one oversteer-tuned.
+                Same throttle, same steering input, same surface — but completely different lines.
+            </p>
+            <div class="diagram">
+                <canvas id="oversteerCanvas" width="800" height="420"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnOversteerReset">Reset</button>
+                <button id="btnOversteerPause">Pause / Resume</button>
+            </div>
+            <div id="oversteerCanvasInfo" class="info-display">Red = oversteer (rear slips first). Cyan = understeer (front slips first).</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- SURFACES -->
+        <!-- ============================================ -->
+        <div id="surfaces" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🛣️ Surface Presets — Tarmac, Gravel, Ice</h2>
+
+            <p>
+                Every surface in this track is two numbers: a <code>rollingDrag</code> (how fast you coast
+                to a stop) and a <code>gripLimit</code> (how much sideways velocity the tires can kill per
+                second). Combining them gives wildly different feels from the same integrator.
+            </p>
+
+            <div class="concept-box">
+                <h4>🎨 The three starter surfaces</h4>
+                <p>These are the numbers used in the mini-project. Tune freely.</p>
+                <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+                    <thead>
+                        <tr style="color: #4fc3f7; border-bottom: 1px solid #2d3354;">
+                            <th style="text-align: left; padding: 6px 8px;">Surface</th>
+                            <th style="text-align: right; padding: 6px 8px;"><code>rollingDrag</code></th>
+                            <th style="text-align: right; padding: 6px 8px;"><code>gripLimit</code></th>
+                            <th style="text-align: left; padding: 6px 8px;">Feel</th>
+                        </tr>
+                    </thead>
+                    <tbody style="color: #c9d1d9;">
+                        <tr><td style="padding: 6px 8px;">Tarmac</td><td style="text-align: right;">0.55</td><td style="text-align: right;">620</td><td style="padding: 6px 8px;">Sharp turns, no drift, quick stops</td></tr>
+                        <tr><td style="padding: 6px 8px;">Gravel</td><td style="text-align: right;">1.40</td><td style="text-align: right;">240</td><td style="padding: 6px 8px;">Loose, rallies easily, decent feedback</td></tr>
+                        <tr><td style="padding: 6px 8px;">Ice</td><td style="text-align: right;">0.20</td><td style="text-align: right;">55</td><td style="padding: 6px 8px;">Glides forever, almost no lateral grip</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <details>
+                <summary>📝 Click to see: surface presets in code</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// One object per surface. Add new ones (snow, dirt, sand) the same way.
+const SURFACES = {
+    tarmac: { name: 'Tarmac', color: '#3a4050', rollingDrag: 0.55, gripLimit: 620 },
+    gravel: { name: 'Gravel', color: '#6e5a3a', rollingDrag: 1.40, gripLimit: 240 },
+    ice:    { name: 'Ice',    color: '#7fbcd4', rollingDrag: 0.20, gripLimit: 55  }
+};</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface Surface {
+    name: string;
+    color: string;
+    rollingDrag: number;
+    gripLimit: number;
+}
+
+const SURFACES: Record&lt;string, Surface&gt; = {
+    tarmac: { name: 'Tarmac', color: '#3a4050', rollingDrag: 0.55, gripLimit: 620 },
+    gravel: { name: 'Gravel', color: '#6e5a3a', rollingDrag: 1.40, gripLimit: 240 },
+    ice:    { name: 'Ice',    color: '#7fbcd4', rollingDrag: 0.20, gripLimit: 55  }
+};</code></pre>
+                </div>
+            </details>
+
+            <div class="thinking-prompt">
+                <h4>🤔 Try this yourself</h4>
+                <p>
+                    What if you wanted a "wet tarmac" preset? Real wet tarmac has nearly the same rolling
+                    drag as dry but only ~60% of the grip. So:
+                    <code>{ rollingDrag: 0.60, gripLimit: 380 }</code>. Drop that into <code>SURFACES</code>,
+                    add a fourth surface button, done.
+                </p>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- MINI-PROJECT -->
+        <!-- ============================================ -->
+        <div id="mini-project" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🏎️ Mini-Project: Drift Pad</h2>
+
+            <p>
+                Time to feel it. The drift pad is the Beginner parking-lot grown up — same controls (WASD or
+                arrows), same persistent skid layer, but now with friction, the grip clamp, and a surface
+                picker. Switch between tarmac, gravel, and ice and notice how the same throttle + steering
+                input produces a completely different drawing on the floor.
+            </p>
+
+            <div class="concept-box">
+                <h4>🎮 What to try</h4>
+                <ul>
+                    <li><strong>Tarmac:</strong> drive a tight circle. Your skid trail is a clean tyre line.</li>
+                    <li><strong>Gravel:</strong> the same input now leaves a slightly wider, sliding arc — that's
+                        lateral velocity surviving the grip clamp.</li>
+                    <li><strong>Ice:</strong> try to drive in a straight line. You'll find the car keeps
+                        pointing where you want to go, but glides somewhere else entirely. That's lateral
+                        velocity overwhelming the (tiny) grip limit.</li>
+                    <li>Watch the HUD: the <strong>GRIP</strong> / <strong>SLIDE</strong> indicator flips
+                        in real time as the grip clamp activates.</li>
+                </ul>
+            </div>
+
+            <h3>The pad</h3>
+            <div class="diagram">
+                <canvas id="driftPadCanvas" width="800" height="500" tabindex="0"></canvas>
+            </div>
+            <div class="controls">
+                <div class="surface-pick">
+                    <button id="btnSurfaceTarmac" class="active">🛣️ Tarmac</button>
+                    <button id="btnSurfaceGravel">🪨 Gravel</button>
+                    <button id="btnSurfaceIce">❄️ Ice</button>
+                </div>
+                <button id="btnDriftReset">Reset</button>
+                <button id="btnDriftClearSkid">Clear skid marks</button>
+            </div>
+            <div id="driftPadCanvasInfo" class="info-display">Click the canvas, then drive with WASD or arrows. Pick a surface.</div>
+
+            <div class="example-box">
+                <h4>🎮 What you just built</h4>
+                <p>
+                    A sim-leaning two-component vehicle model. Same architecture every real top-down racer
+                    uses (Death Rally, the original Need For Speed top-down modes, REDLINE). The Advanced
+                    tier extends this with proper walls and a closed track; the Expert tier replaces the
+                    simple grip clamp with a Pacejka tire curve so the slip-to-grip transition smoothly
+                    eases instead of snapping.
+                </p>
+            </div>
+
+            <div class="key-point">
+                <strong>💡 What's next:</strong> the <a href="advanced.html">Advanced tier</a> turns the
+                drift pad into a real <em>track</em>. You'll generate a closed centerline from a Bézier
+                spline, build walls along it, detect when the car crosses them, bounce off, lap-count, and
+                race a simple AI opponent that follows the racing line.
+            </div>
+        </div>
+
+        <!-- Next Steps -->
+        <div class="section" style="text-align: center;">
+            <h2>✅ Intermediate Tier Complete</h2>
+            <p style="font-size: 1.1em; margin: 24px 0;">
+                You can now decompose velocity into forward + lateral, apply friction along one axis and
+                a grip clamp along the other, swap surface presets, and feel the difference between
+                oversteer and understeer. That's the engine every later tier sits on.
+            </p>
+            <a href="advanced.html" class="nav-button" style="font-size: 1.2em; padding: 20px 40px;">
+                Continue to Advanced →
+            </a>
+            <p style="margin-top: 20px;"><em>Advanced isn't written yet — coming in the next phase. Track your progress on the <a href="index.html">track index</a>.</em></p>
+        </div>
+    </div>
+
+    <!-- Scroll to Top Button -->
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <!-- Load shared utilities. Paths are relative to this subdirectory. -->
+    <script src="../shared/utils.js"></script>
+
+    <!-- Code-tab toggle (JavaScript / TypeScript). Same script the Fundamentals pages use. -->
+    <script src="../shared/code-tabs.js"></script>
+
+    <!-- Page-specific interactive demos. -->
+    <script src="intermediate-demos.js"></script>
+
+    <!-- Shared export-demo injector. None of our <details> carry data-demo-id
+         yet (bundles file deferred), so the injector finds zero registered
+         demos and stays silent. -->
+    <script src="../shared/export-demo.js"></script>
+</body>
+</html>

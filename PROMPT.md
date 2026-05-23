@@ -272,3 +272,24 @@ racing-sim is a flat 5-tier track, which is the pattern already documented;
 no new structural shape. `racing-sim/bundles-beginner.js` deferred to a
 future Export commit (matches iso track's history); the export-demo script
 is still wired in beginner.html and stays silent without bundles.
+
+## 2026-05-23 (pt.2) — Racing Sim: Intermediate tier (Driving Feel)
+
+> Okay, work on the next iteration.
+
+Continued the per-tier cadence. Shipped the second tier of `racing-sim/`:
+Driving Feel. Topics: friction & drag (multiplicative decay along forward
+only), lateral-vs-longitudinal velocity decomposition (forward = cos/sin h,
+lateral = perpendicular), the grip threshold ("cancel lateral up to
+gripLimit*dt; the rest slides"), oversteer vs understeer (one car with low
+rear grip + yaw kick, one with damped steering effectiveness), surface
+presets (tarmac / gravel / ice), and a drift-pad mini-project with the
+surface picker, persistent skid layer (marks only stamp while sliding now),
+and a live GRIP / SLIDE telemetry HUD.
+
+Delivered: `racing-sim/intermediate.html` (7 sections + recap),
+`racing-sim/intermediate-demos.js` (5 IIFE demos + an `integrateWithGrip`
+that's a strict superset of the Beginner integrator). Flipped the
+Intermediate roadmap card to Ready on `racing-sim/index.html`. Removed the
+"(coming soon)" marker from the root TOC's intermediate link. README,
+PROMPT, and memory/2026-05-23.md updated. ARCHITECTURE.md still unchanged.
