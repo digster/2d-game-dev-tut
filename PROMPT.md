@@ -293,3 +293,37 @@ that's a strict superset of the Beginner integrator). Flipped the
 Intermediate roadmap card to Ready on `racing-sim/index.html`. Removed the
 "(coming soon)" marker from the root TOC's intermediate link. README,
 PROMPT, and memory/2026-05-23.md updated. ARCHITECTURE.md still unchanged.
+
+## 2026-05-23 (pt.3) — Racing Sim: Advanced tier (Track & Race Loop)
+
+> Okay, work on the next iteration.
+
+Continued the per-tier cadence. Shipped the third tier of `racing-sim/`:
+Track & Race Loop. The pivot in this tier is **the track becomes data** —
+a centerline (sampled points from chained cubic Béziers) plus an
+inflation step to produce left/right wall segments. Three apparently
+different features fall out of that one data structure: wall collision
+(car-circle vs inflated segments, with `Vector2D.reflect`), ordered
+checkpoint lap counting (`lineIntersection` against perpendicular cross
+segments), and AI driving (look-ahead seek along the same sampled array).
+
+Delivered: `racing-sim/advanced.html` (7 sections + recap),
+`racing-sim/advanced-demos.js` (5 IIFE demos + `sampleCubic`,
+`buildCenterline`, `inflateWalls`, `buildCheckpoints`,
+`closestPointOnSegment`, `collideCarWithWall`,
+`collideCarWithPolyline`, `tickCheckpoints`, `aiDrive`, `makeOvalTrack`).
+Reuses `Vector2D.reflect` and `lineIntersection` from `shared/utils.js`
+— no copy-paste of those.
+
+Demos: drag-to-deform 4-Bézier closed track with walls/samples/handles
+toggles; car-vs-segment wall bounce with impact + normal + reflected
+arrows; ordered-checkpoint lap counter (step forward / backward / auto);
+draggable-target steering seek; race-against-one-AI mini-project (player
+WASD vs look-ahead seek AI, both on the same `integrateWithGrip` from
+Intermediate, walls bounce both, first to 3 laps wins, HUD shows lap
+counts and a winner banner).
+
+Flipped the Advanced roadmap card to Ready on `racing-sim/index.html`.
+Removed the "(coming soon)" marker from the root TOC's Advanced link.
+README, PROMPT, and memory/2026-05-23.md updated. ARCHITECTURE.md still
+unchanged.

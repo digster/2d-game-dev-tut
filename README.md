@@ -89,18 +89,24 @@ own subdirectory with a per-tier file structure mirroring the Fundamentals layou
   see `ARCHITECTURE.md` for the harness-contract extension seam.
 - `racing-sim/` — build a sim-leaning top-down 2D racing game from first principles.
   See `racing-sim/index.html` for the full five-tier roadmap (Beginner +
-  Intermediate Ready; Advanced / Expert / Simulations on the roadmap).
+  Intermediate + Advanced Ready; Expert / Simulations on the roadmap).
   Beginner (5 demos): car-state slider diagram, kinematic WASD drive,
   dt-correct vs per-frame integrator comparison, rotating sprite, and a
-  parking-lot sandbox with persistent offscreen-canvas skid marks. **Intermediate
-  (5 demos): a coast-down comparison across rolling-drag values, a draggable
-  velocity-decomposition visualiser (forward + lateral basis projection), a
-  grip-threshold bar diagram (input lateral → after one frame of grip),
-  an oversteer-vs-understeer side-by-side on the same scripted input, and a
-  drift-pad mini-project with tarmac / gravel / ice surface presets and a
-  live GRIP / SLIDE telemetry HUD.** Demo IDs reserve the `rac_` namespace
-  for the future per-tier bundles file. Tracks the established "one tier
-  per commit" cadence used by voxel-worlds.
+  parking-lot sandbox with persistent offscreen-canvas skid marks.
+  Intermediate (5 demos): a coast-down comparison across rolling-drag values,
+  a draggable velocity-decomposition visualiser (forward + lateral basis
+  projection), a grip-threshold bar diagram (input lateral → after one frame
+  of grip), an oversteer-vs-understeer side-by-side on the same scripted
+  input, and a drift-pad mini-project with tarmac / gravel / ice surface
+  presets and a live GRIP / SLIDE telemetry HUD. **Advanced (5 demos): a
+  drag-to-deform 4-cubic-Bézier closed-track builder with wall inflation, a
+  car-vs-segment wall-collision demo with impact-point + normal + reflected
+  velocity arrows, ordered-checkpoint lap counting on a fixed oval, a
+  draggable-target steering-seek visualiser, and a headline race-against-AI
+  mini-project (player WASD vs look-ahead-seek AI on the same physics, lap
+  counting, walls bounce both cars, first to 3 laps wins).** Demo IDs reserve
+  the `rac_` namespace for the future per-tier bundles file. Tracks the
+  established "one tier per commit" cadence used by voxel-worlds.
 
 ## Shared assets
 

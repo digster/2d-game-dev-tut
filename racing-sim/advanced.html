@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced — Top-Down Racing Sim Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <!-- Prism.js Syntax Highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+    <style>
+        /* Race HUD inside the headline demo. */
+        .race-hud {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-top: 8px;
+            color: #c9d1d9;
+            font-family: monospace;
+            font-size: 1.05em;
+        }
+        .race-hud strong { color: #4fc3f7; }
+        .race-hud .pill {
+            background: #1a1f3a;
+            padding: 4px 12px;
+            border-radius: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏁 Advanced — Track &amp; Race Loop</h1>
+        <p class="subtitle">Bézier centerlines, walls that bounce, lap counting, and an AI you can actually race against.</p>
+
+        <!-- Navigation -->
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="intermediate.html" class="nav-button">← Intermediate</a>
+            <a href="advanced.html" class="nav-button active">Advanced</a>
+            <a href="expert.html" class="nav-button">Expert →</a>
+        </div>
+
+        <!-- Table of Contents -->
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#intro">From Open Pad to Closed Track</a></li>
+                <li><a href="#bezier-track">Building a Centerline from Cubic Béziers</a></li>
+                <li><a href="#walls">Wall Collision &amp; Bounce</a></li>
+                <li><a href="#checkpoints">Checkpoints &amp; Lap Counting</a></li>
+                <li><a href="#steering-ai">AI Driving — Path Following as Steering</a></li>
+                <li><a href="#racing-line">The Racing Line ≠ The Centerline</a></li>
+                <li><a href="#mini-project">Mini-Project: Race Against One AI</a></li>
+            </ul>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- INTRO -->
+        <!-- ============================================ -->
+        <div id="intro" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🛣️ From Open Pad to Closed Track</h2>
+
+            <p>
+                The Intermediate tier left us with a car that handles like a car — friction, grip, slide.
+                What it didn't have is a <em>track</em>. No walls to bounce off, no laps to count, no
+                opponent to chase. This tier closes that gap. By the end, you'll be racing a single AI
+                opponent around a Bézier-shaped oval that you collide with, with proper lap timing.
+            </p>
+
+            <div class="concept-box">
+                <h4>📐 One data structure, three features</h4>
+                <p>
+                    Almost everything in this tier is built on one shared structure: a
+                    <strong>centerline</strong> (an array of sampled points along the middle of the track)
+                    plus an <strong>inflation</strong> step that produces left/right wall segments. From
+                    that one structure we get:
+                </p>
+                <ul>
+                    <li><strong>Walls</strong> for collision (inflate the centerline outward and inward).</li>
+                    <li><strong>Checkpoints</strong> for laps (perpendicular line segments at evenly spaced
+                        centerline indices).</li>
+                    <li><strong>Racing line</strong> for AI (the centerline itself, or an offset version).</li>
+                </ul>
+                <p>That's why this tier teaches more <em>features</em> than the previous ones but doesn't
+                actually have more <em>code</em>. One data structure, many uses.</p>
+            </div>
+
+            <div class="key-point">
+                <strong>💡 What we're leaning on from Fundamentals:</strong>
+                <a href="../advanced.html#bezier">Bézier Curves &amp; Splines</a> for the track shape,
+                <a href="../intermediate.html#collision">Collision Detection</a> + <a href="../intermediate.html#reflection">Bouncing &amp; Reflection</a>
+                for wall bounce, and <a href="../advanced.html#steering">Steering Behaviours</a> for the AI.
+                We won't re-derive any of those — we'll compose them.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- BEZIER TRACK -->
+        <!-- ============================================ -->
+        <div id="bezier-track" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>📐 Building a Centerline from Cubic Béziers</h2>
+
+            <p>
+                A cubic Bézier curve takes four control points <code>P0, P1, P2, P3</code> and produces a
+                smooth curve from <code>P0</code> to <code>P3</code> that bends toward the middle two
+                handles. To build a <em>closed</em> track we chain several together end-to-end and make the
+                last segment's endpoint equal the first's start. An oval needs only four cubics — one per
+                quarter.
+            </p>
+
+            <div class="concept-box">
+                <h4>🧮 The cubic Bézier formula</h4>
+                <div class="formula">
+                    B(t) = (1−t)³·P0 + 3(1−t)²t·P1 + 3(1−t)t²·P2 + t³·P3 &nbsp;&nbsp; for t ∈ [0, 1]
+                </div>
+                <p>
+                    Sample <code>B(t)</code> at <code>N</code> evenly spaced <code>t</code> values
+                    (say <code>N = 64</code> per segment) and you get a polyline approximation of the curve.
+                    That polyline becomes the centerline samples — the foundation for everything else in
+                    this tier. (Strictly speaking, "evenly spaced <code>t</code>" doesn't mean "evenly
+                    spaced arc-length" — see the deep-dive in the Simulations tier; for now it's close
+                    enough that no one will notice.)
+                </p>
+                <p>Full refresher and interactive demos: <a href="../advanced.html#bezier">Bézier Curves &amp; Splines</a>.</p>
+            </div>
+
+            <details>
+                <summary>📝 Click to see: sampling a cubic + chaining four</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// One cubic Bézier, sampled at N points (excluding the final endpoint,
+// because the next segment will repeat it).
+function sampleCubic(p0, p1, p2, p3, n) {
+    const out = [];
+    for (let i = 0; i &lt; n; i++) {
+        const t = i / n;
+        const u = 1 - t;
+        out.push({
+            x: u*u*u*p0.x + 3*u*u*t*p1.x + 3*u*t*t*p2.x + t*t*t*p3.x,
+            y: u*u*u*p0.y + 3*u*u*t*p1.y + 3*u*t*t*p2.y + t*t*t*p3.y
+        });
+    }
+    return out;
+}
+
+// A closed centerline from an array of cubic segments. Each segment is
+// {p0,p1,p2,p3} and the next segment's p0 must equal the previous p3.
+function buildCenterline(segments, samplesPerSegment = 64) {
+    const points = [];
+    for (const s of segments) {
+        points.push(...sampleCubic(s.p0, s.p1, s.p2, s.p3, samplesPerSegment));
+    }
+    return points; // implicitly closed: points[0] follows points[points.length-1]
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">type P = { x: number; y: number };
+type CubicSeg = { p0: P; p1: P; p2: P; p3: P };
+
+function sampleCubic(p0: P, p1: P, p2: P, p3: P, n: number): P[] {
+    const out: P[] = [];
+    for (let i = 0; i &lt; n; i++) {
+        const t = i / n;
+        const u = 1 - t;
+        out.push({
+            x: u*u*u*p0.x + 3*u*u*t*p1.x + 3*u*t*t*p2.x + t*t*t*p3.x,
+            y: u*u*u*p0.y + 3*u*u*t*p1.y + 3*u*t*t*p2.y + t*t*t*p3.y
+        });
+    }
+    return out;
+}
+
+function buildCenterline(segments: CubicSeg[], samplesPerSegment: number = 64): P[] {
+    const points: P[] = [];
+    for (const s of segments) {
+        points.push(...sampleCubic(s.p0, s.p1, s.p2, s.p3, samplesPerSegment));
+    }
+    return points;
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>Centerline → walls</h3>
+            <p>
+                Walls are just the centerline shoved outward by <code>trackWidth / 2</code> along the local
+                <strong>perpendicular</strong>. At sample <code>i</code>, the perpendicular is rotated 90°
+                from the tangent <code>(p[i+1] − p[i])</code>. That gives you parallel left and right
+                polylines, which break into a sequence of wall <em>segments</em> for collision tests.
+            </p>
+
+            <details>
+                <summary>📝 Click to see: inflate centerline to walls</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Returns { left: [...], right: [...] } parallel polylines.
+function inflateWalls(centerline, halfWidth) {
+    const left = [], right = [];
+    const n = centerline.length;
+    for (let i = 0; i &lt; n; i++) {
+        const a = centerline[i];
+        const b = centerline[(i + 1) % n];
+        // Tangent vector
+        const tx = b.x - a.x, ty = b.y - a.y;
+        const len = Math.hypot(tx, ty) || 1;
+        // Perpendicular (rotated 90° left). Flip the sign for "right".
+        const nx = -ty / len, ny = tx / len;
+        left.push({  x: a.x + nx * halfWidth, y: a.y + ny * halfWidth });
+        right.push({ x: a.x - nx * halfWidth, y: a.y - ny * halfWidth });
+    }
+    return { left, right };
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function inflateWalls(
+    centerline: P[],
+    halfWidth: number
+): { left: P[]; right: P[] } {
+    const left: P[] = [], right: P[] = [];
+    const n = centerline.length;
+    for (let i = 0; i &lt; n; i++) {
+        const a = centerline[i];
+        const b = centerline[(i + 1) % n];
+        const tx = b.x - a.x, ty = b.y - a.y;
+        const len = Math.hypot(tx, ty) || 1;
+        const nx = -ty / len, ny = tx / len;
+        left.push({  x: a.x + nx * halfWidth, y: a.y + ny * halfWidth });
+        right.push({ x: a.x - nx * halfWidth, y: a.y - ny * halfWidth });
+    }
+    return { left, right };
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>See it built</h3>
+            <p>
+                A 4-segment closed track. Control points are the orange dots — moving them with the
+                <strong>Drag a handle</strong> button reshapes the curve. Toggle <strong>show walls</strong>
+                to see the inflated outer/inner. The cyan dots are the sampled centerline points.
+            </p>
+            <div class="diagram">
+                <canvas id="bezierTrackCanvas" width="800" height="460"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnBezToggleWalls" class="active">Show walls</button>
+                <button id="btnBezToggleSamples">Show samples</button>
+                <button id="btnBezToggleHandles" class="active">Show handles</button>
+                <button id="btnBezReset">Reset shape</button>
+            </div>
+            <div id="bezierTrackCanvasInfo" class="info-display">Drag any orange handle to reshape the track. Toggle layers above.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- WALLS -->
+        <!-- ============================================ -->
+        <div id="walls" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🧱 Wall Collision &amp; Bounce</h2>
+
+            <p>
+                A wall is a <strong>line segment</strong> (two endpoints A and B). The car is a
+                <strong>circle</strong> (position + radius). Collision is: <em>"is the closest point on AB
+                within radius distance of the car?"</em>. If yes, push the car out and reflect its
+                velocity across the wall's normal.
+            </p>
+
+            <div class="concept-box">
+                <h4>🧮 Closest point on a segment</h4>
+                <p>
+                    Project the car's position onto the infinite line through A and B, then clamp the
+                    parameter <code>t</code> to [0, 1] so we stay on the segment.
+                </p>
+                <div class="formula">
+                    t = clamp(((C − A) · (B − A)) / |B − A|², 0, 1)<br>
+                    closest = A + t · (B − A)
+                </div>
+                <p>
+                    If <code>|C − closest| &lt; radius</code>, we have a collision.
+                </p>
+            </div>
+
+            <div class="concept-box">
+                <h4>🎱 Bounce via reflection</h4>
+                <p>
+                    The wall's <strong>outward normal</strong> at the collision is the unit vector from
+                    <code>closest</code> to <code>C</code>. We push the car out along that normal until
+                    its edge no longer overlaps, then reflect the velocity using
+                    <code>shared/utils.js</code>'s <code>Vector2D.reflect(normal)</code>:
+                </p>
+                <div class="formula">
+                    v_new = v − 2 · (v · n) · n
+                </div>
+                <p>
+                    Multiply by a <code>bounceDamping</code> factor (e.g. 0.55) to lose energy on impact
+                    — pure reflection looks like a billiard ball and is too lively for cars. Refresher:
+                    <a href="../intermediate.html#reflection">Bouncing &amp; Reflection</a>.
+                </p>
+            </div>
+
+            <details>
+                <summary>📝 Click to see: car-vs-wall collision &amp; bounce</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Returns the closest point on segment AB to point C, plus t in [0,1].
+function closestPointOnSegment(c, a, b) {
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const denom = dx * dx + dy * dy;
+    if (denom === 0) return { x: a.x, y: a.y, t: 0 };
+    let t = ((c.x - a.x) * dx + (c.y - a.y) * dy) / denom;
+    t = Math.max(0, Math.min(1, t));
+    return { x: a.x + t * dx, y: a.y + t * dy, t };
+}
+
+// One wall = one segment. Returns true if we resolved a collision.
+function collideCarWithWall(car, a, b, radius, bounceDamping = 0.55) {
+    const closest = closestPointOnSegment(car.position, a, b);
+    const dx = car.position.x - closest.x;
+    const dy = car.position.y - closest.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist &gt;= radius || dist === 0) return false;
+    // Normal — from the wall toward the car (unit length).
+    const nx = dx / dist, ny = dy / dist;
+    // Push the car out so its edge sits exactly on the wall.
+    car.position.x += nx * (radius - dist);
+    car.position.y += ny * (radius - dist);
+    // Reflect velocity. Vector2D.reflect lives in shared/utils.js.
+    const reflected = car.velocity.reflect({ x: nx, y: ny });
+    car.velocity.x = reflected.x * bounceDamping;
+    car.velocity.y = reflected.y * bounceDamping;
+    return true;
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function closestPointOnSegment(
+    c: { x: number; y: number },
+    a: { x: number; y: number },
+    b: { x: number; y: number }
+): { x: number; y: number; t: number } {
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const denom = dx * dx + dy * dy;
+    if (denom === 0) return { x: a.x, y: a.y, t: 0 };
+    let t = ((c.x - a.x) * dx + (c.y - a.y) * dy) / denom;
+    t = Math.max(0, Math.min(1, t));
+    return { x: a.x + t * dx, y: a.y + t * dy, t };
+}
+
+function collideCarWithWall(
+    car: { position: Vector2D; velocity: Vector2D },
+    a: { x: number; y: number },
+    b: { x: number; y: number },
+    radius: number,
+    bounceDamping: number = 0.55
+): boolean {
+    const closest = closestPointOnSegment(car.position, a, b);
+    const dx = car.position.x - closest.x;
+    const dy = car.position.y - closest.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist &gt;= radius || dist === 0) return false;
+    const nx = dx / dist, ny = dy / dist;
+    car.position.x += nx * (radius - dist);
+    car.position.y += ny * (radius - dist);
+    const reflected = car.velocity.reflect({ x: nx, y: ny } as Vector2D);
+    car.velocity.x = reflected.x * bounceDamping;
+    car.velocity.y = reflected.y * bounceDamping;
+    return true;
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>Bounce the car off walls</h3>
+            <p>
+                Drag the cyan dot to set the car's velocity vector. Release to launch. The car slides until
+                it hits one of the three walls; we show the impact point, the wall's normal, and the
+                reflected velocity. Multiple bounces in one launch are fine.
+            </p>
+            <div class="diagram">
+                <canvas id="wallCollisionCanvas" width="800" height="420"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnWallReset">Reset position</button>
+                <button id="btnWallClearTrail">Clear trail</button>
+            </div>
+            <div id="wallCollisionCanvasInfo" class="info-display">Drag the cyan dot to aim, release to launch. Watch the bounces.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- CHECKPOINTS -->
+        <!-- ============================================ -->
+        <div id="checkpoints" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🚩 Checkpoints &amp; Lap Counting</h2>
+
+            <p>
+                A lap is "the car visited every checkpoint in order, then crossed the start line again". To
+                detect that we lay <strong>perpendicular line segments</strong> across the centerline at
+                evenly spaced indices, then test each frame whether the car's last-step movement
+                (its position segment from previous-frame to this-frame) intersects the <em>next</em>
+                checkpoint segment in order.
+            </p>
+
+            <div class="concept-box">
+                <h4>🎯 Why "next in order", not "any"?</h4>
+                <p>
+                    If we accepted any checkpoint cross, a player could drive backwards across one and
+                    "complete" a lap. By tracking a <code>nextCheckpoint</code> index and only advancing
+                    it on the right crossing, we enforce going around the track the correct way. Hit the
+                    final checkpoint and the start line in order → lap completes.
+                </p>
+            </div>
+
+            <details>
+                <summary>📝 Click to see: ordered checkpoint progression</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Returns updated { nextCheckpoint, laps } given that the car moved from
+// prevPos to currPos this frame. Uses lineIntersection from shared/utils.js.
+function tickCheckpoints(prevPos, currPos, checkpoints, nextCheckpoint, laps) {
+    const cp = checkpoints[nextCheckpoint];
+    if (lineIntersection(prevPos, currPos, cp.a, cp.b)) {
+        nextCheckpoint = (nextCheckpoint + 1) % checkpoints.length;
+        if (nextCheckpoint === 0) laps += 1; // wrapped → completed a lap
+    }
+    return { nextCheckpoint, laps };
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">type Checkpoint = { a: { x: number; y: number }; b: { x: number; y: number } };
+
+function tickCheckpoints(
+    prevPos: { x: number; y: number },
+    currPos: { x: number; y: number },
+    checkpoints: Checkpoint[],
+    nextCheckpoint: number,
+    laps: number
+): { nextCheckpoint: number; laps: number } {
+    const cp = checkpoints[nextCheckpoint];
+    if (lineIntersection(prevPos, currPos, cp.a, cp.b)) {
+        nextCheckpoint = (nextCheckpoint + 1) % checkpoints.length;
+        if (nextCheckpoint === 0) laps += 1;
+    }
+    return { nextCheckpoint, laps };
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>Step a car around a track</h3>
+            <p>
+                Click <strong>▶ Step</strong> to advance the car along a fixed centerline. Each checkpoint
+                lights up as it's crossed (in order). The lap counter increments when the car wraps back
+                to checkpoint 0. Click <strong>↺ Drive backwards</strong> to confirm reverse crossings are
+                ignored.
+            </p>
+            <div class="diagram">
+                <canvas id="checkpointsCanvas" width="800" height="380"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnCpStep">▶ Step forward</button>
+                <button id="btnCpStepBack">↺ Step backward</button>
+                <button id="btnCpAuto">Auto-run</button>
+                <button id="btnCpReset">Reset</button>
+            </div>
+            <div id="checkpointsCanvasInfo" class="info-display">Step the car around the track and watch checkpoints light up in order.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- STEERING AI -->
+        <!-- ============================================ -->
+        <div id="steering-ai" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🤖 AI Driving — Path Following as Steering</h2>
+
+            <p>
+                The Fundamentals tier covers <a href="../advanced.html#steering">steering behaviours</a> —
+                little vector recipes that move an agent toward a target. We use one of the simplest,
+                <strong>seek with look-ahead</strong>, to make a car follow our centerline. The AI's
+                "target" isn't where it is now; it's a point a few samples <em>ahead</em>. Look-ahead is
+                why AI cars take corners instead of cutting straight across them.
+            </p>
+
+            <div class="concept-box">
+                <h4>📐 The AI loop, in three steps</h4>
+                <ol>
+                    <li><strong>Find the look-ahead target:</strong> from the AI's current centerline index,
+                        skip forward by <code>LOOKAHEAD</code> samples. Wrap around the end of the array.</li>
+                    <li><strong>Compute desired heading:</strong>
+                        <code>atan2(target.y − pos.y, target.x − pos.x)</code>.</li>
+                    <li><strong>Steer toward it:</strong> the shortest angular difference between current
+                        heading and desired, fed into the same <code>integrateWithGrip</code> as the player.
+                        Throttle eases off when steering hard, like a real driver.</li>
+                </ol>
+                <p>
+                    The AI uses the <em>same integrator</em> as the player. It races with the same physics,
+                    same grip clamp, same friction. The only difference is where its throttle and steering
+                    numbers come from.
+                </p>
+            </div>
+
+            <details>
+                <summary>📝 Click to see: the AI driver</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Returns { throttle, steer, currentIndex } for one frame of an AI driver.
+function aiDrive(car, centerline, currentIndex, lookahead = 14) {
+    // Advance currentIndex if we're close enough to the current waypoint
+    // — keeps look-ahead anchored ahead of the car.
+    const cur = centerline[currentIndex];
+    const distCur = Math.hypot(car.position.x - cur.x, car.position.y - cur.y);
+    if (distCur &lt; 36) currentIndex = (currentIndex + 1) % centerline.length;
+
+    // Target is `lookahead` samples ahead of currentIndex.
+    const targetIdx = (currentIndex + lookahead) % centerline.length;
+    const target = centerline[targetIdx];
+    const desired = Math.atan2(target.y - car.position.y, target.x - car.position.x);
+
+    // Shortest angular difference, then clamp to [-1, +1] steering.
+    let diff = desired - car.heading;
+    while (diff &gt;  Math.PI) diff -= 2 * Math.PI;
+    while (diff &lt; -Math.PI) diff += 2 * Math.PI;
+    const steer = clamp(diff * 2.2, -1, 1);
+
+    // Throttle eases off when steering hard — basic "lift off in corners".
+    const throttle = clamp(0.85 - Math.abs(steer) * 0.35, 0.15, 1);
+
+    return { throttle, steer, currentIndex };
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function aiDrive(
+    car: { position: Vector2D; heading: number },
+    centerline: { x: number; y: number }[],
+    currentIndex: number,
+    lookahead: number = 14
+): { throttle: number; steer: number; currentIndex: number } {
+    const cur = centerline[currentIndex];
+    const distCur = Math.hypot(car.position.x - cur.x, car.position.y - cur.y);
+    if (distCur &lt; 36) currentIndex = (currentIndex + 1) % centerline.length;
+    const targetIdx = (currentIndex + lookahead) % centerline.length;
+    const target = centerline[targetIdx];
+    const desired = Math.atan2(target.y - car.position.y, target.x - car.position.x);
+    let diff = desired - car.heading;
+    while (diff &gt;  Math.PI) diff -= 2 * Math.PI;
+    while (diff &lt; -Math.PI) diff += 2 * Math.PI;
+    const steer = clamp(diff * 2.2, -1, 1);
+    const throttle = clamp(0.85 - Math.abs(steer) * 0.35, 0.15, 1);
+    return { throttle, steer, currentIndex };
+}</code></pre>
+                </div>
+            </details>
+
+            <h3>See the steering in isolation</h3>
+            <p>
+                A target (cyan) you can drag. The AI car (red) chases it using the same loop above. The
+                orange arrow is the AI's <strong>desired heading</strong>; the white arrow is its
+                <strong>current heading</strong>. Watch how the steering input is the gap between them.
+            </p>
+            <div class="diagram">
+                <canvas id="steeringSeekCanvas" width="800" height="420"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnSeekReset">Reset car</button>
+            </div>
+            <div id="steeringSeekCanvasInfo" class="info-display">Drag the cyan target. The red AI car seeks it.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- RACING LINE -->
+        <!-- ============================================ -->
+        <div id="racing-line" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🎯 The Racing Line ≠ The Centerline</h2>
+
+            <p>
+                A real driver doesn't drive down the middle of the road — they hug the inside of each
+                corner (the <em>apex</em>), set up wide on entry, and unwind wide on exit. That trajectory
+                is the <strong>racing line</strong>, and on a closed circuit it's shorter and faster than
+                the centerline. The classic geometric racing line is a sequence of arcs that touch the
+                inside of each corner.
+            </p>
+
+            <div class="concept-box">
+                <h4>🛞 The cheap racing line we'll use</h4>
+                <p>
+                    A full racing-line solver is a Simulations-tier topic. In this tier we approximate the
+                    racing line with a <strong>laterally-offset</strong> centerline — at each sample, shift
+                    a little toward the inside of the local curve (toward the center of the local turning
+                    radius). The result is good enough to look "racing-y" without needing a solver.
+                </p>
+                <p>
+                    Our AI in the mini-project below uses the plain centerline for clarity. Swapping it for
+                    an offset racing line is a one-line change in <code>aiDrive</code> — just point
+                    <code>centerline</code> at a different array. Try it!
+                </p>
+            </div>
+
+            <div class="thinking-prompt">
+                <h4>🤔 Try this yourself</h4>
+                <p>
+                    Why does the racing line work? At constant grip, the maximum cornering speed is set by
+                    the turn's <em>radius</em>. The racing line maximises that radius (you trace the
+                    largest possible arc through each corner that still touches all three of: entry edge,
+                    apex, exit edge). Bigger radius → higher allowable speed. Same grip, faster lap.
+                </p>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- MINI-PROJECT -->
+        <!-- ============================================ -->
+        <div id="mini-project" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🏆 Mini-Project: Race Against One AI</h2>
+
+            <p>
+                The capstone. A closed oval track from four cubic Béziers. You drive the red car with
+                WASD; the cyan AI car follows the centerline using the seek loop. Both cars collide with
+                walls and bounce; both increment the lap counter at the same checkpoint logic. First to
+                three laps wins.
+            </p>
+
+            <div class="concept-box">
+                <h4>🎮 What to try</h4>
+                <ul>
+                    <li><strong>Out-brake the AI:</strong> the AI lifts off in corners but doesn't actually
+                        brake. If you stab the brake before turn-in you'll be faster through the apex.</li>
+                    <li><strong>Bump &amp; run:</strong> the cars don't collide with each other in this
+                        tier (multi-car collisions land in Expert). You can take any line you like.</li>
+                    <li><strong>Watch the look-ahead:</strong> the small cyan dot ahead of the AI is its
+                        current target. The AI is always steering toward that dot, never where it is.</li>
+                </ul>
+            </div>
+
+            <h3>The race</h3>
+            <div class="diagram">
+                <canvas id="raceCanvas" width="800" height="500" tabindex="0"></canvas>
+            </div>
+            <div class="race-hud">
+                <span class="pill">🔴 You: lap <strong id="raceLapPlayer">0</strong> / 3</span>
+                <span class="pill">🔵 AI: lap <strong id="raceLapAI">0</strong> / 3</span>
+                <span class="pill" id="raceStatus">Click the canvas, then WASD to drive.</span>
+            </div>
+            <div class="controls" style="margin-top: 12px;">
+                <button id="btnRaceReset">Reset race</button>
+                <button id="btnRaceShowAI" class="active">Show AI lookahead</button>
+            </div>
+            <div id="raceCanvasInfo" class="info-display">Race the AI for three laps. Bounce off walls; the AI lifts off in corners.</div>
+
+            <div class="example-box">
+                <h4>🎮 What you just built</h4>
+                <p>
+                    A genuine top-down racing game loop: a procedurally-shaped track, wall physics, ordered
+                    checkpoints, lap counting, an AI opponent on the same physics as the player, and a
+                    win condition. ~250 lines of glue on top of the Beginner+Intermediate integrator.
+                </p>
+            </div>
+
+            <div class="key-point">
+                <strong>💡 What's next:</strong> the <a href="expert.html">Expert tier</a> replaces the
+                simple grip clamp with a Pacejka tire curve (smooth slip-to-grip transition), adds weight
+                transfer under braking and cornering, a race state machine (start lights → green → finish),
+                a smooth follow camera, and gamepad input.
+            </div>
+        </div>
+
+        <!-- Next Steps -->
+        <div class="section" style="text-align: center;">
+            <h2>✅ Advanced Tier Complete</h2>
+            <p style="font-size: 1.1em; margin: 24px 0;">
+                You can now build a track from a spline, bounce off its walls, count laps with ordered
+                checkpoints, and race an AI that drives on the same physics. That's the entire
+                feature-set of an early-90s arcade racer — built from first principles in roughly 600
+                lines of code.
+            </p>
+            <a href="expert.html" class="nav-button" style="font-size: 1.2em; padding: 20px 40px;">
+                Continue to Expert →
+            </a>
+            <p style="margin-top: 20px;"><em>Expert isn't written yet — coming in the next phase. Track your progress on the <a href="index.html">track index</a>.</em></p>
+        </div>
+    </div>
+
+    <!-- Scroll to Top Button -->
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <!-- Load shared utilities. Paths are relative to this subdirectory. -->
+    <script src="../shared/utils.js"></script>
+
+    <!-- Code-tab toggle (JavaScript / TypeScript). Same script the Fundamentals pages use. -->
+    <script src="../shared/code-tabs.js"></script>
+
+    <!-- Page-specific interactive demos. -->
+    <script src="advanced-demos.js"></script>
+
+    <!-- Shared export-demo injector. None of our <details> carry data-demo-id
+         yet (bundles file deferred), so the injector finds zero registered
+         demos and stays silent. -->
+    <script src="../shared/export-demo.js"></script>
+</body>
+</html>
