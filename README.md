@@ -87,9 +87,9 @@ own subdirectory with a per-tier file structure mirroring the Fundamentals layou
   runs on a second sibling harness, `makeMeshToy` (a real grid mesh + user
   vertex shader), alongside `makeAgentSim` and the gather-only `makeSim`;
   see `ARCHITECTURE.md` for the harness-contract extension seam.
-- `racing-sim/` — build a sim-leaning top-down 2D racing game from first principles.
-  See `racing-sim/index.html` for the full five-tier roadmap (Beginner +
-  Intermediate + Advanced + Expert Ready; Simulations on the roadmap).
+- `racing-sim/` — **fully shipped — all 5 tiers, 26 demos.** Build a
+  sim-leaning top-down 2D racing game from first principles. See
+  `racing-sim/index.html` for the full five-tier roadmap.
   Beginner (5 demos): car-state slider diagram, kinematic WASD drive,
   dt-correct vs per-frame integrator comparison, rotating sprite, and a
   parking-lot sandbox with persistent offscreen-canvas skid marks.
@@ -115,7 +115,17 @@ own subdirectory with a per-tier file structure mirroring the Fundamentals layou
   bars), and a hot-lap mini-project on a world-scrolled track with the
   Pacejka integrator, follow-camera with lead, race state machine, gamepad-
   or-keyboard input, and a telemetry HUD (current / last / best lap times,
-  live slip angle, throttle/brake bars).** Demo IDs reserve
+  live slip angle, throttle/brake bars). **Simulations (6 demos): a
+  draggable friction-circle visualiser (lateral + longitudinal force bars
+  with in/out-of-circle indicator), a tire heat-and-wear model (bell-curve
+  grip multiplier with aggressive/smooth/cold-start modes), an aerodynamic-
+  downforce calculator (real-world v² equation with speed and C_L·A
+  sliders), a suspension spring-damper animation over a bumpy road (live
+  ζ damping-ratio classification), a live g-g diagram + telemetry traces
+  (drive a car with WASD, dot traces the friction circle, three time-series
+  panels), and a procedural-track generator (seeded mulberry32 PRNG +
+  polar-anchor jitter + cubic-Bézier smoothing with an auto-driver
+  checking the line is drivable).** Demo IDs reserve
   the `rac_` namespace for the future per-tier bundles file. Tracks the
   established "one tier per commit" cadence used by voxel-worlds.
 

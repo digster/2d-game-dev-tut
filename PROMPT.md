@@ -361,3 +361,46 @@ Flipped the Expert roadmap card to Ready on `racing-sim/index.html`.
 Removed the "(coming soon)" marker from the root TOC's Expert link.
 README, PROMPT, and memory/2026-05-23.md updated. ARCHITECTURE.md still
 unchanged.
+
+## 2026-05-23 (pt.5) — Racing Sim: Simulations tier — TRACK COMPLETE
+
+> Okay, work on the next iteration.
+
+Fifth and final iteration on racing-sim. Topics from the landing-page
+Simulations card: slip ratio + friction circle, tire heat & wear,
+aerodynamic downforce, suspension spring-damper, live g-g diagram,
+procedural track generator. Standalone deep-dive toys — no shared state
+across demos, no integration into the hot-lap. Same pattern as the
+voxel-worlds Simulations tier.
+
+Delivered: `racing-sim/simulations.html` (7 sections + completion banner),
+`racing-sim/simulations-demos.js` (6 IIFE demos + mulberry32 PRNG +
+startFrameLoop + drawArrow). No grid/track/wall helpers carried forward —
+the procgen demo builds its own track in-place because its constraint
+(closed centerline from polar anchors) differs slightly from
+makeOvalTrack.
+
+Demos: draggable friction-circle (drag a cyan dot inside a normalised
+unit circle, see lateral+longitudinal force bars, in/out indicator);
+tire heat & wear (single tire icon colour-shifts cold→good→hot, bell-
+curve grip multiplier plot with the current temp's dot, three mode
+buttons); aerodynamic downforce calculator (real-world equation
+0.5·ρ·v²·A·C_L; bar chart of downforce, normal load, cornering grip; the
+car-weight reference line on the normal-load bar; sliders for speed in
+km/h and C_L·A in m²); suspension spring-damper animation (car body
+rides over bumpy road at constant speed; sliders for k and c; live ζ
+damping ratio with regime classification UNDER/CRITICAL/OVER); live g-g
+diagram (drive WASD on an empty pad, dot traces the friction circle in
+real time, fading trail, three telemetry time-series panels for speed/
+lat-g/long-g); procgen track generator (seeded mulberry32 + N polar
+anchors with radial jitter + cubic-Bézier handles tangent to local
+circle direction; auto-driver follows the centerline so you see if it's
+drivable).
+
+Flipped the Simulations roadmap card to Ready. Removed the
+"(coming soon)" marker from the root TOC's Simulations link. README
+updated to mark the whole `racing-sim/` track as "fully shipped — all 5
+tiers, 26 demos." PROMPT and memory/2026-05-23.md updated. ARCHITECTURE.md
+still unchanged — flat 5-tier pattern already documented.
+
+**Track total: 5 tiers, 26 interactive demos.**

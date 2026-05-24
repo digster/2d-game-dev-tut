@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulations — Top-Down Racing Sim Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+    <style>
+        .slider-row {
+            display: grid;
+            grid-template-columns: 220px 1fr 90px;
+            gap: 14px;
+            align-items: center;
+            margin: 10px 0;
+        }
+        .slider-row label { color: #c9d1d9; font-weight: 500; }
+        .slider-row input[type="range"] { width: 100%; accent-color: #4fc3f7; }
+        .slider-row .value { color: #4fc3f7; font-family: monospace; font-weight: bold; text-align: right; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏁 Simulations — Deep Dives</h1>
+        <p class="subtitle">Standalone toys for the racing physics the gameplay didn't need but the sim purist will look for.</p>
+
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="expert.html" class="nav-button">← Expert</a>
+            <a href="simulations.html" class="nav-button active">Simulations</a>
+        </div>
+
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#intro">What a "Sims Tier" Is For</a></li>
+                <li><a href="#slip-friction-circle">Slip Ratio vs Slip Angle &amp; the Friction Circle</a></li>
+                <li><a href="#tire-temps">Tire Heat &amp; Wear</a></li>
+                <li><a href="#aero">Aerodynamic Downforce</a></li>
+                <li><a href="#suspension">Suspension as Spring + Damper</a></li>
+                <li><a href="#gg-diagram">Live g-g Diagram &amp; Telemetry Traces</a></li>
+                <li><a href="#procgen-track">Procedural Track Generator</a></li>
+            </ul>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- INTRO -->
+        <!-- ============================================ -->
+        <div id="intro" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>🔬 What a "Sims Tier" Is For</h2>
+
+            <p>
+                The four previous tiers built a complete sim-leaning racing game — by the Expert tier we
+                had a Pacejka tire curve, a follow camera, a race state machine, lap timing, gamepad input.
+                Everything you need to <em>play</em>. This tier doesn't add gameplay. It adds
+                <strong>understanding</strong>.
+            </p>
+
+            <div class="concept-box">
+                <h4>📐 Six standalone deep dives</h4>
+                <p>
+                    Each section is a self-contained interactive toy — no shared state, no integration into
+                    the hot-lap demo. They're written so a sim purist can poke at each concept in isolation:
+                </p>
+                <ol>
+                    <li><strong>Slip ratio + the friction circle</strong> — why a tire can't simultaneously
+                        produce maximum lateral and maximum longitudinal force.</li>
+                    <li><strong>Tire heat &amp; wear</strong> — why fresh cold tires don't grip and abused
+                        hot ones grip less.</li>
+                    <li><strong>Aerodynamic downforce</strong> — why an F1 car at 200 km/h has more
+                        grip than at 50 km/h on the same surface.</li>
+                    <li><strong>Suspension as spring + damper</strong> — why under-damped cars bounce and
+                        over-damped ones crash.</li>
+                    <li><strong>Live g-g diagram</strong> — the iconic engineering plot you've seen in every
+                        F1 telemetry overlay.</li>
+                    <li><strong>Procedural track generator</strong> — every track in this guide so far
+                        was a hand-authored oval; here's how to grow one from a seed.</li>
+                </ol>
+            </div>
+
+            <div class="key-point">
+                <strong>💡 Reading order:</strong> these are independent. Skip to whichever sounds most
+                interesting. Each one cross-links back to the Expert (or earlier) tier section that
+                <em>used</em> the concept, so you can see how the gameplay code is a simplification of
+                what's modelled here.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- SLIP RATIO & FRICTION CIRCLE -->
+        <!-- ============================================ -->
+        <div id="slip-friction-circle" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>⭕ Slip Ratio vs Slip Angle &amp; the Friction Circle</h2>
+
+            <p>
+                The Expert tier introduced <strong>slip angle</strong> (α) — the angle between the velocity
+                vector and the heading. That governs <em>lateral</em> force. There's a matching number for
+                <em>longitudinal</em> force called <strong>slip ratio</strong> (κ):
+            </p>
+
+            <div class="concept-box">
+                <h4>📐 Slip ratio (longitudinal)</h4>
+                <div class="formula">
+                    κ = (ω · r − v) / v
+                </div>
+                <p>
+                    where <strong>ω</strong> is the wheel's angular velocity, <strong>r</strong> the wheel
+                    radius, and <strong>v</strong> the forward speed. When κ &gt; 0 the wheel is spinning
+                    <em>faster</em> than the ground (wheelspin under throttle); when κ &lt; 0 it's spinning
+                    slower (lockup under braking). Both peak at some small slip ratio — typically 0.1–0.15
+                    — and fall off past the peak, same shape as the slip-angle curve.
+                </p>
+            </div>
+
+            <div class="concept-box">
+                <h4>🔵 The friction circle</h4>
+                <p>
+                    A tire can produce at most some maximum total force <strong>F<sub>max</sub></strong>.
+                    Lateral and longitudinal force together must fit inside a circle (or, in real life, an
+                    ellipse) of radius F<sub>max</sub>:
+                </p>
+                <div class="formula">
+                    F<sub>lat</sub>² + F<sub>long</sub>² ≤ F<sub>max</sub>²
+                </div>
+                <p>
+                    That's why "trail braking" works (some of the grip budget that <em>was</em> longitudinal
+                    becomes lateral as you ease off the brake into the corner), and why "powering through"
+                    a corner with full throttle and full steering doesn't (you're asking for ~1.4× F<sub>max</sub>
+                    — the tire just slides). It's also why ABS exists — locking the wheels puts you at
+                    100% longitudinal grip, 0% steering. Refresh the Expert tier's Pacejka section
+                    <a href="expert.html#pacejka">here</a>.
+                </p>
+            </div>
+
+            <h3>Slip-angle + slip-ratio playground</h3>
+            <p>
+                Drag the cyan dot inside the friction circle. The bars on the left show the two force
+                components; the dot's distance from the centre is the magnitude of the combined demand.
+                Cross the circle's edge and you're sliding — the dot turns red.
+            </p>
+            <div class="diagram">
+                <canvas id="frictionCircleCanvas" width="800" height="420"></canvas>
+            </div>
+            <div id="frictionCircleCanvasInfo" class="info-display">Drag the dot. Combined force must fit inside the circle.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- TIRE HEAT & WEAR -->
+        <!-- ============================================ -->
+        <div id="tire-temps" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>🌡️ Tire Heat &amp; Wear</h2>
+
+            <p>
+                A racing tire is a chemical compound that only works in a narrow temperature window.
+                Below it the rubber is hard and slips; above it the rubber's gone gummy and slips. Every
+                pro driver spends the first lap warming the tires (weaving, late braking) and the last
+                lap nursing them (smooth inputs, no slides). We model this with a single
+                <strong>temperature → grip multiplier</strong> curve per tire.
+            </p>
+
+            <div class="concept-box">
+                <h4>📐 The simplest tire-temp model</h4>
+                <ul>
+                    <li>Each tire has a temperature in °C, starting at ambient (say 25°).</li>
+                    <li>Slip generates heat: <code>ΔT/Δt = k<sub>heat</sub> · |slip|</code>.</li>
+                    <li>The tire also bleeds heat to the surrounding air:
+                        <code>ΔT/Δt = −k<sub>cool</sub> · (T − T<sub>ambient</sub>)</code>.</li>
+                    <li>Grip multiplier is a bell curve centred on the optimal temp (say 95°). Below 60°
+                        or above 130° = 60% grip; in-window = 100% grip.</li>
+                </ul>
+            </div>
+
+            <h3>Heat-and-cool simulation</h3>
+            <p>
+                Click <strong>🔥 Aggressive driving</strong> to dump slip-energy into the tire. Click
+                <strong>❄️ Smooth driving</strong> to let it cool. The gauge shows current temperature;
+                the grip-multiplier dot moves along the bell curve.
+            </p>
+            <div class="diagram">
+                <canvas id="tireHeatCanvas" width="800" height="380"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnTireAggressive">🔥 Aggressive driving</button>
+                <button id="btnTireSmooth">❄️ Smooth driving</button>
+                <button id="btnTireColdStart">🧊 Cold start (reset)</button>
+            </div>
+            <div id="tireHeatCanvasInfo" class="info-display">Tire temp drives a bell-curve grip multiplier.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- AERO DOWNFORCE -->
+        <!-- ============================================ -->
+        <div id="aero" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>✈️ Aerodynamic Downforce</h2>
+
+            <p>
+                A wing makes a car heavier the faster it goes. That extra "weight" is purely a downward
+                aerodynamic force from air pushing on inclined surfaces. It scales with <em>speed squared</em>
+                — at 200 km/h there's 4× as much downforce as at 100 km/h.
+            </p>
+
+            <div class="concept-box">
+                <h4>📐 The downforce equation</h4>
+                <div class="formula">
+                    F<sub>down</sub> = ½ · ρ · v² · A · C<sub>L</sub>
+                </div>
+                <p>
+                    where ρ is air density (~1.225 kg/m³), v is speed (m/s), A is the wing area, and
+                    C<sub>L</sub> is the wing's lift coefficient (negative for downforce). For a fast
+                    F1 car at 300 km/h, F<sub>down</sub> can exceed the car's weight — which is why
+                    they're often described as being able to drive upside down on a ceiling.
+                </p>
+                <p>
+                    In a top-down sim, downforce is a scalar that <em>multiplies the tire's peak force
+                    D</em>. More downforce → more grip → tighter cornering. That's it.
+                </p>
+            </div>
+
+            <h3>Speed → grip</h3>
+            <p>
+                Drag the speed slider. The bars show the downforce, the resulting normal load (weight +
+                downforce), and the available cornering grip. Notice the v² shape: doubling speed
+                quadruples downforce.
+            </p>
+            <div class="diagram">
+                <canvas id="aeroCanvas" width="800" height="360"></canvas>
+            </div>
+            <div class="controls">
+                <div class="slider-row">
+                    <label for="aeroSpeed">speed (km/h)</label>
+                    <input type="range" id="aeroSpeed" min="0" max="320" step="1" value="120">
+                    <span class="value" id="aeroSpeedVal">120</span>
+                </div>
+                <div class="slider-row">
+                    <label for="aeroCl">C<sub>L</sub> · A (m²)</label>
+                    <input type="range" id="aeroCl" min="0.5" max="6" step="0.1" value="2.5">
+                    <span class="value" id="aeroClVal">2.5</span>
+                </div>
+            </div>
+            <div id="aeroCanvasInfo" class="info-display">Drag speed. Downforce scales with v² — quadruples when speed doubles.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- SUSPENSION -->
+        <!-- ============================================ -->
+        <div id="suspension" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>🧷 Suspension as Spring + Damper</h2>
+
+            <p>
+                A car body is a mass riding on four springs (the suspension). When a wheel hits a bump,
+                the spring compresses and pushes the body up; the damper (shock absorber) dissipates
+                kinetic energy so the body doesn't keep bouncing. The whole assembly is a classic
+                damped harmonic oscillator — refresher in the Fundamentals:
+                <a href="../intermediate.html#spring">Spring Physics &amp; Damping</a>.
+            </p>
+
+            <div class="concept-box">
+                <h4>📐 The ODE</h4>
+                <div class="formula">
+                    m·ẍ + c·ẋ + k·x = F<sub>road</sub>(t)
+                </div>
+                <p>
+                    where x is the body's vertical displacement, m is the body mass, k the spring
+                    stiffness, c the damping. The dimensionless damping ratio
+                    <strong>ζ = c / (2·√(k·m))</strong> classifies the response:
+                </p>
+                <ul>
+                    <li><strong>ζ &lt; 1</strong> — under-damped: oscillates before settling. Comfortable;
+                        bad over bumpy tarmac.</li>
+                    <li><strong>ζ = 1</strong> — critically damped: returns to zero in minimum time, no
+                        overshoot. The "sweet spot" for a road car.</li>
+                    <li><strong>ζ &gt; 1</strong> — over-damped: returns slowly, no overshoot. Feels
+                        wooden; great for absorbing big single hits.</li>
+                </ul>
+            </div>
+
+            <h3>Drive over bumps</h3>
+            <p>
+                The animated car rolls over a bumpy road at constant speed. Sliders adjust spring
+                stiffness and damping. Watch how under-damped settings make the body keep bouncing after
+                each bump, and how critically-damped settings feel calm.
+            </p>
+            <div class="diagram">
+                <canvas id="suspensionCanvas" width="800" height="320"></canvas>
+            </div>
+            <div class="controls">
+                <div class="slider-row">
+                    <label for="suspK">spring stiffness k</label>
+                    <input type="range" id="suspK" min="20" max="400" step="1" value="120">
+                    <span class="value" id="suspKVal">120</span>
+                </div>
+                <div class="slider-row">
+                    <label for="suspC">damping c</label>
+                    <input type="range" id="suspC" min="0" max="90" step="0.5" value="12">
+                    <span class="value" id="suspCVal">12</span>
+                </div>
+            </div>
+            <div id="suspensionCanvasInfo" class="info-display">Tweak k and c. ζ (damping ratio) is shown live.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- G-G DIAGRAM -->
+        <!-- ============================================ -->
+        <div id="gg-diagram" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>📊 Live g-g Diagram &amp; Telemetry Traces</h2>
+
+            <p>
+                A <strong>g-g diagram</strong> is the iconic engineering plot from every motorsport
+                telemetry tool. Lateral acceleration on the X axis, longitudinal acceleration on the Y
+                axis. A pro driver's plot traces the rim of the friction circle — they're using
+                <em>all</em> the grip <em>all</em> the time. An amateur's plot is a small blob in the
+                middle.
+            </p>
+
+            <div class="concept-box">
+                <h4>📐 Reading a g-g plot</h4>
+                <ul>
+                    <li><strong>Top half</strong> — accelerating (positive long. accel).</li>
+                    <li><strong>Bottom half</strong> — braking (negative long. accel).</li>
+                    <li><strong>Left/right</strong> — left/right cornering.</li>
+                    <li><strong>Diagonal quadrants</strong> — trail braking (bottom-left/right) and
+                        power-on cornering (top-left/right).</li>
+                    <li><strong>Hugging the circle's edge</strong> — driving at the limit of grip.</li>
+                </ul>
+            </div>
+
+            <h3>Drive a car &amp; watch the plot</h3>
+            <p>
+                Use WASD to drive the white car around the empty pad. The blue dot in the g-g plot
+                tracks current accelerations; the fading trail shows the last few seconds. The dashed
+                circle is the friction limit — stay inside, or the dot turns red. The three telemetry
+                traces below show speed and the two accel components over time.
+            </p>
+            <div class="diagram">
+                <canvas id="ggCanvas" width="800" height="520" tabindex="0"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btnGgReset">Reset</button>
+                <button id="btnGgClearTrail">Clear trail</button>
+            </div>
+            <div id="ggCanvasInfo" class="info-display">Click the canvas, then WASD. Watch the dot trace the friction circle.</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- PROCGEN TRACK -->
+        <!-- ============================================ -->
+        <div id="procgen-track" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>🗺️ Procedural Track Generator</h2>
+
+            <p>
+                Every track in this tutorial so far has been a hand-authored oval. Generating
+                <strong>arbitrary closed tracks</strong> from a seed unlocks endless content. The trick:
+                start with a circle of evenly spaced points in polar coords, perturb each point's radius
+                using a seeded PRNG, then run each pair of consecutive points through a smoothing pass
+                (we use cubic Béziers tangent to the local circle direction). Refresher:
+                <a href="../expert.html#procgen">Procedural Generation</a>.
+            </p>
+
+            <div class="concept-box">
+                <h4>📐 The recipe in three steps</h4>
+                <ol>
+                    <li><strong>Polar points:</strong> N points evenly spaced around a circle, each at
+                        radius <code>R · (1 + jitter · rand(−1, +1))</code>. Higher jitter = more wiggly.</li>
+                    <li><strong>Bézier handles:</strong> for each pair of neighbours, pick handle
+                        positions perpendicular to the local radial direction so the joined curve is
+                        smooth.</li>
+                    <li><strong>Sample:</strong> walk the cubic Bézier chain to produce a centerline,
+                        then <code>inflateWalls()</code> as usual.</li>
+                </ol>
+            </div>
+
+            <h3>Generate &amp; explore</h3>
+            <p>
+                Drag the seed slider to step through random tracks. <strong>Complexity</strong> changes
+                the number of control points; <strong>jitter</strong> changes how wiggly the track
+                becomes. A small auto-driver follows the generated centerline so you can see if it's
+                drivable.
+            </p>
+            <div class="diagram">
+                <canvas id="procgenCanvas" width="800" height="500"></canvas>
+            </div>
+            <div class="controls">
+                <div class="slider-row">
+                    <label for="pgSeed">seed</label>
+                    <input type="range" id="pgSeed" min="0" max="999" step="1" value="42">
+                    <span class="value" id="pgSeedVal">42</span>
+                </div>
+                <div class="slider-row">
+                    <label for="pgComplexity">control points</label>
+                    <input type="range" id="pgComplexity" min="6" max="20" step="1" value="10">
+                    <span class="value" id="pgComplexityVal">10</span>
+                </div>
+                <div class="slider-row">
+                    <label for="pgJitter">radial jitter</label>
+                    <input type="range" id="pgJitter" min="0" max="0.6" step="0.02" value="0.24">
+                    <span class="value" id="pgJitterVal">0.24</span>
+                </div>
+            </div>
+            <div id="procgenCanvasInfo" class="info-display">Drag the sliders. The cyan dot is an auto-driver checking the line.</div>
+        </div>
+
+        <!-- Track completion -->
+        <div class="section" style="text-align: center;">
+            <h2>🎉 Racing-Sim Track Complete</h2>
+            <p style="font-size: 1.1em; margin: 24px 0;">
+                Five tiers shipped: Beginner (Car Foundations), Intermediate (Driving Feel),
+                Advanced (Track &amp; Race Loop), Expert (Sim Polish), Simulations (Deep Dives).
+                Twenty-six interactive demos. From an empty parking-lot car to a Pacejka-tire,
+                downforce-aware, procedurally-tracked sim — every step in browser-runnable code.
+            </p>
+            <a href="index.html" class="nav-button" style="font-size: 1.2em; padding: 20px 40px;">
+                Back to the Track Index
+            </a>
+            <p style="margin-top: 20px;"><em>Want more? The <a href="../index.html">Fundamentals guide</a> has the math underneath everything we built here — vectors, trig, splines, springs, state machines, all live as their own pages.</em></p>
+        </div>
+    </div>
+
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <script src="../shared/utils.js"></script>
+    <script src="../shared/code-tabs.js"></script>
+    <script src="simulations-demos.js"></script>
+    <script src="../shared/export-demo.js"></script>
+</body>
+</html>
