@@ -404,3 +404,64 @@ tiers, 26 demos." PROMPT and memory/2026-05-23.md updated. ARCHITECTURE.md
 still unchanged — flat 5-tier pattern already documented.
 
 **Track total: 5 tiers, 26 interactive demos.**
+
+# 2026-05-28 — New track: Netcode & Multiplayer (scaffold)
+
+"I want to look into multiplayer or netcode. Could it be a track on its
+own? Don't make a plan yet."
+
+Plan-mode conversation → AskUserQuestion (track category, existing-seed
+handling, transport, cross-links) → ExitPlanMode approved → ship the
+**scaffold only** following the racing-sim cadence.
+
+## Decisions taken with the user
+
+- **Index integration:** rename the root index "🏰 Game Tracks" section to
+  "🏰 Tracks" (no sub-groups); genre + systems tracks coexist flat.
+- **Existing seed:** `expert.html#network` is left untouched; both surfaces
+  stand alone and diverge.
+- **Transport:** simulated network only. A `FakeNetwork` with sliders for
+  RTT, jitter, loss, reorder. No backend, no WebRTC, no BroadcastChannel.
+- **Cross-links:** the netcode track's later tiers reuse the racing-sim car
+  internally; genre tracks (`racing-sim/`, `isometric-strategy/`) are NOT
+  edited.
+
+## Shipped this commit
+
+```
+netcode/
+  index.html              ← landing: 5 tier cards all locked "Coming soon",
+                            scaffold self-check at the bottom
+  net/
+    seeded-rng.js         ← mulberry32, on window.SeededRng
+    fake-network.js       ← priority-queue simulator on window.FakeNetwork
+```
+
+Root `index.html` — 4 edits:
+- "Game Tracks" → "Tracks" (heading + TOC heading + intro paragraph
+  broadened for systems tracks).
+- New NETCODE nav-button after RACE.
+- New TOC `<li>` after racing-sim with 5 "(coming soon)" tier links.
+
+Docs — README adds netcode entry (scaffold-only status); ARCHITECTURE
+documents the new `<track>/net/`-style helper-subfolder convention; this
+memory log + PROMPT append.
+
+## Verification
+
+`python3 -m http.server 8765` via the existing `.claude/launch.json`.
+
+- `netcode/index.html` loads with **zero** console errors. The self-check
+  panel prints three green ticks (SeededRng deterministic, FakeNetwork
+  delivers, stats correct).
+- Programmatic stress test from the page: 200 packets @ 50% loss → 87
+  dropped (43.5%); 50 packets @ 30% reorder → 23 of 50 arrived out of
+  sequence; seed=42 twice → bit-identical stats {delivered: 86,
+  dropped: 14, reordered: 6}.
+- Root `index.html` integration verified: heading renamed, old heading
+  gone, NETCODE nav-button links, TOC entry plus 5 sublinks render.
+- No regression at `expert.html#network` — section + heading + canvas
+  still render, anchor still scrolls.
+
+**Tier-by-tier landing follows on the racing-sim cadence: Beginner →
+Intermediate → Advanced → Expert → Simulations, one commit each.**

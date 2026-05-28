@@ -30,6 +30,19 @@ Fundamentals anchors as `../../<page>.html#…` (vs `../` for a flat track). The
 root `index.html` TOC nests two `<ul>` levels for this track (track → sub-track →
 tier) where flat tracks nest only one.
 
+**Per-track `<track>/net/`-style helper subfolders.** Most tracks keep helpers
+inline at the top of each `<tier>-demos.js`. The exception is when a helper has
+to be **shared across multiple tier files** (and is too large or important to
+copy-paste). `netcode/` introduces this pattern: `netcode/net/fake-network.js`
+and `netcode/net/seeded-rng.js` are loaded by `netcode/index.html` and (later)
+every `netcode/<tier>.html`. They expose their classes on `window` (`FakeNetwork`,
+`SeededRng`), pre-checked to not collide with anything in `shared/utils.js`.
+This is cheaper than promoting them to `shared/` because they're netcode-specific
+— if a second track ever needed them, **that** would be the moment to elevate.
+The general rule: helpers used by ≥ 2 tier files inside the same track go in a
+sibling subfolder named after their concern; helpers used across multiple tracks
+go in `shared/`.
+
 **Why tiers are separate files:** content is split beginner → intermediate →
 expert → raymarching → stylization → distortion → advanced → simulations so each
 file stays editable without hitting length limits, and the per-track

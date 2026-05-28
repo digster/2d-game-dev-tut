@@ -16,10 +16,13 @@ Math and core systems organized by difficulty tier — read one tier per session
 - `expert.html` — spatial partitioning, ECS, tilemaps, noise, networking, fixed timestep
 - `simulation.html` / `simulation-v2.html` — fluid dynamics, cloth, SPH water, RK4 physics
 
-### Game Tracks (end-to-end tutorials)
+### Tracks (end-to-end tutorials)
 
-Vertical tracks that compose the fundamentals into a working game. Each track lives in its
-own subdirectory with a per-tier file structure mirroring the Fundamentals layout.
+Vertical tracks that compose the fundamentals into a working build. Two flavours coexist
+under the same section: **genre tracks** (RTS, voxel, shaders, racing) compose the
+fundamentals into a working game; **systems tracks** (netcode) build cross-cutting
+machinery that any genre can adopt. Each track lives in its own subdirectory with a
+per-tier file structure mirroring the Fundamentals layout.
 
 - `isometric-strategy/` — build an AoE2 / Red Alert 2 style isometric RTS.
   See `isometric-strategy/index.html` for the track roadmap. Currently scaffolded;
@@ -128,6 +131,23 @@ own subdirectory with a per-tier file structure mirroring the Fundamentals layou
   checking the line is drivable).** Demo IDs reserve
   the `rac_` namespace for the future per-tier bundles file. Tracks the
   established "one tier per commit" cadence used by voxel-worlds.
+- `netcode/` — **scaffold only — landing page + shared helpers shipped, five
+  tier pages to follow iteratively.** The project's first *systems* track
+  (cross-cutting, not genre-specific): teach the math and machinery of
+  online multiplayer entirely over a **simulated network** with zero
+  backend. All demos run inside one browser tab; two canvases play the role
+  of "server" and "client" and a `FakeNetwork` object with sliders for RTT,
+  jitter, packet loss, and reorder probability sits between them. The
+  scaffold adds `netcode/index.html` (five-tier roadmap, all tiers locked
+  "Coming soon") and two foundational helpers in `netcode/net/`:
+  `seeded-rng.js` (mulberry32 — same PRNG racing-sim uses for procgen, so
+  the same seed reproduces the same "network weather" twice) and
+  `fake-network.js` (priority-queue scheduler with `connect(id)` → endpoint
+  surface mirroring WebSocket/DataChannel). A self-check at the bottom of
+  the landing page verifies both helpers load and behave (deterministic
+  seed, end-to-end message delivery, statistical loss/reorder). Future
+  tier files will reuse these helpers and live as `netcode/<tier>.html` +
+  `netcode/<tier>-demos.js`, same flat shape as racing-sim.
 
 ## Shared assets
 

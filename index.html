@@ -65,16 +65,18 @@
             </div>
         </div>
 
-        <!-- Game Tracks (end-to-end, game-focused tutorials) -->
+        <!-- Tracks (end-to-end tutorials — both game-genre and cross-cutting systems) -->
         <!--
             Separate category from the Fundamentals above. The Fundamentals teach concepts
-            tier by tier; Game Tracks teach how to compose those concepts into a real game.
-            Each track has its own subdirectory with its own beginner/intermediate/expert/advanced/simulations files.
+            tier by tier; Tracks teach how to compose those concepts into a real game OR a
+            real cross-cutting system (e.g. netcode). Each track has its own subdirectory
+            with its own beginner/intermediate/expert/advanced/simulations files.
         -->
         <div class="section">
-            <h2>🏰 Game Tracks — End-to-End Tutorials</h2>
+            <h2>🏰 Tracks — End-to-End Tutorials</h2>
             <p style="text-align: center; color: #9e9e9e; margin-bottom: 30px;">
-                Full game-build tracks that compose the fundamentals into a working game.
+                Full build tracks — game-genre tracks compose the fundamentals into a working game;
+                systems tracks (like netcode) build the cross-cutting machinery games share.
             </p>
 
             <div class="nav">
@@ -93,6 +95,10 @@
                 <a href="racing-sim/index.html" class="nav-button">
                     <span class="level-indicator level-expert">RACE</span>
                     <div style="margin-top: 10px;">Top-Down Racing Sim<br><span style="font-weight: normal; font-size: 0.85em; color: #9e9e9e;">Sim-leaning, real driving math</span></div>
+                </a>
+                <a href="netcode/index.html" class="nav-button">
+                    <span class="level-indicator level-expert">NETCODE</span>
+                    <div style="margin-top: 10px;">Netcode &amp; Multiplayer<br><span style="font-weight: normal; font-size: 0.85em; color: #9e9e9e;">Systems track — simulated network</span></div>
                 </a>
                 <!-- Future tracks (platformer, roguelike, etc.) drop in here as more nav-buttons. -->
             </div>
@@ -217,13 +223,14 @@
             </div>
 
             <!--
-                Game Tracks TOC entry. Sits at the end so the Fundamentals tier-by-tier flow
+                Tracks TOC entry. Sits at the end so the Fundamentals tier-by-tier flow
                 above reads as one continuous list. As more tracks land, each gets its own
-                nested <ul> under this section.
+                nested <ul> under this section. Includes both game-genre tracks and
+                cross-cutting systems tracks like netcode.
             -->
             <div class="toc-section">
                 <div class="toc-section-title">
-                    🏰 Game Tracks — End-to-End Tutorials
+                    🏰 Tracks — End-to-End Tutorials
                 </div>
                 <ul>
                     <li><a href="isometric-strategy/index.html">→ Isometric Real-Time Strategy (AoE2 / Red Alert 2 style)</a>
@@ -274,6 +281,15 @@
                             <li><a href="racing-sim/advanced.html">→ Advanced — Track &amp; Race Loop</a></li>
                             <li><a href="racing-sim/expert.html">→ Expert — Sim Polish</a></li>
                             <li><a href="racing-sim/simulations.html">→ Simulations — Deep Dives</a></li>
+                        </ul>
+                    </li>
+                    <li><a href="netcode/index.html">→ Netcode &amp; Multiplayer (systems track, simulated network)</a>
+                        <ul style="margin-left: 20px; margin-top: 5px;">
+                            <li><a href="netcode/beginner.html">→ Beginner — Hello, Network</a> (coming soon)</li>
+                            <li><a href="netcode/intermediate.html">→ Intermediate — Authority &amp; Movement</a> (coming soon)</li>
+                            <li><a href="netcode/advanced.html">→ Advanced — Reconciliation, Lag Comp, Compression</a> (coming soon)</li>
+                            <li><a href="netcode/expert.html">→ Expert — Determinism, Lockstep, Rollback, AoI</a> (coming soon)</li>
+                            <li><a href="netcode/simulations.html">→ Simulations — Everything On</a> (coming soon)</li>
                         </ul>
                     </li>
                 </ul>
