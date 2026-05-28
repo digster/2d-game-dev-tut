@@ -131,8 +131,8 @@ per-tier file structure mirroring the Fundamentals layout.
   checking the line is drivable).** Demo IDs reserve
   the `rac_` namespace for the future per-tier bundles file. Tracks the
   established "one tier per commit" cadence used by voxel-worlds.
-- `netcode/` — **scaffold + Beginner tier shipped — four more tiers to
-  follow iteratively.** The project's first *systems* track (cross-cutting,
+- `netcode/` — **scaffold + Beginner + Intermediate tiers shipped — three
+  more to follow iteratively.** The project's first *systems* track (cross-cutting,
   not genre-specific): teach the math and machinery of online multiplayer
   entirely over a **simulated network** with zero backend. All demos run
   inside one browser tab; two canvases play the role of "server" and
@@ -158,8 +158,34 @@ per-tier file structure mirroring the Fundamentals layout.
   ping-pong mini-project where two clients (A and B) exchange messages
   through one `FakeNetwork` with a seed input — the visible proof of
   determinism (same seed + same actions = bit-identical stats every time).
-  Demo IDs reserve the `net_` namespace for the future per-tier bundles
-  file. Tracks the established "one tier per commit" cadence used by
+  **Intermediate tier (Authority &amp; Movement — 5 demos):** a `naiveDemo`
+  with a "wait for the server" client that lags by the full RTT (drag a
+  direction button and watch the CLIENT ball trail your input by 200 ms);
+  a `predictionDemo` that applies input locally + naively snaps to
+  authoritative on each snapshot (toggle on/off to A/B against the naive
+  version; a green dashed ghost shows the authoritative position so the
+  snap distance is visible); an `interpolationDemo` focused on REMOTE
+  entities that renders the entity at `now − interpDelay` lerping between
+  the two snapshots that straddle it (a dashed orange "server-truth-right-now"
+  overlay makes the cost of the interp buffer visible as a "behind reality
+  by N px" annotation); a `snapVsSmoothDemo` showing two players hit by
+  identical periodic corrections — LEFT snaps instantly, RIGHT smooths via
+  frame-rate-correct `1 − exp(−k·dt)` exponential decay (sliders for
+  smoothing time and correction interval); and a `arenaDemo` capstone with
+  SERVER and CLIENT panels showing one local player (WASD) plus one remote
+  bot orbiting a circle, with independent toggles for prediction,
+  interpolation, and smoothing so the user can A/B each technique in
+  isolation under harsh network sliders (RTT/jitter/loss). The whole tier
+  hammers one discipline: server-state and client-state are SEPARATE
+  objects in every demo, communicating ONLY through FakeNetwork messages,
+  never via shared object references — the only way to teach this
+  honestly inside one browser tab. An additive helper tweak landed with
+  this tier: every in-flight FakeNetwork packet now carries `sentAt`,
+  `delay`, and `reordered` metadata so demos can render packet progress
+  along a lane (used heavily by the Beginner packet-lane demo already
+  and reused here for the snapshot-arrival visualisation). Demo IDs
+  reserve the `net_` namespace for the future per-tier bundles file.
+  Tracks the established "one tier per commit" cadence used by
   racing-sim and voxel-worlds.
 
 ## Shared assets

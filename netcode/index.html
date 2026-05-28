@@ -186,10 +186,10 @@
                 </a>
 
                 <!-- Intermediate tier card -->
-                <a class="tier-card locked">
+                <a href="intermediate.html" class="tier-card active">
                     <div class="tier-card-header">
                         <span class="level-indicator level-intermediate">INTERMEDIATE</span>
-                        <span class="tier-card-status">Coming soon</span>
+                        <span class="tier-card-status ready">Ready</span>
                     </div>
                     <div class="tier-card-title">Authority &amp; Movement</div>
                     <p>Authoritative server vs P2P. Client-side prediction. Entity interpolation for remote players.</p>
@@ -197,9 +197,9 @@
                         <li>Why authority matters (and where P2P still wins)</li>
                         <li>The naive scheme — feel the lag before you fix it</li>
                         <li>Client-side prediction: apply input immediately</li>
-                        <li>Entity interpolation: render remotes ~100 ms in the past</li>
-                        <li>Snap vs smooth correction</li>
-                        <li><em>Mini-project:</em> two-canvas server-vs-client arena with live lag sliders</li>
+                        <li>Entity interpolation: render remotes ~one snapshot in the past</li>
+                        <li>Snap vs smooth correction (frame-rate-correct exponential decay)</li>
+                        <li><em>Mini-project:</em> arena with toggleable prediction / interpolation / smoothing</li>
                     </ul>
                 </a>
 

@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Intermediate — Netcode &amp; Multiplayer Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+
+    <!-- Tier-local styles — input button pad shared by every demo with WASD,
+         plus a compact toggle/slider row layout. -->
+    <style>
+        .input-pad {
+            display: inline-grid;
+            grid-template-columns: 38px 38px 38px;
+            grid-template-rows: 38px 38px;
+            gap: 4px;
+            margin: 4px 0 8px 0;
+        }
+        .input-pad button {
+            background: #1a1f3a;
+            color: #4fc3f7;
+            border: 1px solid #2d3354;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: monospace;
+            font-size: 18px;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .input-pad button:active {
+            background: #2d3354;
+            color: #ffa726;
+        }
+        .input-pad .pad-up    { grid-column: 2; grid-row: 1; }
+        .input-pad .pad-left  { grid-column: 1; grid-row: 2; }
+        .input-pad .pad-down  { grid-column: 2; grid-row: 2; }
+        .input-pad .pad-right { grid-column: 3; grid-row: 2; }
+        .input-pad-hint {
+            color: #9e9e9e;
+            font-size: 0.85em;
+            display: inline-block;
+            margin-left: 12px;
+            vertical-align: middle;
+        }
+        .toggle-row {
+            display: flex;
+            gap: 14px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin: 8px 0;
+        }
+        .toggle-row label {
+            color: #c9d1d9;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🛰️ Intermediate — Authority &amp; Movement</h1>
+        <p class="subtitle">Apply input locally, render remotes a beat behind, and soften the inevitable corrections. The three techniques that turn a laggy mess into a playable game.</p>
+
+        <!-- Navigation -->
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="beginner.html" class="nav-button">← Beginner</a>
+            <a href="intermediate.html" class="nav-button active">Intermediate</a>
+            <a href="advanced.html" class="nav-button">Advanced →</a>
+        </div>
+
+        <!-- Table of Contents -->
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#intro">Authority — who has the truth?</a></li>
+                <li><a href="#naive">Naive — wait for the server</a></li>
+                <li><a href="#prediction">Client-side prediction — apply input now</a></li>
+                <li><a href="#interpolation">Entity interpolation — render remotes in the past</a></li>
+                <li><a href="#snap-smooth">Snap vs smooth — softening the correction</a></li>
+                <li><a href="#mini-project">Mini-Project: the arena</a></li>
+            </ul>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- INTRO -->
+        <!-- ============================================ -->
+        <div id="intro" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>👑 Authority — who has the truth?</h2>
+
+            <p>
+                Every online game has to answer one question before any other: <strong>when two
+                machines disagree about the state of the world, who wins?</strong> The answer
+                shapes everything about the architecture.
+            </p>
+
+            <table style="width:100%; border-collapse:collapse; margin: 16px 0;">
+                <thead>
+                    <tr style="border-bottom: 2px solid #2d3354;">
+                        <th style="text-align:left; padding:10px;">Model</th>
+                        <th style="text-align:left; padding:10px;">Who decides truth?</th>
+                        <th style="text-align:left; padding:10px;">Used by</th>
+                        <th style="text-align:left; padding:10px;">Trade-off</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr style="border-bottom:1px solid #2d3354;">
+                        <td style="padding:10px;"><strong>Authoritative server</strong></td>
+                        <td style="padding:10px;">One dedicated server. Clients send inputs; the server sends back state.</td>
+                        <td style="padding:10px;">Most shooters, MMOs, MOBAs</td>
+                        <td style="padding:10px;">Cheat-resistant; costs infrastructure; client always feels remote.</td>
+                    </tr>
+                    <tr style="border-bottom:1px solid #2d3354;">
+                        <td style="padding:10px;"><strong>Listen server</strong></td>
+                        <td style="padding:10px;">One of the players' machines IS the server.</td>
+                        <td style="padding:10px;">Many co-op games, casual shooters</td>
+                        <td style="padding:10px;">Zero infrastructure; host has unfair latency advantage; trivially cheatable.</td>
+                    </tr>
+                    <tr style="border-bottom:1px solid #2d3354;">
+                        <td style="padding:10px;"><strong>P2P with input lockstep</strong></td>
+                        <td style="padding:10px;">No server; every client runs the same deterministic sim from the same inputs.</td>
+                        <td style="padding:10px;">RTS (Age of Empires-era), some fighters</td>
+                        <td style="padding:10px;">Tiny bandwidth (just inputs!); requires perfect determinism; one cheater desyncs the match.</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:10px;"><strong>P2P with rollback</strong></td>
+                        <td style="padding:10px;">Predict opponent input; rewind and re-simulate when the real input arrives.</td>
+                        <td style="padding:10px;">Fighting games (GGPO-era)</td>
+                        <td style="padding:10px;">Feels instant locally; requires perfect determinism + frequent re-simulation.</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="key-point">
+                <strong>💡 This tier uses authoritative-server everywhere</strong> because it's the
+                most common shape and because the technique vocabulary you learn here (prediction,
+                interpolation, smoothing) is the foundation that the Expert tier's lockstep and
+                rollback work later builds on. Even if your eventual target is lockstep RTS, you
+                still need this tier — the client-rendering smoothing techniques are universal.
+            </div>
+
+            <h3>The two-clock setup</h3>
+            <p>
+                Every demo in this tier runs <strong>both</strong> sides — server and client — in
+                the SAME browser tab, communicating only through a <code>FakeNetwork</code> object.
+                That's the only way to teach this without a real backend. Discipline: <em>never</em>
+                read server state directly from a client renderer. If a demo does, it's lying about
+                what the client actually knows.
+            </p>
+            <p>
+                The visual convention: every demo has a <strong>SERVER panel on the left</strong>
+                (orange) and a <strong>CLIENT panel on the right</strong> (cyan). The two panels
+                show the SAME world from two different perspectives. Watching the gap between them
+                IS the whole pedagogy of the tier.
+            </p>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- NAIVE -->
+        <!-- ============================================ -->
+        <div id="naive" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🐢 Naive — wait for the server</h2>
+
+            <p>
+                The simplest possible client: do <em>nothing</em> on input except send it.
+                The displayed position is whatever the server last said. Result:
+                input-to-displayed-action delay = full RTT.
+            </p>
+
+            <div class="diagram">
+                <canvas id="naiveCanvas" width="780" height="280"></canvas>
+            </div>
+            <div class="controls">
+                <div class="input-pad" id="naivePad">
+                    <button class="pad-up"    id="naiveUp">↑</button>
+                    <button class="pad-left"  id="naiveLeft">←</button>
+                    <button class="pad-down"  id="naiveDown">↓</button>
+                    <button class="pad-right" id="naiveRight">→</button>
+                </div>
+                <span class="input-pad-hint">or click the canvas and use WASD / arrows</span>
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px; margin-left:20px;">
+                    RTT
+                    <input type="range" id="naiveRtt" min="0" max="400" value="200" style="width:200px;">
+                    <span id="naiveRttVal" style="font-family:monospace; color:#4fc3f7; min-width:60px;">200 ms</span>
+                </label>
+                <button id="naiveReset">↻ Reset</button>
+            </div>
+            <div id="naiveInfo" class="info-display" style="font-family:monospace;">starting up…</div>
+
+            <div class="key-point">
+                <strong>💡 Try this:</strong> hold a direction, then release. The CLIENT ball keeps
+                moving for one whole RTT after you release. That's the input-to-displayed-action
+                delay, and it's the single biggest UX problem of online play. Every later technique
+                in this tier exists to mask it.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- PREDICTION -->
+        <!-- ============================================ -->
+        <div id="prediction" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🔮 Client-side prediction — apply input now</h2>
+
+            <p>
+                The instant the player presses a key, the client applies the input <em>locally</em>
+                AND sends it to the server. The screen responds immediately; the server's later
+                acknowledgement is just a sanity check. When the server's snapshot arrives, we naively
+                snap the client to the authoritative position.
+            </p>
+            <p>
+                Toggle prediction OFF below to compare directly: with prediction, motion is instant;
+                without it, you're back to the naive demo's RTT lag. The green dashed ghost on the
+                CLIENT panel shows the authoritative position from the last snapshot — the gap between
+                the cyan ball and the green ghost is the disagreement that produces visible snaps.
+            </p>
+
+            <div class="diagram">
+                <canvas id="predictionCanvas" width="780" height="280"></canvas>
+            </div>
+            <div class="controls">
+                <div class="input-pad" id="predPad">
+                    <button class="pad-up"    id="predUp">↑</button>
+                    <button class="pad-left"  id="predLeft">←</button>
+                    <button class="pad-down"  id="predDown">↓</button>
+                    <button class="pad-right" id="predRight">→</button>
+                </div>
+                <span class="input-pad-hint">or click the canvas and use WASD / arrows</span>
+            </div>
+            <div class="controls">
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    RTT
+                    <input type="range" id="predRtt" min="0" max="400" value="160" style="width:160px;">
+                    <span id="predRttVal" style="font-family:monospace; color:#4fc3f7; min-width:60px;">160 ms</span>
+                </label>
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    Jitter
+                    <input type="range" id="predJitter" min="0" max="100" value="20" style="width:140px;">
+                    <span id="predJitterVal" style="font-family:monospace; color:#4fc3f7; min-width:60px;">±20 ms</span>
+                </label>
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    <input type="checkbox" id="predToggle" checked>
+                    Prediction ON
+                </label>
+                <button id="predReset">↻ Reset</button>
+            </div>
+            <div id="predInfo" class="info-display" style="font-family:monospace;">starting up…</div>
+
+            <div class="concept-box">
+                <h4>🔍 What you should see</h4>
+                <ol>
+                    <li><strong>Prediction OFF:</strong> the CLIENT ball lags behind the SERVER ball by exactly RTT. Identical to the naive demo.</li>
+                    <li><strong>Prediction ON, low jitter:</strong> the CLIENT ball matches the SERVER ball almost perfectly. The green ghost overlay sits right on top of the cyan ball — they agree.</li>
+                    <li><strong>Prediction ON, high jitter (push to 80+):</strong> the ghost separates from the cyan ball occasionally and the cyan ball "snaps" to it on every snapshot. Visible micro-stutter.</li>
+                </ol>
+                <p>
+                    Snapping on every disagreement is the BAD version of reconciliation. The
+                    <strong>Advanced tier</strong> introduces <em>server reconciliation</em> — keep a
+                    ring buffer of unacked inputs, apply the server snapshot, then replay your
+                    buffered inputs on top. The visible snap disappears because the prediction
+                    realigns with the server's view of the past.
+                </p>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- INTERPOLATION -->
+        <!-- ============================================ -->
+        <div id="interpolation" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🪞 Entity interpolation — render remotes in the past</h2>
+
+            <p>
+                Prediction fixes the LOCAL player. But what about every OTHER player — the ones
+                whose inputs you don't have? You can't predict them; all you have is the periodic
+                snapshots the server sends. If you just render the latest snapshot directly,
+                remote players stutter at the snapshot rate. The fix:
+                <strong>render remotes ~one snapshot-interval IN THE PAST</strong>, lerping between
+                the two snapshots that surround the chosen render time.
+            </p>
+
+            <p>
+                The remote entity below moves smoothly in a circle on the server. The two panels
+                show the same data, rendered two different ways:
+            </p>
+            <ul>
+                <li><strong>Snap to latest</strong> (purple) — render whatever snapshot arrived most recently. Stutters at low snapshot rates.</li>
+                <li><strong>Interpolation buffer</strong> (green) — render at <code>now − interpDelay</code>, lerping between the two snapshots straddling that time.</li>
+            </ul>
+
+            <div class="diagram">
+                <canvas id="interpolationCanvas" width="780" height="280"></canvas>
+            </div>
+            <div class="controls">
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    Snapshot rate
+                    <input type="range" id="interpSnapRate" min="2" max="30" value="5" style="width:180px;">
+                    <span id="interpSnapRateVal" style="font-family:monospace; color:#4fc3f7; min-width:60px;">5 Hz</span>
+                </label>
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    Interp delay
+                    <input type="range" id="interpDelay" min="50" max="500" value="220" style="width:160px;">
+                    <span id="interpDelayVal" style="font-family:monospace; color:#4fc3f7; min-width:60px;">220 ms</span>
+                </label>
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    <input type="checkbox" id="interpShowTruth" checked>
+                    Show server-truth outline
+                </label>
+            </div>
+            <div id="interpInfo" class="info-display" style="font-family:monospace;">starting up…</div>
+
+            <div class="concept-box">
+                <h4>🔍 What to try</h4>
+                <ol>
+                    <li>Start at <strong>5 Hz</strong> snapshot rate. The LEFT (snap-to-latest) ball teleports five times per second — visibly stuttery. The RIGHT (interp) ball glides smoothly.</li>
+                    <li>Watch the orange dashed outline on the RIGHT panel — that's where the entity ACTUALLY is on the server right now. The smooth green ball is visibly behind it. <em>That's the cost of the interp buffer.</em></li>
+                    <li>Drop snapshot rate to <strong>2 Hz</strong>. The LEFT ball jumps every half-second. The RIGHT ball still glides but now sits ~500 ms behind reality. Hit-detection on remotes at this rate needs the Advanced tier's lag-compensation.</li>
+                    <li>Push snapshot rate to <strong>30 Hz</strong>. Both balls now look identical — the buffer's cost is hidden at high rates.</li>
+                </ol>
+            </div>
+
+            <div class="key-point">
+                <strong>💡 The seed planted in Beginner:</strong> remember the
+                <a href="beginner.html#tick-vs-frame">tick-vs-frame demo</a>'s "interpolate between
+                ticks" toggle? This is the same technique, but the "ticks" you're lerping between
+                are now snapshots arriving from another machine instead of locally-simulated steps.
+                Same idea, different data source.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- SNAP VS SMOOTH -->
+        <!-- ============================================ -->
+        <div id="snap-smooth" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🪶 Snap vs smooth — softening the correction</h2>
+
+            <p>
+                Even with prediction working perfectly, the server will <em>occasionally</em> disagree
+                with the client. When that happens, do you snap the client to the authoritative
+                position instantly, or do you slide there over a small smoothing window?
+            </p>
+            <p>
+                Below, both players move in a straight line; every ~1.5 seconds a "correction event"
+                teleports them to a new Y. The LEFT player snaps instantly; the RIGHT player smooths
+                the correction with frame-rate-correct exponential decay (99% of the gap closed in
+                <code>smoothMs</code>).
+            </p>
+
+            <div class="diagram">
+                <canvas id="snapVsSmoothCanvas" width="780" height="280"></canvas>
+            </div>
+            <div class="controls">
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    Smoothing time
+                    <input type="range" id="svsSmoothMs" min="0" max="500" value="150" style="width:200px;">
+                    <span id="svsSmoothMsVal" style="font-family:monospace; color:#4fc3f7; min-width:70px;">150 ms</span>
+                </label>
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    Correction interval
+                    <input type="range" id="svsCorrInterval" min="500" max="3000" value="1500" style="width:180px;">
+                    <span id="svsCorrIntervalVal" style="font-family:monospace; color:#4fc3f7; min-width:60px;">1.5 s</span>
+                </label>
+            </div>
+            <div id="svsInfo" class="info-display" style="font-family:monospace;">starting up…</div>
+
+            <details>
+                <summary>📝 Click to see: framerate-correct exponential smoothing in code</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Smooth the player position toward `target` over ~smoothMs milliseconds.
+// Frame-rate INDEPENDENT — same visible smoothness at 30 fps or 240 fps.
+//
+// Key idea: lerp(current, target, 1 - exp(-k * dt)) where k is chosen so
+// that ~99% of the remaining gap closes within smoothMs. That gives the
+// exponential-decay "drag toward the target" feel that hides corrections
+// without ever overshooting.
+
+function smoothToward(currentPos, targetPos, smoothMs, dt) {
+    if (smoothMs &lt;= 0) return { ...targetPos };          // 0 ms = snap
+    const k = -Math.log(0.01) / (smoothMs / 1000);         // 1/s
+    const alpha = 1 - Math.exp(-k * dt);
+    return {
+        x: lerp(currentPos.x, targetPos.x, alpha),
+        y: lerp(currentPos.y, targetPos.y, alpha),
+    };
+}
+
+// The naive version `lerp(current, target, smoothness * dt)` is what people
+// reach for first — but it's WRONG. At high dt (a tab refocus, a slow frame),
+// `smoothness * dt` can exceed 1, the lerp overshoots, the player snaps
+// anyway. Exponential decay is bounded — alpha is always in [0, 1).</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">type Vec2 = { x: number; y: number };
+
+function smoothToward(currentPos: Vec2, targetPos: Vec2, smoothMs: number, dt: number): Vec2 {
+    if (smoothMs &lt;= 0) return { ...targetPos };
+    const k = -Math.log(0.01) / (smoothMs / 1000);
+    const alpha = 1 - Math.exp(-k * dt);
+    return {
+        x: lerp(currentPos.x, targetPos.x, alpha),
+        y: lerp(currentPos.y, targetPos.y, alpha),
+    };
+}</code></pre>
+                </div>
+                <div class="key-point">
+                    <strong>💡 Why <code>1 - exp(-k·dt)</code>:</strong> this formula is the standard
+                    way to make any "drag toward a target" behaviour frame-rate-independent. It comes
+                    up everywhere in game code — follow cameras, audio fades, network corrections.
+                    Racing-sim's expert tier uses the same trick for the
+                    <a href="../racing-sim/expert.html">follow camera</a>; the technique transfers
+                    cleanly between domains.
+                </div>
+            </details>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- MINI-PROJECT -->
+        <!-- ============================================ -->
+        <div id="mini-project" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🏟️ Mini-project — the arena</h2>
+
+            <p>
+                Capstone time. SERVER panel on the left (truth); CLIENT panel on the right (what
+                your player sees). One LOCAL player (you control with WASD / buttons) and one
+                REMOTE bot moving in a circle. Toggle each technique independently:
+            </p>
+
+            <ul>
+                <li><strong>Prediction</strong> covers the LOCAL player.</li>
+                <li><strong>Interpolation</strong> covers the REMOTE player (purple).</li>
+                <li><strong>Smoothing</strong> softens any corrections the server delivers to your LOCAL player.</li>
+            </ul>
+
+            <div class="diagram">
+                <canvas id="arenaCanvas" width="780" height="280"></canvas>
+            </div>
+
+            <div class="controls">
+                <div class="input-pad" id="arenaPad">
+                    <button class="pad-up"    id="arenaUp">↑</button>
+                    <button class="pad-left"  id="arenaLeft">←</button>
+                    <button class="pad-down"  id="arenaDown">↓</button>
+                    <button class="pad-right" id="arenaRight">→</button>
+                </div>
+                <span class="input-pad-hint">or click the canvas and use WASD / arrows</span>
+            </div>
+
+            <div class="controls">
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    RTT
+                    <input type="range" id="arenaRtt" min="0" max="500" value="180" style="width:160px;">
+                    <span id="arenaRttVal" style="font-family:monospace; color:#4fc3f7; min-width:60px;">180 ms</span>
+                </label>
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    Jitter
+                    <input type="range" id="arenaJitter" min="0" max="100" value="20" style="width:120px;">
+                    <span id="arenaJitterVal" style="font-family:monospace; color:#4fc3f7; min-width:60px;">±20 ms</span>
+                </label>
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    Loss
+                    <input type="range" id="arenaLoss" min="0" max="40" value="2" style="width:100px;">
+                    <span id="arenaLossVal" style="font-family:monospace; color:#4fc3f7; min-width:40px;">2 %</span>
+                </label>
+                <button id="arenaReset">↻ Reset</button>
+            </div>
+
+            <div class="toggle-row">
+                <label><input type="checkbox" id="arenaPredict" checked> Prediction</label>
+                <label><input type="checkbox" id="arenaInterp" checked> Interpolation</label>
+                <label><input type="checkbox" id="arenaSmooth" checked> Smoothing</label>
+                <label style="display:inline-flex; align-items:center; gap:8px;">
+                    Smooth time
+                    <input type="range" id="arenaSmoothMs" min="0" max="400" value="150" style="width:120px;">
+                    <span id="arenaSmoothMsVal" style="font-family:monospace; color:#4fc3f7; min-width:60px;">150 ms</span>
+                </label>
+            </div>
+
+            <div id="arenaInfo" class="info-display" style="font-family:monospace;">starting up…</div>
+
+            <div class="key-point">
+                <strong>💡 Try this:</strong> push RTT to 350, jitter to 60. Now toggle features
+                one at a time:
+                <ul style="margin-top:8px;">
+                    <li>ALL OFF — local player feels horrible (RTT lag), bot stutters.</li>
+                    <li>PREDICTION ON, others OFF — local player feels instant but snaps on every snapshot; bot still stutters.</li>
+                    <li>PREDICTION + INTERPOLATION — local feels instant (with snaps), bot is smooth (but ~70 ms behind).</li>
+                    <li>ALL THREE ON — local feels instant, snaps are now invisible (smoothing absorbs them), bot is smooth. <em>This is what the technique stack buys you.</em></li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- RECAP -->
+        <!-- ============================================ -->
+        <div class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🧰 Recap — what you've got</h2>
+
+            <ul>
+                <li>A vocabulary for <strong>authority models</strong> — authoritative server, listen server, P2P lockstep, P2P rollback — and a working mental model for why authoritative server is the most common default.</li>
+                <li><strong>Client-side prediction</strong> — apply local input immediately, send to server, snap to authoritative on snapshot arrival. The single biggest UX win in any networked game.</li>
+                <li><strong>Entity interpolation</strong> — render REMOTE players ~one-snapshot-interval in the past so you can lerp between two known snapshots. Smooths remotes at low snapshot rates at the cost of a small render-time deficit.</li>
+                <li><strong>Frame-rate-correct smoothing</strong> via <code>1 − exp(−k·dt)</code> — hides correction snaps without overshooting. Same formula transfers to follow cameras, audio fades, anywhere a "drag toward target" feel is wanted.</li>
+                <li>The capstone arena demo, where all three techniques compose: local player feels instant, remote feels smooth, corrections disappear into smoothing.</li>
+            </ul>
+
+            <div class="key-point">
+                <strong>💡 What you DON'T have yet (the Advanced-tier promise):</strong>
+                you're still snapping on prediction-vs-authoritative disagreement.
+                <strong>Server reconciliation</strong> fixes that: keep a ring buffer of every
+                input you sent, and when the server says "as of tick N your state was X", apply X
+                and then REPLAY all your buffered inputs from N+1 onward. The visible snap
+                disappears — your prediction realigns with the server's view of the past.
+                You also haven't done anything about WHO can be sure where they hit at high latency:
+                that's <strong>lag compensation</strong>, the Advanced tier's other big technique.
+            </div>
+        </div>
+
+        <!-- Next Steps -->
+        <div class="section" style="text-align: center;">
+            <h2>✅ Intermediate Tier Complete</h2>
+            <p style="font-size: 1.1em; margin: 24px 0;">
+                You can now hide latency from the local player, smooth out remote players, and
+                soften the disagreements that the server inevitably delivers. That's a playable
+                game over a bad network.
+            </p>
+            <a href="advanced.html" class="nav-button" style="font-size: 1.2em; padding: 20px 40px;">
+                Continue to Advanced →
+            </a>
+            <p style="margin-top: 20px;"><em>Advanced isn't written yet — coming in the next phase. Track your progress on the <a href="index.html">track index</a>.</em></p>
+        </div>
+    </div>
+
+    <!-- Scroll to Top Button -->
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <!-- Load order: shared utils → code-tabs → netcode helpers → tier demos.
+         The demos file depends on Vector2D from shared (via the Player class
+         uses {x,y,vx,vy} primitives, not Vector2D directly, but `lerp` is from
+         shared and used heavily); FakeNetwork + SeededRng on window from net/. -->
+    <script src="../shared/utils.js"></script>
+    <script src="../shared/code-tabs.js"></script>
+    <script src="net/seeded-rng.js"></script>
+    <script src="net/fake-network.js"></script>
+    <script src="intermediate-demos.js"></script>
+
+    <!-- Shared export-demo injector. No netcode/bundles-intermediate.js yet,
+         and the <details> blocks intentionally omit data-demo-id — same opt-out
+         approach Beginner used. -->
+    <script src="../shared/export-demo.js"></script>
+</body>
+</html>

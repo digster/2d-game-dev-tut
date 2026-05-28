@@ -535,3 +535,75 @@ Beginner TOC sublink.
   interpolation for remote players; snap vs smooth correction. The
   tick-vs-frame demo from THIS tier is the template for Intermediate's
   entity-interpolation demo (same toggle, different data source).
+
+# 2026-05-28 (pt.3) — Netcode: Intermediate tier (Authority & Movement)
+
+"Okay, work on the next iteration." — third iteration on netcode,
+following the racing-sim cadence (one tier per commit).
+
+## Shipped this commit
+
+```
+netcode/
+  intermediate.html        ← 6 sections + recap (intro/authority,
+                             naive, prediction, interpolation,
+                             snap-vs-smooth, arena mini-project)
+  intermediate-demos.js    ← 5 IIFE demos + Player + helpers
+```
+
+`netcode/index.html` — Intermediate tier card → `.active + .ready + "Ready"`.
+Root `index.html` — "(coming soon)" removed from Intermediate sublink.
+
+## The five demos
+
+1. **naiveDemo** — split SERVER | CLIENT panels. Wait-for-server client
+   lags by full RTT. The cornerstone "feel the pain" demo.
+2. **predictionDemo** — apply input locally + naive snap on snapshot.
+   Toggle on/off for A/B vs naive. Green dashed ghost shows the
+   authoritative position so the snap distance is visible.
+3. **interpolationDemo** — remote entity orbits a circle on the
+   server. LEFT renders latest snapshot (stutters); RIGHT renders
+   at `now − interpDelay` lerping between buffered snapshots.
+   Dashed orange "server truth" outline makes the "behind reality
+   by N px" cost explicit.
+4. **snapVsSmoothDemo** — two players hit by identical periodic
+   corrections. LEFT snaps, RIGHT smooths with frame-rate-correct
+   `1 − exp(−k·dt)` exponential decay (links back to racing-sim's
+   follow camera which uses the same formula).
+5. **arenaDemo** (capstone) — SERVER + CLIENT panels with one local
+   player (WASD/buttons) + one remote bot. Three independent toggles
+   for prediction/interpolation/smoothing under harsh network sliders.
+   A/B each technique in isolation.
+
+## Discipline locked in
+
+Server-state and client-state are SEPARATE objects in every demo;
+communication ONLY through FakeNetwork messages. Typed verbatim into the
+demos file header. If a demo reads server state from a client renderer,
+the technique it's teaching becomes invisible.
+
+## Verification
+
+`python3 -m http.server 8765`.
+- intermediate.html loads with zero console errors.
+- All 5 canvases + 41 controls present.
+- Every demo's info bar populated with live data.
+- Interaction tests pass: prediction toggle, interp slider, arena
+  toggles + reset, naive button input all wire correctly.
+- Visual screenshots:
+  - naive at rest: both balls centred.
+  - naive after right-hold: both balls on right side of panels.
+  - interpolation: LEFT stuttery purple, RIGHT smooth green WITH
+    server-truth outline visibly ahead of it.
+  - arena (all toggles on, RTT 350 / jitter 20 / loss 2): both
+    panels show near-identical positions — the technique stack
+    works under brutal conditions.
+
+## Next
+
+- **Advanced tier — Reconciliation, Lag Comp, Compression.** The
+  arena from this tier extends into a tiny 2-player shooter scene.
+  Server reconciliation fixes the visible snap from this tier's
+  predictionDemo. Lag compensation fixes the "behind reality" cost
+  from interpolationDemo. Delta compression + bit-packing attack
+  the bandwidth equation from Beginner.
