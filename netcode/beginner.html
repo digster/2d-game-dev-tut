@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beginner — Netcode &amp; Multiplayer Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <!-- Prism.js Syntax Highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+
+    <!-- Tier-local styles. Only used on the bandwidth meter demo (Demo 3),
+         which is DOM-driven rather than canvas-driven. Same approach
+         racing-sim/index.html uses for its roadmap-only CSS. -->
+    <style>
+        .bw-grid {
+            display: grid;
+            grid-template-columns: 140px 1fr 80px;
+            gap: 12px 16px;
+            align-items: center;
+            margin: 18px 0;
+        }
+        .bw-grid label { color: #c9d1d9; font-size: 0.95em; }
+        .bw-grid input[type="range"] { width: 100%; }
+        .bw-grid .bw-num {
+            color: #4fc3f7;
+            font-family: monospace;
+            text-align: right;
+            font-size: 0.95em;
+        }
+        .bw-out-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 12px;
+            background: #161b2c;
+            border-left: 3px solid #4fc3f7;
+            border-radius: 4px;
+            margin: 6px 0;
+            font-family: monospace;
+            color: #e0e0e0;
+        }
+        .bw-out-row strong { color: #ffa726; }
+        .bw-meter {
+            width: 100%;
+            height: 22px;
+            background: #161b2c;
+            border: 1px solid #2e3548;
+            border-radius: 4px;
+            overflow: hidden;
+            position: relative;
+            margin: 14px 0 4px 0;
+        }
+        .bw-meter-fill {
+            height: 100%;
+            transition: width 0.2s, background-color 0.2s;
+        }
+        .bw-meter-label {
+            font-family: monospace;
+            text-align: center;
+            font-size: 0.85em;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+        }
+        .bw-presets {
+            margin: 10px 0;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .bw-presets button {
+            background: #1a1f3a;
+            color: #c9d1d9;
+            border: 1px solid #2d3354;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.85em;
+        }
+        .bw-presets button:hover {
+            border-color: #4fc3f7;
+            color: #4fc3f7;
+        }
+        /* Ping-pong demo logs */
+        .pp-log {
+            font-family: monospace;
+            font-size: 0.85em;
+            background: #161b2c;
+            padding: 8px 12px;
+            border-radius: 4px;
+            color: #c9d1d9;
+            min-height: 90px;
+            line-height: 1.5;
+        }
+        .pp-stats-row {
+            display: flex;
+            gap: 24px;
+            justify-content: center;
+            margin: 14px 0;
+            flex-wrap: wrap;
+        }
+        .pp-client-block {
+            background: #161b2c;
+            padding: 14px 18px;
+            border-radius: 6px;
+            min-width: 240px;
+            flex: 1;
+        }
+        .pp-client-block h4 {
+            margin: 0 0 8px 0;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🛰️ Beginner — Hello, Network</h1>
+        <p class="subtitle">Latency, jitter, packet loss, and reorder — see them with your eyes before you fight them with code.</p>
+
+        <!-- Navigation -->
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="beginner.html" class="nav-button active">Beginner</a>
+            <a href="intermediate.html" class="nav-button">Intermediate →</a>
+        </div>
+
+        <!-- Table of Contents -->
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#intro">What netcode actually is</a></li>
+                <li><a href="#anatomy">Anatomy of a network message — RTT, jitter, loss, reorder</a></li>
+                <li><a href="#packet-lane">See it in action — the packet lane</a></li>
+                <li><a href="#tick-vs-frame">Tick rate vs frame rate</a></li>
+                <li><a href="#bandwidth">The bandwidth tradeoff equation</a></li>
+                <li><a href="#mini-project">Mini-Project: ping-pong between two clients</a></li>
+            </ul>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- INTRO -->
+        <!-- ============================================ -->
+        <div id="intro" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🛰️ What netcode actually is</h2>
+
+            <p>
+                <strong>Netcode</strong> is the bag of techniques that makes a game playable when one player
+                presses a button in Tokyo and another player needs to see the result in Berlin. That sentence
+                hides three brutal physical realities:
+            </p>
+
+            <ul>
+                <li><strong>The speed of light is finite.</strong> The fastest possible Tokyo–Berlin round trip is roughly 90 ms, ignoring routers, switches, fibre splices, and the fact that the great-circle path is unlikely to be available.</li>
+                <li><strong>The internet isn't a wire — it's a queue of queues.</strong> Every router between you and your peer can hold your packet, reorder it, drop it, or briefly hold it for someone else's flow.</li>
+                <li><strong>You don't have your opponent's state — you have an old copy of it.</strong> By the time you see them shoot, they've already moved.</li>
+            </ul>
+
+            <div class="key-point">
+                <strong>💡 The whole netcode track is a response to those three sentences.</strong> Every
+                technique in every later tier — prediction, interpolation, reconciliation, lag compensation,
+                rollback, lockstep — is a way of pretending those problems don't exist while making the
+                game feel like they don't.
+            </div>
+
+            <h3>The zero-backend setup</h3>
+            <p>
+                Every demo in this track runs inside one browser tab. There is no server. There is no
+                <code>npm install</code>. Instead, every message goes through a <strong>simulated network</strong>
+                — a class called <code>FakeNetwork</code> with sliders for round-trip time, jitter, packet
+                loss, and reorder probability. You can drag the sliders to nightmare conditions and watch
+                each technique earn (or fail to earn) its keep.
+            </p>
+
+            <div class="concept-box">
+                <h4>🧱 Two helpers, loaded on every page in this track</h4>
+                <ul>
+                    <li><code>SeededRng</code> — a deterministic random-number generator. Same seed + same actions = same outcome, every time. Crucial for "see, that's the exact moment the client mispredicted".</li>
+                    <li><code>FakeNetwork</code> — the message-queue scheduler with the four sliders. Endpoint surface (<code>send(targetId, msg)</code> + <code>onMessage(handler)</code>) is the same shape you'd see talking to a WebSocket, so the demo code would survive a future swap to a real transport.</li>
+                </ul>
+                <p>
+                    Both already shipped in the scaffold commit. Open the
+                    <a href="index.html">track index</a> and scroll to the bottom — the Scaffold Self-Check
+                    panel proves both helpers loaded and behave.
+                </p>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- ANATOMY -->
+        <!-- ============================================ -->
+        <div id="anatomy" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>📐 Anatomy of a network message — the four numbers that decide your fate</h2>
+
+            <p>
+                When you call <code>endpoint.send(targetId, msg)</code> on a real or simulated network,
+                four things determine whether — and when — the recipient will see it:
+            </p>
+
+            <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+                <thead>
+                    <tr style="border-bottom: 2px solid #2d3354;">
+                        <th style="text-align: left; padding: 10px;">Term</th>
+                        <th style="text-align: left; padding: 10px;">In plain language</th>
+                        <th style="text-align: left; padding: 10px;">Realistic range</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr style="border-bottom: 1px solid #2d3354;">
+                        <td style="padding: 10px;"><strong>RTT</strong> (round-trip time)</td>
+                        <td style="padding: 10px;">Time for a packet to go to the server AND come back. One-way latency is half of that.</td>
+                        <td style="padding: 10px;">20–80 ms local · 80–150 ms regional · 200–400 ms intercontinental · 600 ms+ mobile-on-a-bad-day</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #2d3354;">
+                        <td style="padding: 10px;"><strong>Jitter</strong></td>
+                        <td style="padding: 10px;">Variance in latency. A 100 ms ± 30 ms link means packets arrive anywhere between 70 ms and 130 ms after sending.</td>
+                        <td style="padding: 10px;">2–10 ms cable · 20–50 ms wifi · 30–100 ms mobile</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #2d3354;">
+                        <td style="padding: 10px;"><strong>Packet loss</strong></td>
+                        <td style="padding: 10px;">Fraction of packets that simply never arrive. On UDP (which most games use) there is no automatic retry — your code has to deal.</td>
+                        <td style="padding: 10px;">&lt; 0.5% good · 1–3% noticeable · &gt; 5% the game starts breaking</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 10px;"><strong>Reorder</strong></td>
+                        <td style="padding: 10px;">Packet #5 arrives before packet #4 because they took different routes through the network. On UDP, your receiver has to sort them out.</td>
+                        <td style="padding: 10px;">Rare on a single link, common across the open Internet</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="concept-box">
+                <h4>🤔 Why isn't packet loss == lag?</h4>
+                <p>
+                    On <strong>TCP</strong> (browsers, HTTP, anything reliable) lost packets ARE retransmitted,
+                    so loss shows up as a sudden lag spike for the duration of one or two retransmits.
+                    On <strong>UDP</strong> (almost all multiplayer games) lost packets just vanish — the
+                    receiver gets nothing for that send. Your code has to either resend (input messages) or
+                    skip-and-extrapolate (state snapshots). The Intermediate, Advanced, and Expert tiers
+                    spend a lot of time on which response is right when.
+                </p>
+            </div>
+
+            <h3>The FakeNetwork API in three lines</h3>
+            <details>
+                <summary>📝 Click to see: the minimum FakeNetwork call shape</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Build one network with realistic Tokyo-Berlin numbers.
+const net = new FakeNetwork({ rttMs: 280, jitterMs: 40, lossRate: 0.01, reorderRate: 0.02 });
+
+// Each player or service registers a name; the call returns an endpoint object.
+const client = net.connect('client');
+const server = net.connect('server');
+
+// One side listens for messages addressed to its id.
+server.onMessage((from, msg) => {
+    console.log('server got', msg, 'from', from);
+});
+
+// The other side sends. The message will arrive ~140 ms later (one-way = rtt/2)
+// PLUS up to ±40 ms jitter, OR not at all (1% loss), OR way later (2% reorder).
+client.send('server', { kind: 'input', tick: 12, ax: 1 });
+
+// Every frame: advance the network's internal clock so anything whose
+// delivery time has elapsed gets handed to its target endpoint.
+function frame(now) {
+    net.tick(now);
+    requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// FakeNetwork ships its types on `window`; we mirror them here for clarity.
+type NetParams = { rttMs?: number; jitterMs?: number; lossRate?: number; reorderRate?: number; seed?: number };
+type Endpoint = {
+    id: string;
+    send(targetId: string, msg: unknown): void;
+    onMessage(handler: (from: string, msg: unknown) =&gt; void): void;
+};
+
+declare const FakeNetwork: new (opts?: NetParams) =&gt; {
+    connect(id: string): Endpoint;
+    tick(nowMs: number): void;
+    setParams(opts: NetParams): void;
+    stats: { sent: number; delivered: number; dropped: number; reordered: number };
+};
+
+const net = new FakeNetwork({ rttMs: 280, jitterMs: 40, lossRate: 0.01, reorderRate: 0.02 });
+const client: Endpoint = net.connect('client');
+const server: Endpoint = net.connect('server');
+
+server.onMessage((from, msg) =&gt; { console.log('server got', msg, 'from', from); });
+client.send('server', { kind: 'input', tick: 12, ax: 1 });
+
+function frame(now: number): void { net.tick(now); requestAnimationFrame(frame); }
+requestAnimationFrame(frame);</code></pre>
+                </div>
+                <div class="key-point">
+                    <strong>💡 The endpoint surface is intentionally WebSocket-shaped.</strong> The same
+                    three calls (<code>connect</code> for the lifecycle, <code>send</code> for outbound,
+                    <code>onMessage</code> for inbound) are what you'd use against a real socket later
+                    — so this teaching code would survive a swap to a real transport with minimal changes.
+                </div>
+            </details>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- PACKET LANE DEMO -->
+        <!-- ============================================ -->
+        <div id="packet-lane" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🎢 See it — the packet lane</h2>
+
+            <p>
+                A single-direction lane from <span style="color:#4fc3f7"><strong>CLIENT</strong></span>
+                to <span style="color:#ffa726"><strong>SERVER</strong></span>. Auto-sends one packet every
+                700 ms. Each in-flight packet animates from sent to delivered based on its assigned delay.
+                Drag the sliders to see what each parameter actually does:
+            </p>
+            <ul>
+                <li><strong>RTT</strong> stretches or compresses the lane animation (lane speed = one-way = rtt/2).</li>
+                <li><strong>Jitter</strong> makes the once-regular cadence of arrivals lumpy.</li>
+                <li><strong>Loss</strong> shows packets vanish (faded red ✕ above the lane).</li>
+                <li><strong>Reorder</strong> tints occasional packets <span style="color:#ba68c8">purple</span> and gives them a halo — these will arrive AFTER ones that were sent later.</li>
+            </ul>
+
+            <div class="diagram">
+                <canvas id="packetLaneCanvas" width="780" height="240"></canvas>
+            </div>
+            <div class="controls">
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    RTT
+                    <input type="range" id="plRtt" min="0" max="500" value="120" style="width:160px;">
+                    <span id="plRttVal" style="font-family:monospace; color:#4fc3f7; min-width:60px;">120 ms</span>
+                </label>
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    Jitter
+                    <input type="range" id="plJitter" min="0" max="100" value="20" style="width:140px;">
+                    <span id="plJitterVal" style="font-family:monospace; color:#4fc3f7; min-width:60px;">±20 ms</span>
+                </label>
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    Loss
+                    <input type="range" id="plLoss" min="0" max="50" value="5" style="width:120px;">
+                    <span id="plLossVal" style="font-family:monospace; color:#4fc3f7; min-width:40px;">5 %</span>
+                </label>
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    Reorder
+                    <input type="range" id="plReorder" min="0" max="50" value="5" style="width:120px;">
+                    <span id="plReorderVal" style="font-family:monospace; color:#4fc3f7; min-width:40px;">5 %</span>
+                </label>
+                <button id="plPause">⏸ Pause</button>
+                <button id="plReset">↻ Reset stats</button>
+            </div>
+            <div id="plStats" class="info-display" style="font-family:monospace;">starting up…</div>
+
+            <div class="key-point">
+                <strong>💡 Try this:</strong> set RTT to 400, jitter to 100, loss to 20, reorder to 30. Watch
+                the lane for a few seconds — the regular send cadence completely breaks down. THAT is what
+                a bad mobile link feels like to your packets, and that's the environment every later tier's
+                techniques are designed to survive.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- TICK VS FRAME -->
+        <!-- ============================================ -->
+        <div id="tick-vs-frame" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>⏱️ Tick rate vs frame rate</h2>
+
+            <p>
+                Every multiplayer game has TWO clocks:
+            </p>
+            <ul>
+                <li><strong>Tick rate</strong> — how often the SIMULATION steps. 20 Hz, 30 Hz, 60 Hz, sometimes higher for fighting games. This is the rate the server makes decisions at, and the rate the client sends inputs at.</li>
+                <li><strong>Frame rate</strong> — how often the screen redraws. Driven by <code>requestAnimationFrame</code> in the browser, capped by the monitor refresh (usually 60 Hz, sometimes 144).</li>
+            </ul>
+            <p>
+                The two clocks aren't aligned — three frames can fall between two ticks at 20 Hz / 60 fps, and
+                that gap is where rendering choices matter. Draw the latest tick state directly and the world
+                stutters in chunks; interpolate between the previous tick and the current one and motion
+                stays smooth.
+            </p>
+
+            <div class="diagram">
+                <canvas id="tickVsFrameCanvas" width="780" height="320"></canvas>
+            </div>
+            <div class="controls">
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    Tick rate
+                    <input type="range" id="tvfTickRate" min="2" max="60" value="10" style="width:200px;">
+                    <span id="tvfTickRateVal" style="font-family:monospace; color:#4fc3f7; min-width:60px;">10 Hz</span>
+                </label>
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    <input type="checkbox" id="tvfInterp" checked>
+                    Interpolate between ticks
+                </label>
+            </div>
+            <div id="tvfInfo" class="info-display" style="font-family:monospace;">starting up…</div>
+
+            <div class="concept-box">
+                <h4>🔍 What to try</h4>
+                <ol>
+                    <li>Start at tick rate <strong>10 Hz</strong> with interpolation ON. Motion looks smooth even though the SIM only updates every 100 ms.</li>
+                    <li>Turn interpolation OFF. The orange SIM ball still moves smoothly (you see it on every frame), but if your eye watches the CYAN REN ball it now <em>snaps</em> to the new tick position instead of sliding.</li>
+                    <li>Slide tick rate up to 60 Hz. The two balls now look almost identical — high tick rate hides the interpolation question. That's why low-tick MMOs care about interpolation more than high-tick fighters.</li>
+                </ol>
+            </div>
+
+            <div class="key-point">
+                <strong>💡 Why this matters for the Intermediate tier:</strong> entity interpolation
+                (rendering remote players ~100 ms in the past so you can lerp between two received snapshots)
+                is the same technique you just toggled here, just running on data coming from another machine
+                instead of a local simulation. That's why this demo lives in Beginner — it's the seed the
+                Intermediate tier pays off.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- BANDWIDTH -->
+        <!-- ============================================ -->
+        <div id="bandwidth" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>📊 The bandwidth tradeoff equation</h2>
+
+            <p>
+                Per-client outbound bandwidth (what the server has to push to one player) follows one
+                equation, the equation every netcode budget conversation eventually traces back to:
+            </p>
+
+            <div style="text-align:center; font-size:1.25em; font-family:monospace; background:#161b2c; padding:18px; border-radius:6px; margin:14px 0; color:#ffa726;">
+                bytes/sec = tickRate × playerCount × entitiesPerPlayer × bytesPerEntity
+            </div>
+
+            <p>
+                Server-total upstream is that × <code>playerCount</code> (the server pushes to every player).
+                Drag the sliders to see how the four knobs combine. Hit a preset to load realistic numbers from
+                shipped games:
+            </p>
+
+            <div id="bandwidthCalc">
+                <div class="bw-grid">
+                    <label for="bwTick">Tick rate</label>
+                    <input type="range" id="bwTick" min="1" max="64" value="20">
+                    <span class="bw-num" id="bwTickVal">20 Hz</span>
+
+                    <label for="bwPlayers">Players</label>
+                    <input type="range" id="bwPlayers" min="2" max="100" value="8">
+                    <span class="bw-num" id="bwPlayersVal">8</span>
+
+                    <label for="bwEntities">Entities / player</label>
+                    <input type="range" id="bwEntities" min="1" max="50" value="1">
+                    <span class="bw-num" id="bwEntitiesVal">1</span>
+
+                    <label for="bwBytes">Bytes / entity</label>
+                    <input type="range" id="bwBytes" min="2" max="128" value="24">
+                    <span class="bw-num" id="bwBytesVal">24 B</span>
+                </div>
+
+                <div class="bw-presets">
+                    <button data-preset='{"tick":10,"players":16,"entities":1,"bytes":32}'>Quake-era shooter (10 Hz, 16 players)</button>
+                    <button data-preset='{"tick":64,"players":10,"entities":1,"bytes":24}'>Modern 64-tick shooter (Valorant-ish)</button>
+                    <button data-preset='{"tick":20,"players":64,"entities":1,"bytes":32}'>Battle royale (64 players)</button>
+                    <button data-preset='{"tick":2,"players":50,"entities":5,"bytes":48}'>MMO (low tick, many entities)</button>
+                </div>
+
+                <div class="bw-meter">
+                    <div class="bw-meter-fill" id="bwMeterFill" style="width:5%; background:#66bb6a;"></div>
+                </div>
+                <div class="bw-meter-label" id="bwMeterLabel">MODEM-FRIENDLY</div>
+
+                <div class="bw-out-row">
+                    <span>Per-client outbound (server → 1 client)</span>
+                    <strong id="bwClientOut">—</strong>
+                </div>
+                <div class="bw-out-row">
+                    <span>Server total upstream (server → all clients)</span>
+                    <strong id="bwServerOut">—</strong>
+                </div>
+                <div id="bwVerdict" class="info-display" style="margin-top:10px;">—</div>
+            </div>
+
+            <div class="concept-box">
+                <h4>🧮 Where the cost actually lives</h4>
+                <p>
+                    Notice how brutally <strong>players × entities/player</strong> scales. A 64-player battle
+                    royale tracking just the players themselves is borderline acceptable; track 5 projectiles
+                    each and you've doubled your bandwidth. The Expert tier's <strong>area-of-interest</strong>
+                    work shrinks the effective <code>playerCount</code> for each client to "the ones near me",
+                    and the Advanced tier's <strong>delta compression + quantization</strong> shrinks
+                    <code>bytesPerEntity</code> by 3–10×. The Beginner-tier equation is the budget; later
+                    tiers earn back the budget by attacking each multiplier.
+                </p>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- MINI-PROJECT -->
+        <!-- ============================================ -->
+        <div id="mini-project" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🏓 Mini-project — ping-pong between two clients</h2>
+
+            <p>
+                Capstone time. Two clients (A on the left, B on the right) exchange messages through a
+                <code>FakeNetwork</code> in the middle. Press "Send ping" on either side; press "Send burst (5)"
+                to fire five in quick succession. Drag the network sliders to see how the same actions feel
+                under different conditions.
+            </p>
+            <p>
+                The seed input + Reset button let you prove determinism by hand: set the seed, press
+                the same buttons in the same order, hit Reset, do it again — the stats line should land on
+                exactly the same numbers both times.
+            </p>
+
+            <div class="diagram">
+                <canvas id="pingPongCanvas" width="780" height="280"></canvas>
+            </div>
+
+            <div class="pp-stats-row">
+                <div class="pp-client-block">
+                    <h4 style="color:#4fc3f7">CLIENT A</h4>
+                    <div id="ppStatsA" style="font-family:monospace; color:#c9d1d9; margin-bottom:10px;">sent 0 · received 0</div>
+                    <div style="display:flex; gap:8px; margin-bottom:10px;">
+                        <button id="ppSendA">Send ping</button>
+                        <button id="ppBurstA">Send burst (5)</button>
+                    </div>
+                    <div class="pp-log" id="ppLogA">(nothing yet)</div>
+                </div>
+                <div class="pp-client-block">
+                    <h4 style="color:#ffa726">CLIENT B</h4>
+                    <div id="ppStatsB" style="font-family:monospace; color:#c9d1d9; margin-bottom:10px;">sent 0 · received 0</div>
+                    <div style="display:flex; gap:8px; margin-bottom:10px;">
+                        <button id="ppSendB">Send ping</button>
+                        <button id="ppBurstB">Send burst (5)</button>
+                    </div>
+                    <div class="pp-log" id="ppLogB">(nothing yet)</div>
+                </div>
+            </div>
+
+            <div class="controls">
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    RTT
+                    <input type="range" id="ppRtt" min="0" max="500" value="160" style="width:160px;">
+                    <span id="ppRttVal" style="font-family:monospace; color:#4fc3f7; min-width:60px;">160 ms</span>
+                </label>
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    Jitter
+                    <input type="range" id="ppJitter" min="0" max="100" value="20" style="width:140px;">
+                    <span id="ppJitterVal" style="font-family:monospace; color:#4fc3f7; min-width:60px;">±20 ms</span>
+                </label>
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    Loss
+                    <input type="range" id="ppLoss" min="0" max="50" value="2" style="width:120px;">
+                    <span id="ppLossVal" style="font-family:monospace; color:#4fc3f7; min-width:40px;">2 %</span>
+                </label>
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    Reorder
+                    <input type="range" id="ppReorder" min="0" max="50" value="2" style="width:120px;">
+                    <span id="ppReorderVal" style="font-family:monospace; color:#4fc3f7; min-width:40px;">2 %</span>
+                </label>
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    Seed
+                    <input type="number" id="ppSeed" value="42" min="1" max="999999" style="width:90px;">
+                </label>
+                <button id="ppReset">↻ Reset (rebuilds the network with the seed)</button>
+            </div>
+
+            <div id="ppGlobalStats" class="info-display" style="font-family:monospace; margin-top:14px;">network sent 0 · delivered 0 · dropped 0 · reordered 0</div>
+
+            <div class="key-point">
+                <strong>💡 Determinism try-it:</strong> set Seed = 42, leave the sliders at their defaults,
+                then click Send burst (5) on A, then Send burst (5) on B, and write down the global stats.
+                Now click ↻ Reset and do the EXACT same sequence — the stats land in the same place every
+                time. That's the substrate the Expert tier's lockstep and rollback netcode are built on.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- RECAP -->
+        <!-- ============================================ -->
+        <div class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🧰 Recap — what you've got</h2>
+
+            <ul>
+                <li>A vocabulary: <strong>RTT, jitter, loss, reorder</strong> — the four numbers every later technique exists to defeat.</li>
+                <li>A mental model of <strong>tick rate vs frame rate</strong>, and the fact that the gap between them is where rendering smoothness lives.</li>
+                <li>The <strong>bandwidth tradeoff equation</strong> — every later tier earns back budget by attacking one of its multipliers.</li>
+                <li>Hands-on familiarity with the <code>FakeNetwork</code> + <code>SeededRng</code> helpers. Every later demo in this track uses these two objects.</li>
+                <li>A capstone ping-pong demo proving the simulator is <strong>deterministic</strong> — same seed, same actions, same outcome.</li>
+            </ul>
+
+            <div class="key-point">
+                <strong>💡 What you DON'T have yet (the Intermediate-tier promise):</strong> you've watched
+                messages get delayed and dropped, but you haven't done anything about it. The player on the
+                receiving end still feels the lag. The Intermediate tier introduces the first defensive
+                technique — <strong>client-side prediction</strong> — and the first smoothing technique —
+                <strong>entity interpolation</strong>. Suddenly the same network weather feels playable.
+            </div>
+        </div>
+
+        <!-- Next Steps -->
+        <div class="section" style="text-align: center;">
+            <h2>✅ Beginner Tier Complete</h2>
+            <p style="font-size: 1.1em; margin: 24px 0;">
+                You can now see network conditions, count their cost, and reproduce them deterministically.
+                That's the substrate every later tier is built on.
+            </p>
+            <a href="intermediate.html" class="nav-button" style="font-size: 1.2em; padding: 20px 40px;">
+                Continue to Intermediate →
+            </a>
+            <p style="margin-top: 20px;"><em>Intermediate isn't written yet — coming in the next phase. Track your progress on the <a href="index.html">track index</a>.</em></p>
+        </div>
+    </div>
+
+    <!-- Scroll to Top Button -->
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <!-- Load order matters: shared utils first, then netcode helpers
+         (FakeNetwork + SeededRng), then this tier's demos. The demos file
+         depends on `Vector2D` from shared, plus `FakeNetwork` and `SeededRng`
+         on window from net/. -->
+    <script src="../shared/utils.js"></script>
+    <script src="../shared/code-tabs.js"></script>
+    <script src="net/seeded-rng.js"></script>
+    <script src="net/fake-network.js"></script>
+    <script src="beginner-demos.js"></script>
+
+    <!-- Shared export-demo injector. Looks for <details data-demo-id="...">
+         and attaches a 📋 Export button. No netcode/bundles-beginner.js yet,
+         and the <details> blocks above intentionally omit data-demo-id —
+         same opt-out approach the racing-sim beginner tier used. The injector
+         finds zero registered demos and stays silent. -->
+    <script src="../shared/export-demo.js"></script>
+</body>
+</html>

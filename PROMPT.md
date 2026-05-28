@@ -465,3 +465,73 @@ memory log + PROMPT append.
 
 **Tier-by-tier landing follows on the racing-sim cadence: Beginner →
 Intermediate → Advanced → Expert → Simulations, one commit each.**
+
+# 2026-05-28 (pt.2) — Netcode: Beginner tier (Hello, Network)
+
+"Continue with the next iteration." — second iteration on netcode,
+following the racing-sim cadence (one tier per commit).
+
+## Shipped this commit
+
+```
+netcode/
+  beginner.html         ← 6 sections + recap (intro, anatomy, packet
+                          lane, tick vs frame, bandwidth, ping-pong)
+  beginner-demos.js     ← 4 IIFE demos + NET_COLORS palette + fmt helpers
+```
+
+Additive helper tweak — `netcode/net/fake-network.js` now stamps each
+in-flight packet with `sentAt`, `delay`, and `reordered: bool` so demos
+can render progress along a lane. Pure addition; scaffold self-check
+still passes.
+
+`netcode/index.html` — Beginner tier card flipped to `.active + .ready
++ "Ready"`. Landing roadmap intro updated.
+
+Root `index.html` — "(coming soon)" marker removed from netcode
+Beginner TOC sublink.
+
+## The four demos
+
+1. **packetLaneDemo** — animated CLIENT→SERVER lane, auto-sending. Each
+   in-flight packet drawn as a labelled circle at progress = (now−sentAt)/
+   delay. Sliders: RTT/jitter/loss/reorder. Lost packets shown as faded
+   red ✕; reordered packets tinted purple with a halo.
+2. **tickVsFrameDemo** — orange SIM ball on tick rail, cyan REN ball on
+   render rail. Toggle for interp between ticks. Slider for tick rate
+   (2–60 Hz). Live gap |sim−ren| in the info bar.
+3. **bandwidthCalcDemo** — DOM-driven. Four sliders for the tick × players
+   × entities × bytes equation. Four shipped-game presets. Logarithmic
+   coloured meter banded by network class.
+4. **pingPongDemo** (capstone) — two clients exchanging messages through
+   one FakeNetwork. Send / burst buttons. Seed input + Reset = visible
+   proof of determinism.
+
+## Verification
+
+`python3 -m http.server 8765` via existing launch.json.
+
+- netcode/index.html scaffold self-check still 3 green ticks (additive
+  FakeNetwork tweak non-breaking).
+- netcode/beginner.html loads with zero console errors.
+- All 3 canvases render, all 32 control elements wired.
+- Bandwidth: defaults give 30.7 kbps; Valorant preset gives 122.9 kbps
+  ("Fine for mobile data and ADSL"); bytes-slider drag to 128 grows to
+  655.4 kbps with live label update.
+- Ping-pong: seed=42 + burst A + burst B → 10 sent, 9 delivered, 1
+  dropped, 0 reordered. Reset and repeat → bit-identical stats. **The
+  Expert tier's determinism story already provable by hand.**
+- Receive log shows out-of-order arrivals from jitter alone (5 sends in
+  ~1ms get spread by ±20 ms jitter), proving "burst send + jitter
+  shuffles order even at 0% reorder" — a teaching point worth surfacing
+  in the Intermediate tier.
+- Root index Beginner sublink: "(coming soon)" gone.
+- expert.html#network unchanged — section + canvas + anchor still work.
+
+## Next
+
+- **Intermediate tier — Authority & Movement.** Authoritative server vs
+  P2P; naive (input → wait → move) → client-side prediction → entity
+  interpolation for remote players; snap vs smooth correction. The
+  tick-vs-frame demo from THIS tier is the template for Intermediate's
+  entity-interpolation demo (same toggle, different data source).

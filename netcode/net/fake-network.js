@@ -207,12 +207,18 @@ class FakeNetwork {
         // Clamp negative deliver times to "right now" so a huge
         // negative jitter can't make a packet arrive in the past.
         const delay = Math.max(0, oneWay + jitter + reorderBoost);
-        const deliverAt = performance.now() + delay;
+        const sentAt = performance.now();
+        const deliverAt = sentAt + delay;
 
         // 4. Insert into the sorted in-flight queue.
         //    Search from the back: typical deliver-times trend forward
         //    in time so most inserts land near the tail.
-        const pkt = { from, to, msg, deliverAt };
+        //
+        //    `sentAt` + `delay` are kept so demos can render each
+        //    packet's progress along a lane as (now-sentAt)/delay.
+        //    `reordered` flags packets that got the extra reorder
+        //    boost so the renderer can highlight them.
+        const pkt = { from, to, msg, sentAt, deliverAt, delay, reordered: reorderBoost > 0 };
         let i = this.inFlight.length;
         while (i > 0 && this.inFlight[i - 1].deliverAt > deliverAt) i--;
         this.inFlight.splice(i, 0, pkt);

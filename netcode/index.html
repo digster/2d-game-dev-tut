@@ -122,8 +122,7 @@
         <div class="nav">
             <a href="../index.html" class="nav-button">← Home</a>
             <a href="index.html" class="nav-button active">Track Index</a>
-            <!-- Beginner tier doesn't exist yet — link kept for future. -->
-            <a href="beginner.html" class="nav-button locked-link" aria-disabled="true">Beginner →</a>
+            <a href="beginner.html" class="nav-button">Beginner →</a>
         </div>
 
         <!-- What we're building -->
@@ -163,17 +162,17 @@
             <p>
                 The track is split across five tiers, each in its own file so it stays focused and quick to load.
                 Each tier ends with a playable mini-project that becomes the foundation of the next tier.
-                This first commit ships the <strong>scaffold</strong> — the landing page plus the shared
-                <code>FakeNetwork</code> + <code>SeededRng</code> helpers — so the tiers can land one at a time.
+                The <strong>Beginner tier is ready</strong>; the next four tiers land one at a time on the
+                established per-tier-per-commit cadence.
             </p>
 
             <div class="roadmap">
 
                 <!-- Beginner tier card -->
-                <a class="tier-card locked">
+                <a href="beginner.html" class="tier-card active">
                     <div class="tier-card-header">
                         <span class="level-indicator level-beginner">BEGINNER</span>
-                        <span class="tier-card-status">Coming soon</span>
+                        <span class="tier-card-status ready">Ready</span>
                     </div>
                     <div class="tier-card-title">Hello, Network</div>
                     <p>What netcode actually is. The simulated-network simulator. Tick rate vs frame rate. Snapshots vs inputs.</p>
@@ -182,7 +181,7 @@
                         <li>Bandwidth tradeoff (tick × players × bytes)</li>
                         <li>Tick rate vs frame rate (fixed-step <code>Simulation</code>)</li>
                         <li>The <code>FakeNetwork</code> API + sliders</li>
-                        <li><em>Mini-project:</em> two-pane ping demo with deliberately awful network weather</li>
+                        <li><em>Mini-project:</em> ping-pong between two clients with deterministic seed</li>
                     </ul>
                 </a>
 
