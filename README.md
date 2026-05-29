@@ -131,9 +131,8 @@ per-tier file structure mirroring the Fundamentals layout.
   checking the line is drivable).** Demo IDs reserve
   the `rac_` namespace for the future per-tier bundles file. Tracks the
   established "one tier per commit" cadence used by voxel-worlds.
-- `netcode/` — **scaffold + Beginner + Intermediate + Advanced + Expert
-  tiers shipped — Simulations to follow.** The project's first *systems*
-  track (cross-cutting,
+- `netcode/` — **fully shipped — all 5 tiers, 23 demos.** The project's
+  first *systems* track (cross-cutting,
   not genre-specific): teach the math and machinery of online multiplayer
   entirely over a **simulated network** with zero backend. All demos run
   inside one browser tab; two canvases play the role of "server" and
@@ -235,10 +234,35 @@ per-tier file structure mirroring the Fundamentals layout.
   radius the readout shows "84% omitted, 9/18 cells scanned vs naive
   O(100)". Plus an HTML-only "Anti-cheat primer" section covering
   server authority, sanity bounds, and replay verification as the
-  three legs every shipped multiplayer game needs. Demo IDs reserve
-  the `net_` namespace for the future per-tier bundles file. Tracks
-  the established "one tier per commit" cadence used by racing-sim
-  and voxel-worlds.
+  three legs every shipped multiplayer game needs.
+  **Simulations tier (Everything On — 5 demos, track capstone):** a
+  `masterArenaDemo` putting the entire client-side stack on one
+  2-player scene with five independent toggles (prediction,
+  reconciliation, interpolation, lag-comp, smoothing) plus All-on /
+  All-off buttons — uses the CORRECT fixed-step architecture (client
+  predicts in fixed `PRED_DT` steps; server is input-driven, consuming
+  buffered inputs in tick order and lagging naturally by network delay)
+  so reconciliation is exact: toggling reconcile drives the avg
+  correction from ~6 px to ~1 px under sustained motion; a
+  `budgetCalcDemo` folding every tier's bandwidth reductions into one
+  calculator (base `tick × players × entities × bytes`, then ×delta
+  ×quant ×AoI multipliers) — a 32-player example collapses 737 kbps to
+  18 kbps (40×) with all three on; a `lockstepVsRollbackDemo` running
+  the two determinism architectures side by side on the same scenario
+  (lockstep stalls until the remote input arrives → RTT/2 input delay,
+  0 corrections; rollback predicts + corrects → 0 input delay, N
+  corrections); an `aoiHeatmapDemo` colouring a spatial grid by how
+  many players' AoI circles overlap each cell, with a clustering slider
+  that drives the peak-cell interest up (the server's worst case = a
+  contested objective); and a `replayScrubberDemo` that records a
+  deterministic seeded ball sim tick-by-tick, lets you scrub the
+  timeline, and on "Verify replay" re-runs from the seed + tick count
+  to assert a bit-identical reconstruction (max error 0.000000) — the
+  determinism capstone that ties rollback, lockstep, AND anti-cheat
+  replay-verification to a single mechanism. Demo IDs reserve the
+  `net_` namespace for the future per-tier bundles file. The track
+  followed the established "one tier per commit" cadence used by
+  racing-sim and voxel-worlds.
 
 ## Shared assets
 

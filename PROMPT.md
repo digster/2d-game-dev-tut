@@ -759,3 +759,73 @@ not animation.
   calculator, lockstep-vs-rollback comparison panel, AoI heatmap, and
   a full-session replay scrubber. The "everything we've taught,
   composable" finale.
+
+# 2026-05-28 (pt.6) — Netcode: Simulations tier — TRACK COMPLETE
+
+"Okay, continue with the next iteration." — sixth and final netcode
+iteration. (Model switched to opus-4-8 mid-session.)
+
+## Shipped this commit
+
+```
+netcode/
+  simulations.html         ← 6 sections + completion banner
+  simulations-demos.js     ← 5 IIFE demos (capstone re-compositions)
+```
+
+`netcode/index.html` — Simulations card → Ready; **all 5 tiers Ready**;
+landing intro rewritten to "all five complete, 23 demos".
+Root `index.html` — last "(coming soon)" removed; every netcode link live.
+README — netcode marked "fully shipped — all 5 tiers, 23 demos".
+
+## The five demos
+
+1. **masterArenaDemo** — whole client-side stack on one scene, 5
+   independent toggles + All-on/All-off + network sliders.
+2. **budgetCalcDemo** — every tier's reductions folded into one
+   calculator (×delta ×quant ×AoI). 32-player: 737 → 18 kbps (40×).
+3. **lockstepVsRollbackDemo** — the two determinism architectures side
+   by side. Lockstep: RTT/2 delay, 0 corrections. Rollback: 0 delay,
+   N corrections.
+4. **aoiHeatmapDemo** — interest-load heatmap with a clustering slider.
+   100% cluster → peak cell = all N players (server worst case).
+5. **replayScrubberDemo** — record a deterministic seeded sim, scrub it,
+   "Verify replay" asserts bit-identical reconstruction (max error
+   0.000000). The determinism capstone.
+
+## The big bug — reconciliation needs matched timesteps
+
+First cut predicted at FRAME rate but buffered/replayed at INPUT rate →
+mismatch → reconcile didn't reduce corrections (avg ~6 px both on and
+off; one run showed reconcile WORSE due to reversal transients). Fixed
+with the correct architecture: client predicts in fixed PRED_DT steps;
+server is input-driven (consume buffered inputs in tick order, lag by
+network delay); reconcile-replay uses the same PRED_DT. After fix:
+avg correction 6 → 1 px when toggling reconcile on. Loss/reorder handled
+with a +3-tick gap tolerance before declaring an input lost. Also fixed
+a smoothing no-op (handler hard-snapped then frame loop lerped to the
+same value) by routing the reconciled target through smoothTarget.
+
+## Verification
+
+`python3 -m http.server 8765` (cache-bust `?v=3` + `?cb=Date.now()`).
+- simulations.html: zero console errors, 4 canvases + 51 controls.
+- Reconcile A/B: predict-only avg 6/max 9; +reconcile avg 1/max 5.
+  All-on: local gap 0, avg correction 0.
+- Budget: 737 → 18 kbps (40×).
+- Lockstep vs rollback: 80 ms/0 corr vs 0 ms/84 corr.
+- Heatmap clustered: peak cell 40 players.
+- Replay verify: bit-identical over 599 ticks, max error 0.000000.
+- Screenshot: master arena renders both panels + full HUD.
+
+## Track total
+
+5 tiers, 23 demos, zero backend. From "what is RTT" to "prove a session
+replays bit-identically". Determinism (scaffold SeededRng) was the
+thread connecting FakeNetwork reproducibility, the rollback ring buffer,
+and the replay verifier. Track COMPLETE.
+
+## Next
+
+Nothing on this track. Deferred: per-tier bundles-*.js Export files.
+Future tracks: platformer/, roguelike/, or another systems track.

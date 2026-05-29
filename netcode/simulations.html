@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulations — Netcode &amp; Multiplayer Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+
+    <style>
+        .input-pad {
+            display: inline-grid;
+            grid-template-columns: 38px 38px 38px;
+            grid-template-rows: 38px 38px;
+            gap: 4px; margin: 4px 0 8px 0;
+        }
+        .input-pad button {
+            background: #1a1f3a; color: #4fc3f7;
+            border: 1px solid #2d3354; border-radius: 4px;
+            cursor: pointer; font-family: monospace; font-size: 18px;
+            user-select: none; -webkit-user-select: none;
+        }
+        .input-pad button:active { background: #2d3354; color: #ffa726; }
+        .input-pad .pad-up    { grid-column: 2; grid-row: 1; }
+        .input-pad .pad-left  { grid-column: 1; grid-row: 2; }
+        .input-pad .pad-down  { grid-column: 2; grid-row: 2; }
+        .input-pad .pad-right { grid-column: 3; grid-row: 2; }
+        .input-pad-hint {
+            color: #9e9e9e; font-size: 0.85em;
+            display: inline-block; margin-left: 12px; vertical-align: middle;
+        }
+        .toggle-row {
+            display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 8px 0;
+        }
+        .toggle-row label { color: #c9d1d9; display: inline-flex; align-items: center; gap: 6px; }
+        /* Budget calculator */
+        .bg-grid {
+            display: grid; grid-template-columns: 150px 1fr 80px;
+            gap: 12px 16px; align-items: center; margin: 18px 0;
+        }
+        .bg-grid label { color: #c9d1d9; font-size: 0.95em; }
+        .bg-grid input[type="range"] { width: 100%; }
+        .bg-grid .bg-num { color: #4fc3f7; font-family: monospace; text-align: right; font-size: 0.95em; }
+        .bg-bar-row {
+            display: grid; grid-template-columns: 60px 1fr 140px;
+            gap: 12px; align-items: center; margin: 6px 0;
+        }
+        .bg-bar-row .bg-label { color: #c9d1d9; font-family: monospace; }
+        .bg-bar-row .bg-readout { color: #ffa726; font-family: monospace; text-align: right; }
+        .bg-bar-track { background: #161b2c; height: 22px; border: 1px solid #2e3548; border-radius: 4px; overflow: hidden; }
+        .bg-bar-fill { height: 100%; transition: width 0.2s, background-color 0.2s; }
+        .bg-bar-fill.base { background: #ef5350; }
+        .bg-bar-fill.final { background: #66bb6a; }
+        .bg-breakdown {
+            font-family: monospace; font-size: 0.9em; color: #c9d1d9;
+            background: #161b2c; border-left: 3px solid #4fc3f7;
+            padding: 12px 14px; border-radius: 4px; margin: 12px 0; line-height: 1.6;
+        }
+        /* Completion banner */
+        .completion-banner {
+            background: linear-gradient(135deg, #1e3a2f 0%, #1a1f3a 100%);
+            border: 2px solid #66bb6a; border-radius: 12px;
+            padding: 28px; margin: 24px 0; text-align: center;
+        }
+        .completion-banner h2 { color: #66bb6a; margin-top: 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🛰️ Simulations — Everything On</h1>
+        <p class="subtitle">The capstone. Every technique from every tier, composable on one scene — plus the budget calculator, the architecture comparison, the interest heatmap, and the replay scrubber that ties the whole track together.</p>
+
+        <!-- Navigation -->
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="expert.html" class="nav-button">← Expert</a>
+            <a href="simulations.html" class="nav-button active">Simulations</a>
+        </div>
+
+        <!-- Table of Contents -->
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#intro">The whole stack, composable</a></li>
+                <li><a href="#master">Master arena — every technique toggleable</a></li>
+                <li><a href="#budget">Bandwidth budget calculator</a></li>
+                <li><a href="#lvr">Lockstep vs rollback, side by side</a></li>
+                <li><a href="#heatmap">Area-of-interest heatmap</a></li>
+                <li><a href="#replay">Replay scrubber — the determinism payoff</a></li>
+            </ul>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- INTRO -->
+        <!-- ============================================ -->
+        <div id="intro" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>🎛️ The whole stack, composable</h2>
+
+            <p>
+                Five tiers built a vocabulary: latency / jitter / loss / reorder (Beginner);
+                prediction / interpolation / smoothing (Intermediate); reconciliation / lag-comp /
+                delta / quantization (Advanced); determinism / lockstep / rollback / AoI (Expert).
+                Every technique was shown in isolation so you could see exactly what it fixed.
+            </p>
+            <p>
+                This final tier puts them together. Nothing new is taught — instead you get to feel
+                the techniques <em>stack</em>, trade off, and combine. There's a master arena where
+                every client-side technique is an independent toggle; a bandwidth calculator that
+                folds every tier's reductions into one number; a lockstep-vs-rollback comparison; an
+                interest-management heatmap; and a replay scrubber that makes the track's founding
+                assumption — determinism — tangible.
+            </p>
+
+            <div class="key-point">
+                <strong>💡 This is also where the netcode track ends.</strong> By the bottom of this
+                page you'll have seen the full arc — from "what is RTT" to "record a session and
+                prove it replays bit-identically". Every demo on this page is a recomposition of
+                code you've already met.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- MASTER ARENA -->
+        <!-- ============================================ -->
+        <div id="master" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>🏟️ Master arena — every technique toggleable</h2>
+
+            <p>
+                SERVER + CLIENT panels. You drive the cyan local player; a purple bot orbits. Five
+                independent toggles for the entire client-side stack. The "All on" / "All off"
+                buttons let you A/B the extremes instantly. Crank the network sliders to nightmare
+                conditions and watch the stack hold the scene together.
+            </p>
+
+            <div class="diagram">
+                <canvas id="masterCanvas" width="780" height="280"></canvas>
+            </div>
+
+            <div class="controls">
+                <div class="input-pad" id="maPad">
+                    <button class="pad-up"    id="maUp">↑</button>
+                    <button class="pad-left"  id="maLeft">←</button>
+                    <button class="pad-down"  id="maDown">↓</button>
+                    <button class="pad-right" id="maRight">→</button>
+                </div>
+                <span class="input-pad-hint">or click the canvas and use WASD / arrows</span>
+            </div>
+
+            <div class="controls">
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    RTT
+                    <input type="range" id="maRtt" min="0" max="500" value="220" style="width:150px;">
+                    <span id="maRttVal" style="font-family:monospace; color:#4fc3f7; min-width:60px;">220 ms</span>
+                </label>
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    Jitter
+                    <input type="range" id="maJitter" min="0" max="100" value="40" style="width:120px;">
+                    <span id="maJitterVal" style="font-family:monospace; color:#4fc3f7; min-width:60px;">±40 ms</span>
+                </label>
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    Loss
+                    <input type="range" id="maLoss" min="0" max="40" value="5" style="width:100px;">
+                    <span id="maLossVal" style="font-family:monospace; color:#4fc3f7; min-width:40px;">5 %</span>
+                </label>
+                <button id="maReset">↻ Reset</button>
+            </div>
+
+            <div class="toggle-row">
+                <label><input type="checkbox" id="maPredict" checked> Prediction</label>
+                <label><input type="checkbox" id="maReconcile" checked> Reconciliation</label>
+                <label><input type="checkbox" id="maInterp" checked> Interpolation</label>
+                <label><input type="checkbox" id="maLagComp" checked> Lag-comp</label>
+                <label><input type="checkbox" id="maSmooth" checked> Smoothing</label>
+                <button id="maAllOn">All on</button>
+                <button id="maAllOff">All off</button>
+            </div>
+
+            <div id="maInfo" class="info-display" style="font-family:monospace;">starting up…</div>
+
+            <div class="key-point">
+                <strong>💡 The instructive sequence:</strong> hit "All off" — the scene is barely
+                playable at RTT 220. Now turn techniques on one at a time: <em>Prediction</em>
+                (local player instant but snappy), <em>+ Reconciliation</em> (snaps gone),
+                <em>+ Interpolation</em> (bot smooth), <em>+ Smoothing</em> (any residual local
+                corrections melt away). The "local gap" stat in the HUD drops toward zero as the
+                stack fills in. That convergence is six tiers of work in one number.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- BUDGET CALCULATOR -->
+        <!-- ============================================ -->
+        <div id="budget" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>🧮 Bandwidth budget calculator</h2>
+
+            <p>
+                Every tier attacked one multiplier of the Beginner-tier bandwidth equation. This
+                calculator folds them all together. Start from
+                <code>tick × players × entities × bytes</code>, then toggle the three reductions —
+                delta compression, quantization, area-of-interest — and watch the per-client
+                bandwidth collapse.
+            </p>
+
+            <div id="budgetCalc">
+                <div class="bg-grid">
+                    <label for="bgTick">Tick rate</label>
+                    <input type="range" id="bgTick" min="5" max="64" value="20">
+                    <span class="bg-num" id="bgTickVal">20 Hz</span>
+
+                    <label for="bgPlayers">Players</label>
+                    <input type="range" id="bgPlayers" min="2" max="100" value="32">
+                    <span class="bg-num" id="bgPlayersVal">32</span>
+
+                    <label for="bgEntities">Entities / player</label>
+                    <input type="range" id="bgEntities" min="1" max="20" value="3">
+                    <span class="bg-num" id="bgEntitiesVal">3</span>
+
+                    <label for="bgBytes">Bytes / entity</label>
+                    <input type="range" id="bgBytes" min="4" max="96" value="48">
+                    <span class="bg-num" id="bgBytesVal">48 B</span>
+                </div>
+
+                <div class="toggle-row">
+                    <label><input type="checkbox" id="bgDelta"> Delta compression (×0.25)</label>
+                    <label><input type="checkbox" id="bgQuant"> Quantization (×0.5)</label>
+                    <label><input type="checkbox" id="bgAoi"> Area-of-interest (×0.2)</label>
+                </div>
+
+                <div class="bg-bar-row">
+                    <span class="bg-label">Base</span>
+                    <div class="bg-bar-track"><div class="bg-bar-fill base" id="bgBaseBar" style="width:100%;"></div></div>
+                    <span class="bg-readout" id="bgBaseOut">—</span>
+                </div>
+                <div class="bg-bar-row">
+                    <span class="bg-label">Final</span>
+                    <div class="bg-bar-track"><div class="bg-bar-fill final" id="bgFinalBar" style="width:100%;"></div></div>
+                    <span class="bg-readout" id="bgFinalOut">—</span>
+                </div>
+
+                <div class="bg-breakdown" id="bgBreakdown">—</div>
+                <div id="bgVerdict" class="info-display">—</div>
+            </div>
+
+            <div class="concept-box">
+                <h4>🔍 What to try</h4>
+                <ol>
+                    <li>Set a 64-player battle royale: tick 20, players 64 (max slider 100), entities 3, bytes 48. The base is brutal.</li>
+                    <li>Turn on all three reductions. The combined factor is 0.25 × 0.5 × 0.2 = <strong>0.025</strong> — a 40× reduction. That's the difference between unshippable and mobile-friendly.</li>
+                    <li>Notice AoI is the single biggest lever (×0.2) because it attacks the <code>players</code> multiplier, which dominates at scale.</li>
+                </ol>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- LOCKSTEP VS ROLLBACK -->
+        <!-- ============================================ -->
+        <div id="lvr" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>⚖️ Lockstep vs rollback, side by side</h2>
+
+            <p>
+                The two determinism architectures from the Expert tier, running the same scenario
+                so you can compare them directly. A remote target jumps around; both panels track it,
+                with the target's "input" arriving over a <code>FakeNetwork</code> at the RTT you set.
+            </p>
+            <ul>
+                <li><strong>LOCKSTEP</strong> (green) can't advance a tick until that tick's remote input has <em>arrived</em>. The whole scene runs RTT/2 in the past — smooth and consistent, but laggy.</li>
+                <li><strong>ROLLBACK</strong> (yellow) predicts the remote input and advances immediately, correcting (snapping) when the prediction was wrong. Always instant, occasionally jumpy.</li>
+            </ul>
+
+            <div class="diagram">
+                <canvas id="lvrCanvas" width="780" height="280"></canvas>
+            </div>
+            <div class="controls">
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    RTT
+                    <input type="range" id="lvrRtt" min="0" max="400" value="160" style="width:180px;">
+                    <span id="lvrRttVal" style="font-family:monospace; color:#4fc3f7; min-width:60px;">160 ms</span>
+                </label>
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    Target change rate
+                    <input type="range" id="lvrChange" min="0.5" max="4" step="0.1" value="1.5" style="width:160px;">
+                    <span id="lvrChangeVal" style="font-family:monospace; color:#4fc3f7; min-width:60px;">1.5 Hz</span>
+                </label>
+                <button id="lvrReset">↻ Reset</button>
+            </div>
+            <div id="lvrInfo" class="info-display" style="font-family:monospace;">starting up…</div>
+
+            <div class="key-point">
+                <strong>💡 The trade in one sentence:</strong> lockstep buys consistency at the cost
+                of input delay; rollback buys zero input delay at the cost of occasional visual
+                corrections. Crank RTT up — lockstep's input delay grows linearly (the dot lags
+                further behind the orange truth), while rollback's correction count grows instead
+                (the dot snaps more often but never lags). Fighting games chose rollback because a
+                player tolerates an occasional snap far better than constant input lag.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- AOI HEATMAP -->
+        <!-- ============================================ -->
+        <div id="heatmap" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>🔥 Area-of-interest heatmap</h2>
+
+            <p>
+                The Expert tier showed AoI filtering from one observer's point of view. At server
+                scale, what matters is the <em>aggregate</em>: how many players are interested in
+                each region of the world. This heatmap colours each grid cell by how many players'
+                AoI circles overlap it. Hot (red) cells are expensive — the server must replicate
+                their entities to many clients at once.
+            </p>
+
+            <div class="diagram">
+                <canvas id="heatmapCanvas" width="780" height="420"></canvas>
+            </div>
+            <div class="controls">
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    Players
+                    <input type="range" id="hmPlayers" min="5" max="120" value="40" style="width:160px;">
+                    <span id="hmPlayersVal" style="font-family:monospace; color:#4fc3f7; min-width:50px;">40</span>
+                </label>
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    AoI radius
+                    <input type="range" id="hmRadius" min="40" max="200" value="100" style="width:160px;">
+                    <span id="hmRadiusVal" style="font-family:monospace; color:#4fc3f7; min-width:60px;">100 px</span>
+                </label>
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    Clustering
+                    <input type="range" id="hmCluster" min="0" max="100" value="0" style="width:160px;">
+                    <span id="hmClusterVal" style="font-family:monospace; color:#4fc3f7; min-width:50px;">0 %</span>
+                </label>
+            </div>
+            <div id="hmInfo" class="info-display" style="font-family:monospace;">starting up…</div>
+
+            <div class="concept-box">
+                <h4>🔍 What to try</h4>
+                <ol>
+                    <li>Slide clustering to 100%. All players pile into the centre — one blazing-hot region the server must work hardest to serve. This is why "everyone fights over the same objective" is a server's worst case.</li>
+                    <li>Drop clustering to 0%. Players spread out, the heat evens out, peak cell interest drops. Spreading players is itself an interest-management strategy (sharding, zoning).</li>
+                    <li>Cross-link: the grid here is the same spatial structure from <a href="../expert.html#spatial">Spatial Partitioning &amp; QuadTree</a> in the Fundamentals tier, now used to measure load rather than to query.</li>
+                </ol>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- REPLAY SCRUBBER -->
+        <!-- ============================================ -->
+        <div id="replay" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>⏺️ Replay scrubber — the determinism payoff</h2>
+
+            <p>
+                The whole track rests on one assumption introduced in the very first scaffold commit:
+                a deterministic simulation plus a recorded seed (and inputs) can reproduce a session
+                exactly. This demo makes that tangible. Six balls bounce under a seeded, fixed-step
+                simulation; every tick's full state is recorded. Pause and scrub the timeline. Then
+                hit <strong>Verify replay</strong>: the demo re-runs the sim from scratch using only
+                the seed and the tick count, and asserts the reconstruction is <em>bit-identical</em>
+                to what was recorded.
+            </p>
+
+            <div class="diagram">
+                <canvas id="replayCanvas" width="780" height="280"></canvas>
+            </div>
+
+            <div class="controls">
+                <button id="rpRecord">⏸ Pause recording</button>
+                <button id="rpReset">↻ Reset</button>
+                <button id="rpVerify">🔍 Verify replay</button>
+            </div>
+            <div class="controls">
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px; width:100%;">
+                    Timeline
+                    <input type="range" id="rpScrub" min="0" max="1" value="0" style="flex:1; min-width:200px;">
+                    <span id="rpScrubVal" style="font-family:monospace; color:#4fc3f7; min-width:170px;">tick 0 / 0</span>
+                </label>
+            </div>
+            <div id="rpInfo" class="info-display" style="font-family:monospace;">starting up…</div>
+            <div id="rpVerifyOut" class="info-display" style="font-family:monospace; margin-top:8px;"></div>
+
+            <div class="key-point">
+                <strong>💡 Why this is the capstone:</strong> "record seed + inputs, replay
+                bit-identically" is the single mechanism behind <em>three</em> separate techniques
+                you met this track — rollback netcode (re-simulate the recent past), lockstep
+                (every machine replays the same inputs), and anti-cheat replay verification
+                (re-run the match on a trusted server and compare). They're all the same trick,
+                and that trick only works because the simulation is deterministic. The green
+                "bit-identical" message is the foundation the entire track stands on, proven in
+                your browser.
+            </div>
+
+            <details>
+                <summary>📝 Click to see: the record-and-verify pattern in code</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// A deterministic sim: state is a pure function of (seed, tickCount).
+// The ONLY randomness is the seeded initial conditions; after that it's
+// pure integration. So recording the seed + counting ticks is enough to
+// reconstruct ANY frame — that's what rollback, lockstep, and anti-cheat
+// replay all rely on.
+
+const SEED = 777;
+function initBalls(seed) {
+    const rng = new SeededRng(seed);          // same PRNG since the scaffold
+    return Array.from({ length: 6 }, () => ({
+        x: rng.range(30, W - 30), y: rng.range(30, H - 30),
+        vx: rng.range(-90, 90),   vy: rng.range(-90, 90),
+    }));
+}
+function step(balls) {
+    for (const b of balls) {
+        b.x += b.vx * DT; b.y += b.vy * DT;
+        if (b.x &lt; 8 || b.x &gt; W - 8) b.vx = -b.vx;   // bounce
+        if (b.y &lt; 8 || b.y &gt; H - 8) b.vy = -b.vy;
+    }
+}
+
+// VERIFY: re-run from the seed for N ticks, compare to the recorded frame.
+function verify(history) {
+    const targetTick = history.length - 1;
+    const replay = initBalls(SEED);
+    for (let t = 0; t &lt; targetTick; t++) step(replay);
+    // Compare replay to history[targetTick] — must be bit-identical.
+    const recorded = history[targetTick];
+    const maxErr = Math.max(...replay.map((b, i) =&gt;
+        Math.max(Math.abs(b.x - recorded[i].x), Math.abs(b.y - recorded[i].y))));
+    return maxErr === 0;   // true on any deterministic sim
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">type Ball = { x: number; y: number; vx: number; vy: number };
+
+const SEED = 777;
+function initBalls(seed: number): Ball[] {
+    const rng = new SeededRng(seed);
+    return Array.from({ length: 6 }, () =&gt; ({
+        x: rng.range(30, W - 30), y: rng.range(30, H - 30),
+        vx: rng.range(-90, 90),   vy: rng.range(-90, 90),
+    }));
+}
+function step(balls: Ball[]): void {
+    for (const b of balls) {
+        b.x += b.vx * DT; b.y += b.vy * DT;
+        if (b.x &lt; 8 || b.x &gt; W - 8) b.vx = -b.vx;
+        if (b.y &lt; 8 || b.y &gt; H - 8) b.vy = -b.vy;
+    }
+}
+function verify(history: Ball[][]): boolean {
+    const targetTick = history.length - 1;
+    const replay = initBalls(SEED);
+    for (let t = 0; t &lt; targetTick; t++) step(replay);
+    const recorded = history[targetTick];
+    const maxErr = Math.max(...replay.map((b, i) =&gt;
+        Math.max(Math.abs(b.x - recorded[i].x), Math.abs(b.y - recorded[i].y))));
+    return maxErr === 0;
+}</code></pre>
+                </div>
+            </details>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- TRACK COMPLETION -->
+        <!-- ============================================ -->
+        <div class="section">
+            <div class="completion-banner">
+                <h2>🎉 Netcode &amp; Multiplayer Track Complete</h2>
+                <p style="font-size: 1.1em; margin: 20px 0;">
+                    Five tiers, 23 interactive demos, all over a simulated network with zero backend.
+                    From <strong>"what is RTT"</strong> to <strong>"record a session and prove it
+                    replays bit-identically"</strong> — the full arc of making a 2D multiplayer game
+                    feel solid across the Internet's hostile reality.
+                </p>
+                <p style="color:#c9d1d9; margin: 16px 0;">
+                    Beginner (Hello, Network) · Intermediate (Authority &amp; Movement) ·
+                    Advanced (Reconciliation, Lag Comp, Compression) ·
+                    Expert (Determinism, Lockstep, Rollback, AoI) · Simulations (Everything On).
+                </p>
+                <a href="index.html" class="nav-button" style="font-size: 1.1em; padding: 16px 32px; margin-top: 12px;">
+                    Back to the Track Index
+                </a>
+            </div>
+
+            <div class="key-point">
+                <strong>💡 Where to go next:</strong> the netcode track deliberately reused entities
+                from other tracks — the rollback demo borrows the
+                <a href="../racing-sim/index.html">racing-sim car</a>, and several demos lean on the
+                <a href="../expert.html#spatial">Fundamentals spatial structures</a> and
+                <a href="../intermediate.html#lerp">interpolation</a>. To apply netcode to a real
+                game, pick a genre track and imagine which architecture fits: the
+                <a href="../isometric-strategy/index.html">isometric RTS</a> wants lockstep; the
+                <a href="../racing-sim/index.html">racing sim</a> wants rollback. The techniques
+                here are the bridge.
+            </div>
+        </div>
+    </div>
+
+    <!-- Scroll to Top Button -->
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <!-- Load order. Versioned script tag dodges http.server's aggressive cache. -->
+    <script src="../shared/utils.js"></script>
+    <script src="../shared/code-tabs.js"></script>
+    <script src="net/seeded-rng.js"></script>
+    <script src="net/fake-network.js"></script>
+    <script src="simulations-demos.js?v=3"></script>
+    <script src="../shared/export-demo.js"></script>
+</body>
+</html>
