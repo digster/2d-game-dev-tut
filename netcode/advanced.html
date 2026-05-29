@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced — Netcode &amp; Multiplayer Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+
+    <!-- Tier-local styles: input button pad (carried from Intermediate),
+         compact toggle row, delta-bandwidth bar chart, quantization readout. -->
+    <style>
+        .input-pad {
+            display: inline-grid;
+            grid-template-columns: 38px 38px 38px;
+            grid-template-rows: 38px 38px;
+            gap: 4px;
+            margin: 4px 0 8px 0;
+        }
+        .input-pad button {
+            background: #1a1f3a; color: #4fc3f7;
+            border: 1px solid #2d3354; border-radius: 4px;
+            cursor: pointer; font-family: monospace; font-size: 18px;
+            user-select: none; -webkit-user-select: none;
+        }
+        .input-pad button:active { background: #2d3354; color: #ffa726; }
+        .input-pad .pad-up    { grid-column: 2; grid-row: 1; }
+        .input-pad .pad-left  { grid-column: 1; grid-row: 2; }
+        .input-pad .pad-down  { grid-column: 2; grid-row: 2; }
+        .input-pad .pad-right { grid-column: 3; grid-row: 2; }
+        .input-pad-hint {
+            color: #9e9e9e; font-size: 0.85em;
+            display: inline-block; margin-left: 12px; vertical-align: middle;
+        }
+        .toggle-row {
+            display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 8px 0;
+        }
+        .toggle-row label {
+            color: #c9d1d9; display: inline-flex; align-items: center; gap: 6px;
+        }
+        /* Delta bandwidth comparison */
+        .ds-grid {
+            display: grid;
+            grid-template-columns: 140px 1fr 80px;
+            gap: 12px 16px;
+            align-items: center;
+            margin: 18px 0;
+        }
+        .ds-grid label { color: #c9d1d9; font-size: 0.95em; }
+        .ds-grid input[type="range"] { width: 100%; }
+        .ds-grid .ds-num {
+            color: #4fc3f7;
+            font-family: monospace;
+            text-align: right;
+            font-size: 0.95em;
+        }
+        .ds-bar-row {
+            display: grid;
+            grid-template-columns: 80px 1fr 140px;
+            gap: 12px;
+            align-items: center;
+            margin: 6px 0;
+        }
+        .ds-bar-row .ds-label { color: #c9d1d9; font-family: monospace; }
+        .ds-bar-row .ds-readout { color: #ffa726; font-family: monospace; text-align: right; }
+        .ds-bar-track {
+            background: #161b2c;
+            height: 22px;
+            border: 1px solid #2e3548;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .ds-bar-fill {
+            height: 100%;
+            transition: width 0.2s, background-color 0.2s;
+        }
+        .ds-bar-fill.full  { background: #ef5350; }
+        .ds-bar-fill.delta { background: #66bb6a; }
+        .ds-savings {
+            color: #66bb6a;
+            font-family: monospace;
+            font-weight: bold;
+            margin: 12px 0 4px 0;
+            text-align: center;
+        }
+        /* Quantization readout */
+        .qz-table {
+            display: grid;
+            grid-template-columns: 200px 1fr;
+            gap: 6px 16px;
+            margin: 14px 0;
+            font-family: monospace;
+            color: #c9d1d9;
+        }
+        .qz-table .qz-key   { color: #9e9e9e; }
+        .qz-table .qz-value { color: #ffa726; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🛰️ Advanced — Reconciliation, Lag Comp, Compression</h1>
+        <p class="subtitle">Hide every visible artefact the Intermediate tier left behind, then shrink your bytes-per-second to something a real network can afford.</p>
+
+        <!-- Navigation -->
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="intermediate.html" class="nav-button">← Intermediate</a>
+            <a href="advanced.html" class="nav-button active">Advanced</a>
+            <a href="expert.html" class="nav-button">Expert →</a>
+        </div>
+
+        <!-- Table of Contents -->
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#intro">From "playable" to "polished"</a></li>
+                <li><a href="#reconciliation">Server reconciliation — replay buffered inputs</a></li>
+                <li><a href="#lag-comp">Lag compensation — hit-check in the past</a></li>
+                <li><a href="#delta">Delta compression — only send what changed</a></li>
+                <li><a href="#quantization">Quantization — float → int16</a></li>
+                <li><a href="#mini-project">Mini-Project: 2-player shooter</a></li>
+            </ul>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- INTRO -->
+        <!-- ============================================ -->
+        <div id="intro" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🎯 From "playable" to "polished"</h2>
+
+            <p>
+                The Intermediate tier got you to a game that <em>worked</em> over a bad network:
+                local players felt instant via client-side prediction, remote players moved smoothly
+                via entity interpolation, and corrections were softened via exponential smoothing.
+                But two visible artefacts and one invisible cost still remain:
+            </p>
+
+            <ul>
+                <li><strong>The prediction snap</strong> — every server snapshot teleports your client to the authoritative position. We hid it under smoothing, but it's still there.</li>
+                <li><strong>The "behind reality" deficit</strong> for remote players — you aim at where the target <em>was</em>, not where the server thinks it <em>is</em> right now. Your shots miss things you visibly hit.</li>
+                <li><strong>Bandwidth blows up</strong> with player count. The Beginner-tier bandwidth equation said it would; once you have 16 entities at 30 Hz with float positions, you're a Mbps per client.</li>
+            </ul>
+
+            <p>This tier fixes all three.</p>
+
+            <div class="key-point">
+                <strong>💡 The shape of the techniques:</strong> reconciliation and lag-comp are
+                <em>extensions of authority</em> — both have the server use HISTORICAL state rather
+                than current state in specific situations. Delta and quantization are <em>encoding
+                wins</em> — they shrink each message without changing what's communicated. Together,
+                they're the four techniques that turn a working game into a shippable one.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- RECONCILIATION -->
+        <!-- ============================================ -->
+        <div id="reconciliation" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🔁 Server reconciliation — replay buffered inputs</h2>
+
+            <p>
+                Client-side prediction (Intermediate) was applying input locally and snapping to the
+                server's snapshot when one arrived. The snap was visible because, by the time the
+                snapshot reached the client, the client had already moved further forward in
+                prediction-land than the snapshot reflected.
+            </p>
+            <p>
+                Reconciliation fixes that with three small changes:
+            </p>
+
+            <ol>
+                <li><strong>Tag every input message with a monotonic tick.</strong> The client also keeps a buffer of the inputs it sent.</li>
+                <li><strong>Server snapshots carry an "ack tick"</strong> — the highest input tick the server has processed.</li>
+                <li><strong>On snapshot arrival, the client drops acked inputs from the buffer, snaps to authoritative, then replays the remaining buffered inputs.</strong></li>
+            </ol>
+
+            <p>
+                Result: the client realigns with the server's view of the PAST plus its own
+                predicted-but-not-yet-acked motion. Because the predicted past matched truth, the
+                replay leaves the present unchanged — no visible snap.
+            </p>
+
+            <div class="diagram">
+                <canvas id="reconCanvas" width="780" height="280"></canvas>
+            </div>
+            <div class="controls">
+                <div class="input-pad" id="reconPad">
+                    <button class="pad-up"    id="reconUp">↑</button>
+                    <button class="pad-left"  id="reconLeft">←</button>
+                    <button class="pad-down"  id="reconDown">↓</button>
+                    <button class="pad-right" id="reconRight">→</button>
+                </div>
+                <span class="input-pad-hint">or click the canvas and use WASD / arrows</span>
+            </div>
+            <div class="controls">
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    RTT
+                    <input type="range" id="reconRtt" min="0" max="500" value="200" style="width:160px;">
+                    <span id="reconRttVal" style="font-family:monospace; color:#4fc3f7; min-width:60px;">200 ms</span>
+                </label>
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    Jitter
+                    <input type="range" id="reconJitter" min="0" max="100" value="30" style="width:140px;">
+                    <span id="reconJitterVal" style="font-family:monospace; color:#4fc3f7; min-width:60px;">±30 ms</span>
+                </label>
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    <input type="checkbox" id="reconToggle" checked>
+                    Reconcile (replay inputs)
+                </label>
+                <button id="reconReset">↻ Reset</button>
+            </div>
+            <div id="reconInfo" class="info-display" style="font-family:monospace;">starting up…</div>
+
+            <details>
+                <summary>📝 Click to see: the reconciliation loop in code</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// CLIENT — on every frame, predict locally and buffer the input.
+let nextTick = 1;
+const inputBuffer = [];   // {tick, ax, ay, dt}
+
+function clientFrame(dt, input) {
+    // 1. Predict — apply input + integrate against local state.
+    applyInput(clientPlayer, input);
+    integrate(clientPlayer, dt);
+
+    // 2. Send input to server, tagged with a tick we control.
+    const tick = nextTick++;
+    inputBuffer.push({ tick, ax: input.ax, ay: input.ay, dt });
+    sendToServer({ kind: 'input', tick, ax: input.ax, ay: input.ay });
+}
+
+// CLIENT — on snapshot arrival.
+function onSnapshot(snap, ackTick) {
+    // 3. Drop acked inputs — the server has already accounted for them.
+    while (inputBuffer.length &gt; 0 &amp;&amp; inputBuffer[0].tick &lt;= ackTick) {
+        inputBuffer.shift();
+    }
+
+    // 4. Snap to authoritative.
+    clientPlayer.x = snap.x; clientPlayer.y = snap.y;
+    clientPlayer.vx = snap.vx; clientPlayer.vy = snap.vy;
+
+    // 5. Replay every buffered input on top, in order.
+    //    This is "reconciliation" — your prediction realigns with the
+    //    server's view of the past, then carries forward your unacked motion.
+    for (const b of inputBuffer) {
+        applyInput(clientPlayer, { ax: b.ax, ay: b.ay });
+        integrate(clientPlayer, b.dt);
+    }
+}
+
+// SERVER — track the highest input tick ever processed.
+let highestAck = 0;
+function onClientInput(msg) {
+    applyInput(serverPlayer, msg);
+    if (msg.tick &gt; highestAck) highestAck = msg.tick;
+}
+// And ship it with every snapshot:
+function sendSnapshot() {
+    sendToClient({ kind: 'snapshot', snap: snapshot(serverPlayer), ackTick: highestAck });
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">type InputBufEntry = { tick: number; ax: number; ay: number; dt: number };
+type Snapshot       = { x: number; y: number; vx: number; vy: number };
+type ServerMsg      = { kind: 'snapshot'; snap: Snapshot; ackTick: number };
+
+let nextTick = 1;
+const inputBuffer: InputBufEntry[] = [];
+
+function clientFrame(dt: number, input: { ax: number; ay: number }): void {
+    applyInput(clientPlayer, input);
+    integrate(clientPlayer, dt);
+    const tick = nextTick++;
+    inputBuffer.push({ tick, ax: input.ax, ay: input.ay, dt });
+    sendToServer({ kind: 'input', tick, ax: input.ax, ay: input.ay });
+}
+
+function onSnapshot(snap: Snapshot, ackTick: number): void {
+    while (inputBuffer.length &gt; 0 &amp;&amp; inputBuffer[0].tick &lt;= ackTick) {
+        inputBuffer.shift();
+    }
+    Object.assign(clientPlayer, snap);
+    for (const b of inputBuffer) {
+        applyInput(clientPlayer, b);
+        integrate(clientPlayer, b.dt);
+    }
+}</code></pre>
+                </div>
+                <div class="key-point">
+                    <strong>💡 The buffer is your future.</strong> Once you start reconciling, the
+                    in-flight inputs are simply <em>"what will happen next"</em> from the server's
+                    perspective. You can pre-render moves before the server confirms them, and the
+                    moment authoritative truth arrives, your prediction snaps invisibly into place
+                    instead of jumping.
+                </div>
+            </details>
+
+            <div class="key-point">
+                <strong>💡 Watch the "snap distance" stat</strong> in the info bar above. With
+                reconcile OFF (toggle off the checkbox), you see the average snap distance grow with
+                RTT × velocity — every snapshot teleports the player back to where the server thought
+                they were. Turn reconcile ON: the snap distance collapses to ~0 px even at 500 ms RTT.
+                That collapse, in one number, IS the technique.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- LAG COMP -->
+        <!-- ============================================ -->
+        <div id="lag-comp" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>⏪ Lag compensation — hit-check in the past</h2>
+
+            <p>
+                The local player feels instant (prediction + reconciliation). Remote players move
+                smoothly but visibly behind reality (entity interpolation). When the local player
+                shoots a remote, they aim at where they see the remote — which is in the past. By
+                the time the fire message reaches the server, the target has moved. The shot misses
+                the current position, even though it would have hit the position the player saw.
+            </p>
+            <p>
+                <strong>Lag compensation</strong> fixes this on the server side. The server keeps a
+                ring buffer of past world states. The fire message carries the client's believed
+                render-time. The server rewinds to that time, checks the shot, and tells the client
+                whether they hit. The "they aimed at what they saw" promise is kept.
+            </p>
+
+            <p>Below, both panels run the same target on the same orbit. Auto-fire shoots at the
+            target every second. The LEFT panel has no lag-comp — the server validates shots against
+            the target's <em>current</em> position. The RIGHT panel has lag-comp on — the server
+            rewinds to the client's render-time. The faint orange dots on the right panel are the
+            server's stored history (= the rewind buffer).</p>
+
+            <div class="diagram">
+                <canvas id="lagCompCanvas" width="780" height="280"></canvas>
+            </div>
+            <div class="controls">
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    Target speed
+                    <input type="range" id="lcSpeed" min="0.5" max="3" step="0.1" value="1.5" style="width:160px;">
+                    <span id="lcSpeedVal" style="font-family:monospace; color:#4fc3f7; min-width:80px;">1.5 rad/s</span>
+                </label>
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    RTT
+                    <input type="range" id="lcRtt" min="0" max="500" value="200" style="width:160px;">
+                    <span id="lcRttVal" style="font-family:monospace; color:#4fc3f7; min-width:60px;">200 ms</span>
+                </label>
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    <input type="checkbox" id="lcAutoFire" checked>
+                    Auto-fire
+                </label>
+                <button id="lcReset">↻ Reset</button>
+            </div>
+            <div id="lcInfo" class="info-display" style="font-family:monospace;">starting up…</div>
+
+            <div class="concept-box">
+                <h4>🔍 What to try</h4>
+                <ol>
+                    <li>Crank target speed to 3 rad/s and RTT to 400 ms. The LEFT (no-comp) hit rate plummets — the target moves visibly faster than your shot can chase. The RIGHT (lag-comp) hit rate stays near 100%.</li>
+                    <li>The visible "miss" cost on the left is the price of authority being on the wrong side of latency. Lag-comp doesn't change the architecture; it changes <em>when</em> the authority looks.</li>
+                </ol>
+            </div>
+
+            <div class="key-point">
+                <strong>💡 The cost of lag-comp:</strong> the shooter (you) gets fair hits, but the
+                shootee (the remote you hit) sometimes "dies behind cover" — the server validated
+                a shot at where they used to be. There's no free lunch in netcode; lag-comp picks
+                the shooter's side of the fairness trade. Most shipped shooters accept this; some
+                (e.g. Apex Legends, Valorant) tune the rewind window heavily to keep it bounded.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- DELTA -->
+        <!-- ============================================ -->
+        <div id="delta" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>📉 Delta compression — only send what changed</h2>
+
+            <p>
+                The Beginner-tier <a href="beginner.html#bandwidth">bandwidth equation</a> said
+                <code>bytes/sec = tickRate × playerCount × entitiesPerPlayer × bytesPerEntity</code>.
+                That assumes you send every entity, every tick. <strong>Delta compression</strong>
+                says: only send entities whose state actually changed since the last snapshot the
+                client acknowledged. In a world where most entities are stationary most of the
+                time, that's a 5–100× win.
+            </p>
+
+            <div id="deltaCalc">
+                <div class="ds-grid">
+                    <label for="dsEntities">Entities</label>
+                    <input type="range" id="dsEntities" min="2" max="200" value="40">
+                    <span class="ds-num" id="dsEntitiesVal">40</span>
+
+                    <label for="dsTick">Tick rate</label>
+                    <input type="range" id="dsTick" min="5" max="60" value="20">
+                    <span class="ds-num" id="dsTickVal">20 Hz</span>
+
+                    <label for="dsChangeRate">Fraction changing per tick</label>
+                    <input type="range" id="dsChangeRate" min="0" max="100" value="20">
+                    <span class="ds-num" id="dsChangeRateVal">20 %</span>
+                </div>
+
+                <div class="ds-bar-row">
+                    <span class="ds-label">Full</span>
+                    <div class="ds-bar-track"><div class="ds-bar-fill full" id="dsFullBar" style="width:100%;"></div></div>
+                    <span class="ds-readout" id="dsFullOut">—</span>
+                </div>
+                <div class="ds-bar-row">
+                    <span class="ds-label">Delta</span>
+                    <div class="ds-bar-track"><div class="ds-bar-fill delta" id="dsDeltaBar" style="width:20%;"></div></div>
+                    <span class="ds-readout" id="dsDeltaOut">—</span>
+                </div>
+                <div class="ds-savings" id="dsSavings">— saved</div>
+                <div id="dsVerdict" class="info-display">—</div>
+            </div>
+
+            <div class="concept-box">
+                <h4>🔍 What to try</h4>
+                <ol>
+                    <li>Crank entities to 200, change rate to 5%. Delta saves ~95% — most of the world is idle, you barely need to send anything.</li>
+                    <li>Drop entities to 8, change rate to 80% (a tight arena shooter). Delta is only marginally smaller — most things move.</li>
+                </ol>
+                <p>
+                    Real implementations also encode whether a field within an entity changed
+                    (sub-entity deltas), and combine that with bit-packing for further gains.
+                    Quantization (below) is what makes the "bytes per entity" number small in the
+                    first place.
+                </p>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- QUANTIZATION -->
+        <!-- ============================================ -->
+        <div id="quantization" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>📦 Quantization — float → int16</h2>
+
+            <p>
+                A 32-bit float can express any position with ~7 decimal digits of precision. Your
+                player probably can't see the difference between <code>x=123.0001234</code> and
+                <code>x=123</code>. <strong>Quantization</strong> trades that invisible precision
+                for fewer bytes: map a float in a known range (say ±512 world units) into a
+                <em>k-bit integer</em>, send that, and decode on the other side.
+            </p>
+
+            <p>
+                Below, a position moves on a Lissajous curve. The cyan ball is the float position;
+                the green ball is the position after a round-trip through <code>quantize</code> →
+                <code>dequantize</code>. The red line is the per-frame error. Drop the bit count
+                low enough and the green ball visibly snaps to a grid.
+            </p>
+
+            <div class="diagram">
+                <canvas id="quantCanvas" width="780" height="280"></canvas>
+            </div>
+
+            <div class="controls">
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    Bits per component
+                    <input type="range" id="qzBits" min="4" max="32" value="16" style="width:200px;">
+                    <span id="qzBitsVal" style="font-family:monospace; color:#4fc3f7; min-width:60px;">16 bits</span>
+                </label>
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    World range
+                    <input type="range" id="qzRange" min="64" max="2048" value="512" style="width:160px;">
+                    <span id="qzRangeVal" style="font-family:monospace; color:#4fc3f7; min-width:120px;">±512 world units</span>
+                </label>
+            </div>
+
+            <div class="qz-table">
+                <span class="qz-key">Bytes per position (float32)</span>
+                <span class="qz-value" id="qzBytesFloat">8 B</span>
+                <span class="qz-key">Bytes per position (quantized)</span>
+                <span class="qz-value" id="qzBytesQuant">4 B</span>
+                <span class="qz-key">Savings</span>
+                <span class="qz-value" id="qzSavings">50% smaller</span>
+                <span class="qz-key">Worst-case error</span>
+                <span class="qz-value" id="qzMaxErr">—</span>
+            </div>
+            <div id="qzInfo" class="info-display" style="font-family:monospace;">starting up…</div>
+
+            <details>
+                <summary>📝 Click to see: the quantize / dequantize pair</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Map `value` ∈ [-range, +range] to a `bits`-wide signed integer.
+function quantize(value, range, bits) {
+    const max = (1 &lt;&lt; (bits - 1)) - 1;        // e.g. bits=16 → max=32767
+    const clamped = Math.max(-range, Math.min(range, value));
+    return Math.round(clamped / range * max);
+}
+
+// Reverse — back to the corresponding float in [-range, +range].
+function dequantize(q, range, bits) {
+    const max = (1 &lt;&lt; (bits - 1)) - 1;
+    return q / max * range;
+}
+
+// Worst-case error per dimension is one quantization step.
+// For ±range and bits-wide ints:  step = range / ((1 &lt;&lt; (bits-1)) - 1)
+// A 1024×1024 world at 16 bits ≈ 0.03 world-units of error — invisible.</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function quantize(value: number, range: number, bits: number): number {
+    const max = (1 &lt;&lt; (bits - 1)) - 1;
+    const clamped = Math.max(-range, Math.min(range, value));
+    return Math.round(clamped / range * max);
+}
+function dequantize(q: number, range: number, bits: number): number {
+    const max = (1 &lt;&lt; (bits - 1)) - 1;
+    return q / max * range;
+}</code></pre>
+                </div>
+                <div class="key-point">
+                    <strong>💡 Bit-packing is the next step.</strong> Once you've quantized your
+                    fields to small integers, you can pack multiple fields into one machine word
+                    instead of sending them as separate JSON values. Real libraries (e.g. flatbuffers,
+                    capnproto, or hand-rolled bitstreams) push this aggressively — an entity update
+                    that was 48 bytes of JSON can shrink to 6–8 bytes of packed bits. The
+                    <a href="../expert.html#network">Fundamentals tier's network section</a> hints
+                    at this; production shooters live by it.
+                </div>
+            </details>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- MINI-PROJECT -->
+        <!-- ============================================ -->
+        <div id="mini-project" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🎯 Mini-project — 2-player shooter</h2>
+
+            <p>
+                Capstone time. SERVER + CLIENT panels. You control the cyan local player
+                (WASD/buttons + mouse aim + click or Fire button to shoot). The purple bot orbits
+                and fires back every 2 s. All four Advanced techniques are independent toggles:
+            </p>
+            <ul>
+                <li><strong>Reconcile</strong> — replay buffered inputs after each snapshot.</li>
+                <li><strong>Lag-comp</strong> — server rewinds for hit checks against the bot.</li>
+                <li><strong>Delta</strong> — bot field omitted from snapshots when unchanged.</li>
+                <li><strong>Quant</strong> — positions quantized to 16-bit over ±512 units on the wire.</li>
+            </ul>
+
+            <div class="diagram">
+                <canvas id="shooterCanvas" width="780" height="280"></canvas>
+            </div>
+
+            <div class="controls">
+                <div class="input-pad" id="shPad">
+                    <button class="pad-up"    id="shUp">↑</button>
+                    <button class="pad-left"  id="shLeft">←</button>
+                    <button class="pad-down"  id="shDown">↓</button>
+                    <button class="pad-right" id="shRight">→</button>
+                </div>
+                <span class="input-pad-hint">or click the canvas and use WASD / arrows · click canvas or press Fire to shoot at the cursor</span>
+                <button id="shFire" style="margin-left:14px;">🔫 Fire</button>
+            </div>
+
+            <div class="controls">
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    RTT
+                    <input type="range" id="shRtt" min="0" max="500" value="200" style="width:140px;">
+                    <span id="shRttVal" style="font-family:monospace; color:#4fc3f7; min-width:60px;">200 ms</span>
+                </label>
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    Jitter
+                    <input type="range" id="shJitter" min="0" max="100" value="20" style="width:120px;">
+                    <span id="shJitterVal" style="font-family:monospace; color:#4fc3f7; min-width:60px;">±20 ms</span>
+                </label>
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    Loss
+                    <input type="range" id="shLoss" min="0" max="40" value="2" style="width:100px;">
+                    <span id="shLossVal" style="font-family:monospace; color:#4fc3f7; min-width:40px;">2 %</span>
+                </label>
+                <button id="shReset">↻ Reset</button>
+            </div>
+
+            <div class="toggle-row">
+                <label><input type="checkbox" id="shReconcile" checked> Reconcile</label>
+                <label><input type="checkbox" id="shLagComp" checked> Lag-comp</label>
+                <label><input type="checkbox" id="shDelta" checked> Delta</label>
+                <label><input type="checkbox" id="shQuant" checked> Quant</label>
+            </div>
+
+            <div id="shInfo" class="info-display" style="font-family:monospace;">starting up…</div>
+            <div id="shBandwidth" class="info-display" style="font-family:monospace; margin-top:8px;">bandwidth: —</div>
+
+            <div class="key-point">
+                <strong>💡 Try this:</strong> push RTT to 400, jitter to 60, loss to 10%. Now flip
+                techniques on one at a time and feel the game come back to life:
+                <ul style="margin-top:8px;">
+                    <li><strong>All off</strong> — you can barely play; every shapshot snaps you backwards, your shots miss the bot you can clearly see.</li>
+                    <li><strong>+ Reconcile</strong> — your movement is smooth and stable, no snaps.</li>
+                    <li><strong>+ Lag-comp</strong> — your shots actually hit the bot you aimed at.</li>
+                    <li><strong>+ Delta + Quant</strong> — same game, but bandwidth drops to a fraction. Watch the kbps readout collapse.</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- RECAP -->
+        <!-- ============================================ -->
+        <div class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🧰 Recap — what you've got</h2>
+
+            <ul>
+                <li><strong>Server reconciliation</strong> — the input buffer + replay loop that hides every prediction snap. The Intermediate tier's predictionDemo with smoothing was hiding the snap; this tier ELIMINATES it.</li>
+                <li><strong>Lag compensation</strong> — server-side history rewind so hit-checks happen at the client's render-time. Shooters fire fairly; the trade-off is that the shootee may "die behind cover".</li>
+                <li><strong>Delta compression</strong> — encode only what changed since the last ack. 5–100× wins on idle-heavy worlds; small wins on tight shooter arenas.</li>
+                <li><strong>Quantization</strong> — map float fields into k-bit integers over a known range. Halves to quarters your per-entity wire size for invisible loss of precision.</li>
+                <li>A capstone 2-player shooter where the four techniques compose under harsh network sliders.</li>
+            </ul>
+
+            <div class="key-point">
+                <strong>💡 What you DON'T have yet (the Expert-tier promise):</strong> you're still
+                running a "client predicts, server is authority" model. For games that need PERFECT
+                determinism across machines (RTS, fighters), there are two harder architectures:
+                <strong>lockstep</strong> (everyone runs the same sim from the same inputs — used
+                by Age of Empires; bandwidth = O(players), not O(units)) and <strong>rollback
+                netcode</strong> (predict opponent inputs, rewind + re-simulate when the truth
+                arrives — used by every modern fighter). You also haven't addressed <strong>area-of-interest</strong>
+                — at 64+ players you can't send everyone's state to everyone. All four land in Expert.
+            </div>
+        </div>
+
+        <!-- Next Steps -->
+        <div class="section" style="text-align: center;">
+            <h2>✅ Advanced Tier Complete</h2>
+            <p style="font-size: 1.1em; margin: 24px 0;">
+                You can now eliminate the visible artefacts of prediction, hit fairly across latency,
+                and shrink your bandwidth to something a real network can afford. That's the
+                technique stack most shipped shooters live by.
+            </p>
+            <a href="expert.html" class="nav-button" style="font-size: 1.2em; padding: 20px 40px;">
+                Continue to Expert →
+            </a>
+            <p style="margin-top: 20px;"><em>Expert isn't written yet — coming in the next phase. Track your progress on the <a href="index.html">track index</a>.</em></p>
+        </div>
+    </div>
+
+    <!-- Scroll to Top Button -->
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <!-- Load order: shared utils → code-tabs → netcode helpers → tier demos. -->
+    <script src="../shared/utils.js"></script>
+    <script src="../shared/code-tabs.js"></script>
+    <script src="net/seeded-rng.js"></script>
+    <script src="net/fake-network.js"></script>
+    <script src="advanced-demos.js?v=2"></script>
+
+    <!-- Export-demo injector. No netcode/bundles-advanced.js yet, and the
+         <details> blocks intentionally omit data-demo-id. The injector finds
+         zero registered demos and stays silent. -->
+    <script src="../shared/export-demo.js"></script>
+</body>
+</html>

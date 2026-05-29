@@ -131,8 +131,8 @@ per-tier file structure mirroring the Fundamentals layout.
   checking the line is drivable).** Demo IDs reserve
   the `rac_` namespace for the future per-tier bundles file. Tracks the
   established "one tier per commit" cadence used by voxel-worlds.
-- `netcode/` — **scaffold + Beginner + Intermediate tiers shipped — three
-  more to follow iteratively.** The project's first *systems* track (cross-cutting,
+- `netcode/` — **scaffold + Beginner + Intermediate + Advanced tiers shipped
+  — two more to follow iteratively.** The project's first *systems* track (cross-cutting,
   not genre-specific): teach the math and machinery of online multiplayer
   entirely over a **simulated network** with zero backend. All demos run
   inside one browser tab; two canvases play the role of "server" and
@@ -183,10 +183,30 @@ per-tier file structure mirroring the Fundamentals layout.
   this tier: every in-flight FakeNetwork packet now carries `sentAt`,
   `delay`, and `reordered` metadata so demos can render packet progress
   along a lane (used heavily by the Beginner packet-lane demo already
-  and reused here for the snapshot-arrival visualisation). Demo IDs
-  reserve the `net_` namespace for the future per-tier bundles file.
-  Tracks the established "one tier per commit" cadence used by
-  racing-sim and voxel-worlds.
+  and reused here for the snapshot-arrival visualisation).
+  **Advanced tier (Reconciliation, Lag Comp, Compression — 5 demos):**
+  a `reconciliationDemo` that extends the Intermediate predict-and-snap
+  loop with a client-side input ring buffer + per-snapshot ack-tick +
+  replay (when reconcile is ON, the average snap distance over hundreds
+  of snapshots collapses to ~0 px even at 500 ms RTT — that single
+  number IS the proof); a `lagCompDemo` with two side-by-side panels
+  showing the same auto-fired shots resolved with vs without
+  server-side history rewind (the right panel renders a faint orange
+  trail = the server's stored history = the "rewind buffer"; at default
+  settings the no-comp panel scores 0% hits while the lag-comp panel
+  scores 100%); a `deltaSnapshotDemo` (DOM-driven, no canvas) with
+  sliders for entity count × tick rate × change fraction and a two-bar
+  visualisation of full-snapshot vs delta bandwidth; a `quantizationDemo`
+  with a Lissajous-curve true position vs a quantized position (drop the
+  bit slider below ~10 and the quantized ball visibly snaps to a grid;
+  worst-case error reported live); and a `shooterDemo` capstone — a
+  2-player top-down shooter with WASD/mouse-aim/click-to-fire, an
+  orbiting bot that fires back every 2 s with HP-based respawn on both
+  sides, and four independent toggles for reconciliation / lag-comp /
+  delta / quantization plus network sliders + live bandwidth readout in
+  kbps. Demo IDs reserve the `net_` namespace for the future per-tier
+  bundles file. Tracks the established "one tier per commit" cadence
+  used by racing-sim and voxel-worlds.
 
 ## Shared assets
 

@@ -607,3 +607,73 @@ the technique it's teaching becomes invisible.
   predictionDemo. Lag compensation fixes the "behind reality" cost
   from interpolationDemo. Delta compression + bit-packing attack
   the bandwidth equation from Beginner.
+
+# 2026-05-28 (pt.4) — Netcode: Advanced tier (Reconciliation, Lag Comp, Compression)
+
+"Okay, work on the next iteration." → "Continue." — fourth iteration on
+netcode.
+
+## Shipped this commit
+
+```
+netcode/
+  advanced.html         ← 7 sections + recap
+  advanced-demos.js     ← 5 IIFE demos + quantize/dequantize/estimateBytes
+```
+
+`netcode/index.html` — Advanced tier card → Ready.
+Root `index.html` — "(coming soon)" removed from Advanced sublink.
+
+Small permanent edit: `<script src="advanced-demos.js?v=2"></script>`
+in advanced.html, to dodge `python3 -m http.server`'s aggressive cache
+during verification (see Bugs).
+
+## The five demos
+
+1. **reconciliationDemo** — input ring buffer + replay. Toggle on/off.
+   Avg snap distance over hundreds of snapshots → 0.0 px with reconcile
+   ON, grows with RTT × velocity when OFF. The whole technique is in
+   one displayed number.
+2. **lagCompDemo** — two-panel A/B. LEFT no-lag-comp validates shots
+   at current server time. RIGHT rewinds 2 s of history to client's
+   render-time. Faint orange trail on the right shows the rewind
+   buffer. Auto-fire defaults: 0/124 vs 124/124 hits.
+3. **deltaSnapshotDemo** — DOM-driven bandwidth calculator: full vs
+   delta. Two bars + verdict text bands. Defaults: 80% saved.
+4. **quantizationDemo** — float vs k-bit int round-trip on a Lissajous
+   path. Slider for bits (4-32). Visible quantization grid at low bits.
+   Numeric error readout. Defaults (16 bits): 0.007 wu error.
+5. **shooterDemo** (capstone) — 2-player shooter, WASD + mouse-aim +
+   click-to-fire, bot orbits and fires every 2 s, both sides respawn
+   at 5 HP. Four independent toggles for the four techniques. Live
+   bandwidth kbps readout.
+
+## Bugs caught & fixed mid-iteration
+
+- **shooterDemo HP went negative.** No respawn logic; the bot kept
+  firing forever and `sLocal.health` decremented to -75/5 over time.
+  Fixed by resetting to 5 + random-teleport on `health <= 0`.
+- **Browser cached `advanced-demos.js`.** Edits weren't picked up by
+  preview reload. Verified via `performance.getEntriesByType('resource')`.
+  Fixed by versioning the script src to `?v=2`. Future edits need a
+  version bump.
+- **Stray debug junk in lagCompDemo** (`let shotsL = null;` + a doubled
+  ternary `drawShots` call). Removed before HTML wiring.
+
+## Verification
+
+`python3 -m http.server 8765`.
+- All 4 canvases + 47 controls present; console clean.
+- Every demo's info bar populated with the right teaching number:
+  reconcile avg snap = 0.0 px; lag-comp 100% vs 0%; delta 80% saved;
+  quant 0.007 wu error.
+- HP respawn confirmed (3/5 after 16 s of bot fire).
+- Visual: lag-comp orange history trail renders on the WITH panel.
+- Root index Advanced sublink: marker gone.
+
+## Next
+
+- **Expert tier — Determinism, Lockstep, Rollback, AoI.** The
+  architectural alternatives (lockstep RTS, rollback fighters) plus
+  AoI filtering for big scenes. Cross-track stub demo reuses
+  racing-sim car for the rollback section.

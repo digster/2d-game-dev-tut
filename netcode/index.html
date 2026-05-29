@@ -204,10 +204,10 @@
                 </a>
 
                 <!-- Advanced tier card -->
-                <a class="tier-card locked">
+                <a href="advanced.html" class="tier-card active">
                     <div class="tier-card-header">
                         <span class="level-indicator level-advanced">ADVANCED</span>
-                        <span class="tier-card-status">Coming soon</span>
+                        <span class="tier-card-status ready">Ready</span>
                     </div>
                     <div class="tier-card-title">Reconciliation, Lag Comp, Compression</div>
                     <p>Replay buffered inputs after corrections. Rewind history for hit validation. Pack bits like you mean it.</p>
@@ -215,9 +215,8 @@
                         <li>Server reconciliation (input ring buffer + replay)</li>
                         <li>Lag compensation / hit rewind for hitscan weapons</li>
                         <li>Delta compression (only send what changed)</li>
-                        <li>Bit-packing &amp; quantization (float → int16)</li>
-                        <li>Snapshot interpolation vs inputs-only</li>
-                        <li><em>Mini-project:</em> 2-player top-down shooter with reconciliation snap visible</li>
+                        <li>Quantization (float → int16 over a known range)</li>
+                        <li><em>Mini-project:</em> 2-player shooter with all four techniques togglable</li>
                     </ul>
                 </a>
 
