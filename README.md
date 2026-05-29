@@ -131,8 +131,9 @@ per-tier file structure mirroring the Fundamentals layout.
   checking the line is drivable).** Demo IDs reserve
   the `rac_` namespace for the future per-tier bundles file. Tracks the
   established "one tier per commit" cadence used by voxel-worlds.
-- `netcode/` — **scaffold + Beginner + Intermediate + Advanced tiers shipped
-  — two more to follow iteratively.** The project's first *systems* track (cross-cutting,
+- `netcode/` — **scaffold + Beginner + Intermediate + Advanced + Expert
+  tiers shipped — Simulations to follow.** The project's first *systems*
+  track (cross-cutting,
   not genre-specific): teach the math and machinery of online multiplayer
   entirely over a **simulated network** with zero backend. All demos run
   inside one browser tab; two canvases play the role of "server" and
@@ -204,9 +205,40 @@ per-tier file structure mirroring the Fundamentals layout.
   orbiting bot that fires back every 2 s with HP-based respawn on both
   sides, and four independent toggles for reconciliation / lag-comp /
   delta / quantization plus network sliders + live bandwidth readout in
-  kbps. Demo IDs reserve the `net_` namespace for the future per-tier
-  bundles file. Tracks the established "one tier per commit" cadence
-  used by racing-sim and voxel-worlds.
+  kbps. **Expert tier (Determinism, Lockstep, Rollback, AoI — 4 demos):**
+  a `determinismDemo` with two double-pendulums started from identical
+  conditions EXCEPT for a slider-controlled Δθ₀ perturbation (default
+  1e-7 rad — about a ten-millionth of a degree); after ~10 seconds the
+  two trails completely diverge, making the "1-bit float difference
+  across machines explodes over time" lesson visceral — paired with a
+  collapsible JS/TS code block showing the fixed-point/lookup-table
+  pattern shipped lockstep games use to dodge this entirely; a
+  `lockstepDemo` with 10–400 units flocking to a draggable waypoint
+  and two coloured bars comparing lockstep bandwidth (one waypoint per
+  tick, O(players)) against naive per-entity-snapshot bandwidth (O(N
+  units × tick)) — at default 100 units / 20 Hz the readout shows
+  "lockstep is 67× smaller"; a `rollbackDemo` that finally lands the
+  cross-track stub the original plan promised — two top-down cars
+  (cyan local controlled by WASD/buttons, purple bot driven through a
+  FakeNetwork) using borrowed-from-racing-sim heading-based physics
+  (the same units convention as racing-sim Intermediate's integrator)
+  with a full GGPO-style ring buffer (90 ticks ≈ 1.5 s @ 60 Hz),
+  input prediction ("same as last frame"), and rewind-and-resimulate
+  when the real remote input arrives different from predicted — at
+  default settings the right-side stats panel shows hundreds of
+  rollbacks/minute with avg depth 4–6 ticks (= RTT/sim_dt) and a
+  yellow flash on the bot whenever a rollback fires; an `aoiDemo`
+  with 20–500 wandering entities, a mouse-cursor observer, a
+  slider-controlled AoI radius, and a spatial-grid (cell = radius)
+  overlay highlighting both the queried cells (faint green) and the
+  visible entities (bright green vs dim) — at 100 entities / 120 px
+  radius the readout shows "84% omitted, 9/18 cells scanned vs naive
+  O(100)". Plus an HTML-only "Anti-cheat primer" section covering
+  server authority, sanity bounds, and replay verification as the
+  three legs every shipped multiplayer game needs. Demo IDs reserve
+  the `net_` namespace for the future per-tier bundles file. Tracks
+  the established "one tier per commit" cadence used by racing-sim
+  and voxel-worlds.
 
 ## Shared assets
 

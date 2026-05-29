@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expert — Netcode &amp; Multiplayer Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+
+    <style>
+        .input-pad {
+            display: inline-grid;
+            grid-template-columns: 38px 38px 38px;
+            grid-template-rows: 38px 38px;
+            gap: 4px; margin: 4px 0 8px 0;
+        }
+        .input-pad button {
+            background: #1a1f3a; color: #4fc3f7;
+            border: 1px solid #2d3354; border-radius: 4px;
+            cursor: pointer; font-family: monospace; font-size: 18px;
+            user-select: none; -webkit-user-select: none;
+        }
+        .input-pad button:active { background: #2d3354; color: #ffa726; }
+        .input-pad .pad-up    { grid-column: 2; grid-row: 1; }
+        .input-pad .pad-left  { grid-column: 1; grid-row: 2; }
+        .input-pad .pad-down  { grid-column: 2; grid-row: 2; }
+        .input-pad .pad-right { grid-column: 3; grid-row: 2; }
+        .input-pad-hint {
+            color: #9e9e9e; font-size: 0.85em;
+            display: inline-block; margin-left: 12px; vertical-align: middle;
+        }
+        /* Lockstep bandwidth bars */
+        .ls-bar-row {
+            display: grid; grid-template-columns: 110px 1fr 140px;
+            gap: 12px; align-items: center; margin: 6px 0;
+        }
+        .ls-bar-row .ls-label { color: #c9d1d9; font-family: monospace; }
+        .ls-bar-row .ls-readout { color: #ffa726; font-family: monospace; text-align: right; }
+        .ls-bar-track {
+            background: #161b2c; height: 22px;
+            border: 1px solid #2e3548; border-radius: 4px; overflow: hidden;
+        }
+        .ls-bar-fill { height: 100%; transition: width 0.2s, background-color 0.2s; }
+        .ls-bar-fill.lock { background: #66bb6a; }
+        .ls-bar-fill.naive { background: #ef5350; }
+        .ls-savings {
+            color: #66bb6a; font-family: monospace; font-weight: bold;
+            margin: 12px 0 4px 0; text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🛰️ Expert — Determinism, Lockstep, Rollback, AoI</h1>
+        <p class="subtitle">The architectural alternatives — when client-predicts-server-corrects isn't the right shape — plus the spatial filter that keeps bandwidth bounded at scale.</p>
+
+        <!-- Navigation -->
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="advanced.html" class="nav-button">← Advanced</a>
+            <a href="expert.html" class="nav-button active">Expert</a>
+            <a href="simulations.html" class="nav-button">Simulations →</a>
+        </div>
+
+        <!-- Table of Contents -->
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#intro">Beyond predict-and-correct</a></li>
+                <li><a href="#determinism">Determinism — why floats betray you</a></li>
+                <li><a href="#lockstep">Lockstep — bandwidth = O(players)</a></li>
+                <li><a href="#rollback">Rollback netcode — predict opponent input, rewind on mismatch</a></li>
+                <li><a href="#aoi">Area of interest — spatial filtering</a></li>
+                <li><a href="#anti-cheat">Anti-cheat primer</a></li>
+            </ul>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- INTRO -->
+        <!-- ============================================ -->
+        <div id="intro" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🛣️ Beyond predict-and-correct</h2>
+
+            <p>
+                The Beginner–Advanced track all assumed one shape: authoritative server, clients
+                predict locally, server snapshots correct (now silently, thanks to reconciliation
+                and smoothing). That shape works for most games. But there are two genres where
+                it visibly doesn't, and one scale problem it doesn't touch:
+            </p>
+
+            <ul>
+                <li><strong>Real-time strategy games</strong> (Age of Empires, Starcraft, Total Annihilation). You might have <em>hundreds</em> of units on screen. Broadcasting each unit's position to every client every tick blows the bandwidth budget. The fix is <strong>lockstep</strong> — every machine simulates from the same inputs, so the only thing on the wire is inputs.</li>
+                <li><strong>Fighting games</strong> (Street Fighter, Skullgirls, every modern fighter). A single-frame input lag is the difference between a combo working and not. The fix is <strong>rollback</strong> — predict the opponent's input, run the sim immediately, rewind + re-simulate when the truth arrives.</li>
+                <li><strong>MMOs and big shooters</strong> (64+ players, large worlds). You can't send every entity to every player no matter what your encoding does. The fix is <strong>area-of-interest</strong> filtering — only send the entities near the player, queried via a spatial structure.</li>
+            </ul>
+
+            <div class="key-point">
+                <strong>💡 All three depend on a property we've assumed since tier 1: DETERMINISM.</strong>
+                Lockstep needs every machine to produce the same simulation from the same inputs.
+                Rollback needs every machine to produce the same simulation from the same inputs
+                (the rewinds happen locally). Even AoI needs determinism for replays and reconciliation.
+                We start with how easily floating-point math sabotages it.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- DETERMINISM -->
+        <!-- ============================================ -->
+        <div id="determinism" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🎲 Determinism — why floats betray you</h2>
+
+            <p>
+                Within a single browser, <code>Math.sin(1.5)</code> gives the same answer every
+                time you call it. Across different machines, that's not guaranteed: different CPUs,
+                different compilers, different vector instruction sets, even different operation
+                orders inside the same compiler optimization level can produce 1-bit differences
+                in the last decimal places. In a one-shot calculation that's invisible. In a long
+                simulation, those 1-bit differences can <em>explode</em>.
+            </p>
+
+            <p>
+                Below, a double pendulum — a famously chaotic system. The cyan one starts with
+                <code>θ₂ = π/2</code> exactly. The red one starts with <code>θ₂ = π/2 + Δθ</code>,
+                where <code>Δθ</code> is the slider (default <code>1e-7 rad</code> — about one
+                ten-millionth of a degree). Watch the two trails: for the first few seconds they
+                follow each other; then they diverge into completely different shapes.
+            </p>
+
+            <div class="diagram">
+                <canvas id="determinismCanvas" width="780" height="320"></canvas>
+            </div>
+
+            <div class="controls">
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    Δθ₀ (initial-angle perturbation)
+                    <input type="range" id="detPerturb" min="-9" max="-1" step="1" value="-7" style="width:200px;">
+                    <span id="detPerturbVal" style="font-family:monospace; color:#4fc3f7; min-width:100px;">1e-7 rad</span>
+                </label>
+                <button id="detReset">↻ Reset</button>
+            </div>
+            <div id="detInfo" class="info-display" style="font-family:monospace;">starting up…</div>
+
+            <div class="concept-box">
+                <h4>🤔 But I'm only running one machine — why do I care?</h4>
+                <p>
+                    Because <em>every</em> player runs a different machine. Two clients running
+                    your lockstep RTS need to agree on every unit's position, every frame, for
+                    hours. A 1-bit difference in <code>Math.cos</code> on one client compounds
+                    over thousands of operations per frame, billions per session — and within a
+                    minute the two clients' worlds have diverged. The game desyncs.
+                </p>
+                <p>
+                    The slider above is a stand-in for that 1-bit cross-machine difference. The
+                    chaos you see in the red pendulum is the chaos every long-running float
+                    simulation invites.
+                </p>
+            </div>
+
+            <details>
+                <summary>📝 How shipped lockstep games avoid this — fixed-point math</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Real lockstep games (StarCraft, Age of Empires II, Total Annihilation,
+// every Worms game) use FIXED-POINT MATH for the simulation. A position
+// isn't a float — it's an integer scaled by 2^16 (so the integer 65536
+// represents 1.0). Every CPU on every platform gets the same answer
+// for `int + int`, `int * int`, and `int >> int`. No drift, ever.
+//
+// The cost: limited range and no exact transcendentals. You build a
+// sin/cos lookup table once and use that. You bake constants into
+// constants. You give up some accuracy for the bit-exact guarantee.
+
+const Q = 16;                         // 16 fractional bits
+function toFixed(f)  { return Math.round(f * (1 &lt;&lt; Q)); }
+function fromFixed(x){ return x / (1 &lt;&lt; Q); }
+function fmul(a, b)  { return (a * b) &gt;&gt; Q; }     // (a*b) is exact, then shift
+function fdiv(a, b)  { return Math.floor((a &lt;&lt; Q) / b); }
+
+// A bit-exact sin via 256-entry lookup. Inputs in fixed-point radians
+// scaled by ((1&lt;&lt;Q) * 2π).
+const SIN_TABLE = new Int32Array(256);
+for (let i = 0; i &lt; 256; i++) {
+    SIN_TABLE[i] = toFixed(Math.sin(i / 256 * 2 * Math.PI));
+}
+function fsin(angle) {
+    // angle is fixed-point radians; map to [0..256) then index.
+    const idx = ((angle &gt;&gt;&gt; (Q - 8)) &amp; 0xff);  // top 8 bits of fractional rad
+    return SIN_TABLE[idx];
+}
+// This is bit-identical on Intel, ARM, RISC-V, anywhere JS or your
+// compiled language runs. Two machines that compute the same sequence
+// of fmul/fadd/fsin calls will agree to the last bit.</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const Q: number = 16;
+function toFixed(f: number): number   { return Math.round(f * (1 &lt;&lt; Q)); }
+function fromFixed(x: number): number { return x / (1 &lt;&lt; Q); }
+function fmul(a: number, b: number): number { return (a * b) &gt;&gt; Q; }
+function fdiv(a: number, b: number): number { return Math.floor((a &lt;&lt; Q) / b); }
+
+const SIN_TABLE = new Int32Array(256);
+for (let i = 0; i &lt; 256; i++) {
+    SIN_TABLE[i] = toFixed(Math.sin(i / 256 * 2 * Math.PI));
+}
+function fsin(angle: number): number {
+    const idx = ((angle &gt;&gt;&gt; (Q - 8)) &amp; 0xff);
+    return SIN_TABLE[idx];
+}</code></pre>
+                </div>
+                <div class="key-point">
+                    <strong>💡 In JS specifically:</strong> Number is a 64-bit float by design.
+                    Real fixed-point work usually happens in a separate physics engine layer or
+                    in WebAssembly, where you can pick the integer width. For pedagogical demos
+                    the lookup-table fixed-point pattern above is enough to feel correct.
+                </div>
+            </details>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- LOCKSTEP -->
+        <!-- ============================================ -->
+        <div id="lockstep" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🔒 Lockstep — bandwidth = O(players)</h2>
+
+            <p>
+                If every machine runs the same deterministic simulation, you don't need to
+                broadcast unit positions. You just need to broadcast <em>inputs</em>. Each player
+                sends their commands once per tick; the server (or every peer in a P2P lockstep
+                game) collects everyone's inputs and re-broadcasts them; every machine simulates
+                forward from the same state, with the same inputs, and produces the same world.
+            </p>
+            <p>
+                The bandwidth math is shocking: a 200-unit RTS at 20 Hz costs about
+                <strong>~64 kbps per client</strong> if you snapshot all positions, but only
+                <strong>~0.5 kbps per client</strong> if you lockstep the inputs. Drag the units
+                slider below — the gap grows linearly.
+            </p>
+
+            <div class="diagram">
+                <canvas id="lockstepCanvas" width="780" height="280"></canvas>
+            </div>
+
+            <div class="controls">
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    Units
+                    <input type="range" id="lsUnits" min="10" max="400" value="100" style="width:200px;">
+                    <span id="lsUnitsVal" style="font-family:monospace; color:#4fc3f7; min-width:50px;">100</span>
+                </label>
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    Tick rate
+                    <input type="range" id="lsTick" min="5" max="60" value="20" style="width:160px;">
+                    <span id="lsTickVal" style="font-family:monospace; color:#4fc3f7; min-width:60px;">20 Hz</span>
+                </label>
+                <button id="lsReset">↻ Reset positions</button>
+            </div>
+
+            <div class="ls-bar-row">
+                <span class="ls-label">Lockstep</span>
+                <div class="ls-bar-track"><div class="ls-bar-fill lock" id="lsLockBar" style="width:1%;"></div></div>
+                <span class="ls-readout" id="lsLockOut">—</span>
+            </div>
+            <div class="ls-bar-row">
+                <span class="ls-label">Naive</span>
+                <div class="ls-bar-track"><div class="ls-bar-fill naive" id="lsNaiveBar" style="width:100%;"></div></div>
+                <span class="ls-readout" id="lsNaiveOut">—</span>
+            </div>
+            <div class="ls-savings" id="lsSavings">—</div>
+            <div id="lsInfo" class="info-display" style="font-family:monospace;">starting up…</div>
+
+            <div class="concept-box">
+                <h4>🛑 The lockstep tax</h4>
+                <p>
+                    Lockstep's win is bandwidth. Its cost is <strong>everyone advances at the
+                    speed of the slowest peer</strong>. A single laggy player makes the whole
+                    game stutter. Hidden-from-the-player techniques like input delay (always run
+                    ~50 ms behind to give every peer time to send their input) hide a lot of it,
+                    but lockstep RTS games still struggle on bad connections. Modern variants
+                    (rollback-on-top-of-lockstep, "stop-and-go" recovery) push the limits.
+                </p>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- ROLLBACK -->
+        <!-- ============================================ -->
+        <div id="rollback" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>⏪⏩ Rollback netcode — predict and rewind</h2>
+
+            <p>
+                Lockstep waits for the slowest peer. Fighting games can't afford that: a single
+                frame of input lag is a competitively-meaningful delay. <strong>Rollback netcode</strong>
+                (popularised by <a href="https://www.ggpo.net/">GGPO</a> in 2006, now the default
+                for every shipped fighter) flips lockstep on its head:
+            </p>
+
+            <ol>
+                <li>Every tick, the client PREDICTS the opponent's input (= same as their last known input).</li>
+                <li>Run the simulation immediately, locally.</li>
+                <li>Save the world state in a ring buffer.</li>
+                <li>When the opponent's REAL input for tick T arrives, compare to the prediction.</li>
+                <li>If different: restore world state to tick T, fix the input, re-apply every tick from T forward.</li>
+            </ol>
+
+            <p>
+                Below, two cars share a small arena. You drive the cyan one with WASD/buttons.
+                The purple one is a "remote bot" — its real inputs travel through a
+                <code>FakeNetwork</code> with the RTT you set. The client predicts the bot's
+                input as "same as last frame"; when the real input differs, rollback fires and
+                briefly flashes the bot yellow. The right panel tallies the rollback count and
+                depth.
+            </p>
+            <p>
+                <strong>This is the cross-track stub the netcode track owes the racing-sim track.</strong>
+                The car physics is borrowed straight from
+                <a href="../racing-sim/intermediate.html">racing-sim Intermediate</a> — heading-based
+                acceleration, dt-correct drag, the same units convention. The Pacejka tire curve
+                from <a href="../racing-sim/expert.html">racing-sim Expert</a> would slot in too, but
+                rollback's correctness story is easier to see with the simpler model.
+            </p>
+
+            <div class="diagram">
+                <canvas id="rollbackCanvas" width="780" height="300"></canvas>
+            </div>
+            <div class="controls">
+                <div class="input-pad" id="rbPad">
+                    <button class="pad-up"    id="rbUp">↑</button>
+                    <button class="pad-left"  id="rbLeft">←</button>
+                    <button class="pad-down"  id="rbDown">↓</button>
+                    <button class="pad-right" id="rbRight">→</button>
+                </div>
+                <span class="input-pad-hint">or click the canvas and use WASD / arrows</span>
+            </div>
+            <div class="controls">
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    RTT
+                    <input type="range" id="rbRtt" min="0" max="400" value="120" style="width:160px;">
+                    <span id="rbRttVal" style="font-family:monospace; color:#4fc3f7; min-width:60px;">120 ms</span>
+                </label>
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    Bot input change rate
+                    <input type="range" id="rbBotChange" min="0.5" max="6" step="0.1" value="2.0" style="width:160px;">
+                    <span id="rbBotChangeVal" style="font-family:monospace; color:#4fc3f7; min-width:60px;">2.0 Hz</span>
+                </label>
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    <input type="checkbox" id="rbToggle" checked>
+                    Rollback ON
+                </label>
+                <button id="rbReset">↻ Reset</button>
+            </div>
+            <div id="rbInfo" class="info-display" style="font-family:monospace;">starting up…</div>
+
+            <div class="key-point">
+                <strong>💡 Try this:</strong> with rollback ON and bot input change rate ~3 Hz,
+                you should see rollback counts in the hundreds per minute, with average depth 3–8
+                ticks. Turn rollback OFF: the rollback counter stops growing but the bot's car
+                visibly does the wrong thing for the prediction-window after every input change
+                (because we never corrected the past). Crank RTT to 400 ms and the average
+                rollback depth grows linearly — RTT is exactly the prediction window you have
+                to repair every time.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- AOI -->
+        <!-- ============================================ -->
+        <div id="aoi" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>📡 Area of interest — spatial filtering</h2>
+
+            <p>
+                A 64-player battle royale with five projectiles each = 320 entities. At 20 Hz with
+                16 bytes per entity that's <strong>~819 kbps per client</strong> for everyone's
+                state. You can't pay that on mobile. The fix: only send the entities <em>near</em>
+                the player. <strong>Area-of-interest</strong> (AoI) filtering, also called
+                "relevancy" or "interest management", queries a spatial structure for the entities
+                within a radius of the observer and includes only those in each snapshot.
+            </p>
+
+            <p>
+                Below, 100 entities wander a big world. Move your mouse over the panel — your
+                cursor is the observer. The AoI radius is the cyan circle. Entities inside it are
+                green (sent in the snapshot); entities outside are dim (omitted). The faint green
+                rectangles are the spatial-grid cells the query touched — at most 4 cells, since
+                the cell size is set equal to the AoI radius.
+            </p>
+
+            <div class="diagram">
+                <canvas id="aoiCanvas" width="780" height="400"></canvas>
+            </div>
+
+            <div class="controls">
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    AoI radius
+                    <input type="range" id="aoiRadius" min="40" max="300" value="120" style="width:200px;">
+                    <span id="aoiRadiusVal" style="font-family:monospace; color:#4fc3f7; min-width:70px;">120 px</span>
+                </label>
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    Entity count
+                    <input type="range" id="aoiCount" min="20" max="500" value="100" style="width:200px;">
+                    <span id="aoiCountVal" style="font-family:monospace; color:#4fc3f7; min-width:50px;">100</span>
+                </label>
+            </div>
+            <div id="aoiInfo" class="info-display" style="font-family:monospace;">starting up…</div>
+            <div id="aoiBandwidth" class="info-display" style="font-family:monospace; margin-top:8px;">bandwidth: —</div>
+
+            <div class="concept-box">
+                <h4>🔍 What to try</h4>
+                <ol>
+                    <li>500 entities, radius 80 — most entities are dim. Snapshot bytes drop ~80%.</li>
+                    <li>Same world, radius 300 — almost everything is visible. AoI buys you nothing in a tight arena.</li>
+                    <li>Cross-link: this demo uses a 2D grid because grids are simpler to teach. <a href="../expert.html#spatial">Spatial Partitioning &amp; QuadTree</a> in the Fundamentals tier covers the data-structure side in depth. For sparse worlds, a quadtree usually wins; for dense uniform worlds, a flat grid wins. Real engines pick per-world.</li>
+                </ol>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- ANTI-CHEAT -->
+        <!-- ============================================ -->
+        <div id="anti-cheat" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🛡️ Anti-cheat primer</h2>
+
+            <p>
+                Once you're shipping over the open Internet, players will try to cheat. This isn't
+                a malicious-attacker-only concern — even well-meaning players will run modded clients,
+                share automation, or accidentally exploit a state-machine bug. A complete anti-cheat
+                story is its own field (kernel-level drivers, server-side machine-learning, third-party
+                services like BattlEye and Easy Anti-Cheat), but every game needs the same baseline:
+            </p>
+
+            <div class="concept-box">
+                <h4>🔒 Server authority — the foundation</h4>
+                <p>
+                    The server is the source of truth. The client can <em>request</em> actions
+                    (move here, shoot there); the server <em>decides</em> whether they're legal.
+                    Never trust the client's reported damage, health, or position — they're inputs
+                    to a validation, not outputs. Authoritative server (the architecture you've
+                    been using all track) is necessary but not sufficient.
+                </p>
+            </div>
+
+            <div class="concept-box">
+                <h4>📏 Sanity bounds — the second line</h4>
+                <p>
+                    Every input has a physical bound. Velocity can't exceed <code>MAX_SPEED</code>;
+                    a player can't fire faster than <code>FIRE_INTERVAL</code>; a unit can't appear
+                    in a tile they don't have line-of-sight to. Check these on the server. A speed
+                    hack that teleports the player 1000 px/frame is immediately detectable; the
+                    sneakier "always 10% faster than allowed" cheat needs statistical detection
+                    (averaging speed over many frames + flagging anomalies).
+                </p>
+            </div>
+
+            <div class="concept-box">
+                <h4>🎬 Replay verification — the audit</h4>
+                <p>
+                    A determinism-based architecture (lockstep, rollback) gets free cheat detection:
+                    record everyone's inputs to the match. After the match, replay them on a
+                    trusted server. If the result differs from what the players reported, someone
+                    cheated. Shipped fighters (e.g. Street Fighter 6) and shipped RTS (e.g. SC2)
+                    both use this to award bans long after the match is over.
+                </p>
+            </div>
+
+            <div class="key-point">
+                <strong>💡 The single most important rule:</strong> if a cheater can do it with a
+                modified game client, the architecture is broken. Every fix has to be on the
+                server side. A client-side anti-cheat is at best a speed bump (since the cheater
+                controls the client). The Beginner-tier discipline of "server-state and
+                client-state are SEPARATE objects" is what enables every later anti-cheat
+                technique to exist.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- RECAP -->
+        <!-- ============================================ -->
+        <div class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🧰 Recap — what you've got</h2>
+
+            <ul>
+                <li><strong>Determinism</strong> — the property every cross-machine technique depends on, and the reason real lockstep games use fixed-point math instead of floats.</li>
+                <li><strong>Lockstep</strong> — bandwidth = O(players × inputs/tick) regardless of world size. The RTS architecture. Costs: everyone waits for the slowest peer, requires perfect determinism.</li>
+                <li><strong>Rollback netcode</strong> — predict opponent input, rewind + re-simulate when wrong. The fighting-game architecture. Costs: requires perfect determinism + a state ring buffer + frequent re-simulation under prediction load.</li>
+                <li><strong>Area-of-interest filtering</strong> — only send entities near the observer. The scale architecture (MMOs, big shooters, sandbox survival). Pairs with the Fundamentals tier's <a href="../expert.html#spatial">spatial structures</a>.</li>
+                <li><strong>Anti-cheat baseline</strong> — server authority + sanity bounds + replay verification. Every shipped multiplayer game needs at least these three.</li>
+            </ul>
+
+            <div class="key-point">
+                <strong>💡 What the Simulations tier puts together:</strong> the Simulations tier
+                (the next and last on this track) is the "everything toggleable in one master
+                arena" capstone — a 2-player scene where you can flip prediction / reconciliation
+                / interpolation / lag-comp / AoI on and off and watch each technique earn its keep
+                under any network conditions, plus a bandwidth budget calculator that ties every
+                tier's lessons together, and a replay scrubber that lets you record and rewind a
+                whole session.
+            </div>
+        </div>
+
+        <!-- Next Steps -->
+        <div class="section" style="text-align: center;">
+            <h2>✅ Expert Tier Complete</h2>
+            <p style="font-size: 1.1em; margin: 24px 0;">
+                You can now reach for the right architecture for your game: predict-and-correct for
+                most shooters, lockstep for RTS, rollback for fighters, AoI when scale demands it,
+                and the anti-cheat baseline under all of them.
+            </p>
+            <a href="simulations.html" class="nav-button" style="font-size: 1.2em; padding: 20px 40px;">
+                Continue to Simulations →
+            </a>
+            <p style="margin-top: 20px;"><em>Simulations isn't written yet — coming in the next phase. Track your progress on the <a href="index.html">track index</a>.</em></p>
+        </div>
+    </div>
+
+    <!-- Scroll to Top Button -->
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <!-- Load order. Versioned script tags dodge python http.server's
+         aggressive cache during iteration (real users unaffected). -->
+    <script src="../shared/utils.js"></script>
+    <script src="../shared/code-tabs.js"></script>
+    <script src="net/seeded-rng.js"></script>
+    <script src="net/fake-network.js"></script>
+    <script src="expert-demos.js?v=2"></script>
+    <script src="../shared/export-demo.js"></script>
+</body>
+</html>

@@ -677,3 +677,85 @@ during verification (see Bugs).
   architectural alternatives (lockstep RTS, rollback fighters) plus
   AoI filtering for big scenes. Cross-track stub demo reuses
   racing-sim car for the rollback section.
+
+# 2026-05-28 (pt.5) — Netcode: Expert tier (Determinism, Lockstep, Rollback, AoI)
+
+"Okay, work on the next iteration." — fifth iteration on netcode.
+
+## Shipped this commit
+
+```
+netcode/
+  expert.html          ← 8 sections + recap (intro, determinism,
+                         lockstep, rollback, AoI, anti-cheat primer,
+                         recap, next)
+  expert-demos.js      ← 4 IIFE demos + double-pendulum solver +
+                         flocking + GGPO ring buffer + spatial grid +
+                         racing-sim car physics
+```
+
+`netcode/index.html` — Expert tier card → Ready. Only Simulations left.
+Root `index.html` — "(coming soon)" removed.
+
+## The four demos
+
+1. **determinismDemo** — two double-pendulums diverging from a 1e-7 rad
+   starting difference. After ~10 s the trails are completely different
+   shapes. The chaos IS the teaching. Includes fixed-point/lookup-table
+   code block as the "how shipped games avoid this" answer.
+2. **lockstepDemo** — 10–400 units flocking to one waypoint. Two
+   coloured bars compare lockstep bandwidth (O(players)) vs naive
+   per-entity bandwidth (O(N × tick)). At 100 units/20 Hz: lockstep is
+   67× smaller.
+3. **rollbackDemo** — the headline. Two cars (cyan local, purple bot)
+   borrowed-from-racing-sim physics. Full GGPO-style 90-tick ring
+   buffer + predict + rewind-and-resimulate when real input differs
+   from predicted. Yellow flash on the bot when rollback fires. Right
+   panel shows live rollback count, avg depth, max depth. At RTT 120 +
+   2 Hz bot changes: ~22 rollbacks/sec, avg depth 4.6 ticks = RTT/dt.
+   **This is the cross-track stub the original plan promised between
+   netcode and racing-sim.** Both tracks now link to each other in this
+   section.
+4. **aoiDemo** — 20-500 wandering entities, mouse cursor = observer,
+   spatial grid overlay (cell = AoI radius) so radius queries touch
+   ≤4 cells. Visible green / dim gray entities. At 100/120: 84%
+   omitted, 9/18 cells scanned vs naive O(100).
+
+Plus an HTML-only **Anti-cheat primer** (server authority + sanity
+bounds + replay verification), no demo because the topic is principles
+not animation.
+
+## Bugs caught & fixed mid-iteration
+
+- **Determinism slider used as raw value instead of exponent.**
+  Slider value -7 meant Δθ₀ should be 1e-7, not -7. Wrapped in a
+  `perturbValue()` helper + label-formatter.
+- **Rollback handler on the WRONG endpoint.** Registered on `botEp`
+  (sender) instead of `localEp` (receiver). The bot sends to local;
+  local needs the onMessage handler. Symptom: 0 rollbacks ever, demo
+  silently broken. Fixed + explicit comment in the file.
+- **Cache-bust pattern reused** (`?v=2` on the script tag) — bumped
+  once during this iteration after the rollback routing fix.
+
+## Verification
+
+`python3 -m http.server 8765`.
+
+- expert.html: zero console errors, 4 canvases + 33 controls, all
+  drawing content.
+- determinism: drift 70.4 px after 8 s at Δθ₀=1e-7 → chaos confirmed.
+- lockstep: 67× smaller bandwidth confirmed.
+- rollback: ~22 rollbacks/sec, avg depth 4.6 ticks confirmed.
+- aoi: 84% omitted, 9/18 cells scanned vs O(100) confirmed.
+- Cache-bust `?v=2` loads with `fromCache: false`.
+- Visual: two-trail divergence in determinism; cars + full stats
+  panel in rollback.
+- Root index Expert sublink: marker gone.
+
+## Next
+
+- **Simulations tier — Everything On.** The capstone master arena
+  combining all techniques from all tiers, with a bandwidth budget
+  calculator, lockstep-vs-rollback comparison panel, AoI heatmap, and
+  a full-session replay scrubber. The "everything we've taught,
+  composable" finale.
