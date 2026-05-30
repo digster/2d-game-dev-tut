@@ -1081,3 +1081,71 @@ Entity/World pattern), inventory + equipment UI (keyboard-driven), status
 effects + identification (unidentified potions/scrolls), energy/speed turn
 scheduler (fast monsters act twice), monster AI variety (FSM + behavior trees),
 capstone "Armed & Dangerous".
+
+
+# 2026-05-30 (pt.5) — Roguelike: Expert tier (Items, Effects & Minds)
+
+Prompt: "Okay, work on the next iteration." → continue tier by tier.
+
+## Promote first
+
+Moved losLine/computeFOV/aStarPath/dijkstraFrom/stepDownhill (+RLHeap/FOV_MULT/
+VIS_DIRS4) from advanced-demos.js to engine/vision.js — the Expert capstone is
+their 2nd consumer. advanced.html loads engine/vision.js; advanced-demos.js
+keeps only its demos. Re-verified Advanced (FOV unit test still passes).
+
+## Shipped this commit
+
+expert.html + expert-demos.js, 6 demos. New systems as shared helpers:
+item ECS (Item + ItemWorld.query), attackDice/defenseOf (derived stats),
+addStatus/tickStatuses/hasStatus/speedOf (status effects), BTSel/BTSeq/BTCond/
+BTAct (behavior trees), applyConsumable. Inventory uses NUMBER keys (1–9) since
+letters are movement.
+
+1. itemsEcsDemo — items as entities with components; walk to pick up, x to drop;
+   panel queries by component.
+2. inventoryUiDemo — press 1–9 to equip/unequip; attack/defense DERIVED from gear
+   (1d3→1d8 with a sword; def 0→3 with mail).
+3. statusIdentDemo — quaff seed-shuffled unidentified potions (heal/poison/regen),
+   identify by use; statuses tick each turn (poison bleeds, regen heals).
+4. energyDemo — energy/speed scheduler; snake (spd200) acts 2×, zombie (spd50) ½×
+   per player move; live energy bars.
+5. aiVarietyDemo — FSM brute (sleep→chase→attack), FSM coward (flee), behavior-tree
+   archer (shoot/retreat/reposition/wander); state labels above each.
+6. armedDangerousDemo (CAPSTONE) — Advanced fog+FOV+pursuit + floor loot/equip +
+   unidentified potions + status effects + energy scheduler (fast venomous snake,
+   slow zombie) + derived-stat combat; reach stairs to win / die.
+
+## Bugs caught & fixed mid-iteration
+
+- speedOf/hasStatus crashed on monsters (no .statuses array; monsters use `speed`
+  not `baseSpeed`). Guarded statuses and made speedOf resolve baseSpeed ?? speed.
+- coward referenced nonexistent RL.accent2; archer's wander branch was a no-op
+  (truthy-array bug). Both fixed.
+- status demo referenced a "New mix" reset that didn't exist → added the button +
+  wiring. Switched all inventory prose from letters to numbers (movement clash).
+
+## Verification
+
+`python3 -m http.server 8765`, expert.html, console CLEAN throughout.
+- Derived stats: equip sword+mail → "attack 1+1d8 · def 3" (from 1+1d3 · 0).
+- Energy scheduler EXACT: 8 player acts → snake ×16 (2×), rat ×8, zombie ×4 (½×).
+- Items: pick up + drop works. Status: quaff identifies (murky→regen), ticks.
+- AI: brute saw sleep/chase/attack; coward idle/flee!; archer shoot/retreat/
+  reposition — all transitions observed.
+- Capstone (seed 1337, randomised play): pickup ✓, equip ✓ (atk→1+1d8), hit ✓,
+  kill ✓, bitten ✓, poisoned-by-snake ✓, death terminal ✓ (win path = same
+  stairs trigger verified in Advanced's hunt). Fog screenshot captured.
+
+Indexes: roguelike/index.html (Expert → Ready + nav; Simulations → Building next),
+root index.html TOC (Expert sub-link), README.md (Expert tier + engine/vision.js),
+ARCHITECTURE.md (vision.js as 5th engine file).
+
+## Next
+
+Simulations tier ("The Whole Dungeon" — grand capstone): cellular-automata caves,
+level themes by depth (rooms shallow, caves deep, themed palettes/spawn tables),
+deterministic seed + record/replay proof, and "The Descent" — the complete
+playable roguelike assembling every system (procgen levels, FOV+fog, energy AI,
+items/equipment/identification, status effects, depth, permadeath, score,
+shareable seed). Mark the track COMPLETE.

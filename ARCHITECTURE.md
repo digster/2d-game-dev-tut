@@ -54,7 +54,10 @@ Intermediate capstone became its second consumer — exactly the "≥ 2 tier fil
 `window`, pre-checked against `shared/utils.js`. A fourth, `dungeon.js`
 (`generateDungeon` + `dg*` helpers), joined when the Advanced tier became the
 third consumer of the rooms-and-corridors generator the Intermediate tier
-teaches inline. Tier-*specific* algorithms still stay inline in their
+teaches inline; and a fifth, `vision.js`
+(`losLine`/`computeFOV`/`aStarPath`/`dijkstraFrom`/`stepDownhill`), promoted out
+of the Advanced tier's `advanced-demos.js` once the Expert capstone became a
+second consumer. Tier-*specific* algorithms still stay inline in their
 `<tier>-demos.js` because they're the lesson, not shared infrastructure — e.g.
 the Advanced tier's `losLine`/`computeFOV`/`aStarPath`/`dijkstraFrom` are
 top-level functions in `advanced-demos.js` (top-level so they're unit-testable

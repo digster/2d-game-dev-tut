@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expert — Roguelike / Dungeon-Crawler Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+    <style>
+        canvas.rl-canvas { cursor: pointer; outline: none; background: #0d1117; max-width: 100%; }
+        canvas.rl-canvas:focus { box-shadow: 0 0 0 2px #7CF2C8; }
+        .rl-log, .rl-inv {
+            font-family: 'Courier New', Consolas, monospace; font-size: 0.9em;
+            background: #0d1117; border: 1px solid #2d3354; border-radius: 6px;
+            padding: 10px 14px; color: #c9d1d9; line-height: 1.6;
+        }
+        .rl-log { height: 200px; overflow-y: auto; }
+        .rl-inv { min-height: 120px; }
+        .rl-log .you { color: #7CF2C8; } .rl-log .mob { color: #ef5350; }
+        .rl-log .good { color: #66bb6a; } .rl-log .warn { color: #ffa726; } .rl-log .dim { color: #6b7488; }
+        .rl-inv .row { display: flex; gap: 8px; }
+        .rl-inv .key { color: #4fc3f7; width: 1.4em; }
+        .rl-inv .eq { color: #66bb6a; } .rl-inv .uid { color: #ab47bc; } .rl-inv .muted { color: #6b7488; }
+        .rl-play-row { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-start; justify-content: center; }
+        .rl-play-row > .rl-col { flex: 1; min-width: 300px; }
+        .gen-controls label { color: #c9d1d9; display: inline-flex; align-items: center; gap: 8px; margin-right: 6px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚔️ Expert — Items, Effects &amp; Minds</h1>
+        <p class="subtitle">A dark dungeon with hunting monsters — but you're still a fist with legs. Time for loot: items as data, gear you wear, potions you risk drinking, speed that bends turn order, and monsters that actually think differently.</p>
+
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="advanced.html" class="nav-button">← Advanced</a>
+            <a href="expert.html" class="nav-button active">Expert</a>
+            <a href="simulations.html" class="nav-button">Simulations →</a>
+        </div>
+
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#intro">From a fist to an arsenal</a></li>
+                <li><a href="#items">Items as data — a tiny ECS</a></li>
+                <li><a href="#inventory">Inventory &amp; equipment (derived stats)</a></li>
+                <li><a href="#status">Status effects &amp; the identification game</a></li>
+                <li><a href="#energy">Energy &amp; speed — bending turn order</a></li>
+                <li><a href="#ai">Monster minds — FSM &amp; behavior trees</a></li>
+                <li><a href="#mini-project">Mini-Project: "Armed &amp; Dangerous"</a></li>
+            </ul>
+        </div>
+
+        <!-- INTRO -->
+        <div id="intro" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🎒 From a fist to an arsenal</h2>
+            <p>
+                Everything so far has been about <em>space</em> — the grid, the dark, the chase. This tier is
+                about <em>stuff</em>: the systems that turn a chase into an RPG.
+            </p>
+            <ul>
+                <li><strong>Items as data.</strong> A sword and a potion are the same kind of thing — an entity with components — which is what lets one inventory hold anything.</li>
+                <li><strong>Equipment &amp; derived stats.</strong> Wearing gear changes numbers you compute, never numbers you store.</li>
+                <li><strong>Status effects &amp; identification.</strong> Poison ticks; haste speeds you up; and that unlabelled potion might be either — the risk <em>is</em> the gameplay.</li>
+                <li><strong>Energy &amp; speed.</strong> The turn loop stops being "everyone takes one turn" — fast things act more often.</li>
+                <li><strong>Monster minds.</strong> A brute, a coward, and an archer want different things; FSMs and behavior trees give them each a brain.</li>
+            </ul>
+            <div class="key-point">
+                <strong>💡 The theme is composition.</strong> None of these is a special case bolted on — each
+                is a small system, and the capstone runs all of them at once on top of the Advanced tier's
+                fog and pursuit. That's how real roguelikes get their famous depth.
+            </div>
+        </div>
+
+        <!-- ITEMS -->
+        <div id="items" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🗃️ Items as data — a tiny ECS</h2>
+            <p>
+                A weapon, a potion, a scroll: wildly different in play, identical in structure. Each is an
+                <strong>entity</strong> with <strong>components</strong> — a glyph, maybe an
+                <code>equip</code> component, maybe a <code>consume</code> component. The inventory doesn't
+                care which; it just holds entities. <strong>Click to focus</strong>, walk onto items to pick
+                them up (or press <strong>g</strong>), and <strong>d</strong> to drop the last one. The panel
+                queries the world by component to label each item.
+            </p>
+            <div class="rl-play-row">
+                <div class="rl-col" style="min-width:420px;">
+                    <div class="diagram"><canvas id="rlItemsCanvas" class="rl-canvas" width="660" height="308" tabindex="0"></canvas></div>
+                    <div id="rlItemsHud" class="info-display" style="font-family:monospace; margin-top:10px;">click, then walk onto items (g grab · d drop)</div>
+                </div>
+                <div class="rl-col">
+                    <h4 style="margin:0 0 8px 0; color:#4fc3f7;">Inventory (by component)</h4>
+                    <div class="rl-inv" id="rlItemsInv"></div>
+                </div>
+            </div>
+            <details>
+                <summary>📝 Click to see: items as entities with components</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// An item is an entity: an id, a glyph, and a bag of components.
+class Item {
+    constructor(name, glyph, color) { this.name = name; this.glyph = glyph; this.color = color; this.comps = {}; }
+    add(name, data) { this.comps[name] = data; return this; }   // chainable
+    has(name) { return name in this.comps; }
+    get(name) { return this.comps[name]; }
+}
+
+// Factories compose components — a sword is "equippable + a weapon";
+// a potion is "consumable". The inventory holds all of them the same way.
+const sword  = new Item('short sword', '/', '#cfd8dc').add('equip', { slot: 'weapon' }).add('weapon', { dice: [1, 8] });
+const armor  = new Item('leather armor', '[', '#c98a4b').add('equip', { slot: 'armor' }).add('armor', { def: 1 });
+const potion = new Item('murky potion', '!', '#ab47bc').add('consume', { effect: 'heal', power: 8 });
+
+// The "World query" — ask for every item with a given component.
+class World {
+    constructor() { this.items = []; }
+    add(it) { this.items.push(it); return it; }
+    query(comp) { return this.items.filter(it =&gt; it.has(comp)); }
+}
+const wearables = world.query('equip');     // [sword, armor]
+const drinkables = world.query('consume');  // [potion]</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface Components { equip?: { slot: 'weapon' | 'armor' }; weapon?: { dice: [number, number] }; armor?: { def: number }; consume?: { effect: string; power: number }; }
+
+class Item {
+    comps: Components = {};
+    constructor(public name: string, public glyph: string, public color: string) {}
+    add&lt;K extends keyof Components&gt;(name: K, data: Components[K]): this { this.comps[name] = data; return this; }
+    has(name: keyof Components): boolean { return name in this.comps; }
+    get&lt;K extends keyof Components&gt;(name: K): Components[K] { return this.comps[name]; }
+}</code></pre>
+                </div>
+                <div class="key-point">
+                    <strong>💡 Why ECS for items?</strong> A "ring of fire resistance that's also a thrown
+                    weapon" isn't a new class — it's an entity with three components. New behaviour = new
+                    component, not a deeper inheritance tree. The systems (equip, consume, throw) each just
+                    query for the component they care about.
+                </div>
+            </details>
+        </div>
+
+        <!-- INVENTORY -->
+        <div id="inventory" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🛡️ Inventory &amp; equipment (derived stats)</h2>
+            <p>
+                You start with a few items. <strong>Click to focus</strong>, then press an item's
+                <strong>number</strong> (1, 2, 3…) to equip or unequip it — weapons fill the weapon slot,
+                armor the armor slot. Your <strong>attack</strong> and <strong>defense</strong> aren't stored;
+                they're <em>derived</em> from whatever's equipped, recomputed on the fly. Equip the sword and
+                watch your attack die grow.
+            </p>
+            <div class="rl-play-row">
+                <div class="rl-col" style="min-width:300px;">
+                    <div class="diagram" style="padding:14px;"><canvas id="rlInvCanvas" class="rl-canvas" width="300" height="220" tabindex="0"></canvas></div>
+                    <div id="rlInvHud" class="info-display" style="font-family:monospace; margin-top:10px;">click, then press 1–9 to equip…</div>
+                </div>
+                <div class="rl-col">
+                    <h4 style="margin:0 0 8px 0; color:#4fc3f7;">Backpack — press a number to equip/unequip</h4>
+                    <div class="rl-inv" id="rlInvPanel"></div>
+                </div>
+            </div>
+            <div class="concept-box">
+                <h4>🧮 Stored vs derived</h4>
+                <p>
+                    Store the <em>equipment</em> (which item is in each slot), never the totals. Then
+                    <code>attack()</code> = base + weapon's contribution and <code>defense()</code> = base +
+                    armor's contribution, computed whenever you need them. Bugs where your stats drift out of
+                    sync with your gear simply can't happen — there's only one source of truth.
+                </p>
+            </div>
+        </div>
+
+        <!-- STATUS -->
+        <div id="status" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🧪 Status effects &amp; the identification game</h2>
+            <p>
+                Three unlabelled potions sit in your pack — a <span class="uid" style="color:#ab47bc">murky</span>,
+                a <span style="color:#4fc3f7">fizzy</span>, and a <span style="color:#66bb6a">glowing</span>
+                one. Each colour maps to an effect for this run — <strong>heal</strong>, <strong>poison</strong>,
+                or <strong>regen</strong> — but which is which? <strong>Click to focus</strong>, press a
+                potion's number to quaff it, and find out (and identify it for good). Then move around: status
+                effects <strong>tick every turn</strong> — poison bleeds you, regen heals you.
+            </p>
+            <div class="rl-play-row">
+                <div class="rl-col" style="min-width:320px;">
+                    <div class="diagram" style="padding:14px;"><canvas id="rlStatusCanvas" class="rl-canvas" width="320" height="220" tabindex="0"></canvas></div>
+                    <div id="rlStatusHud" class="info-display" style="font-family:monospace; margin-top:10px;">click, then quaff a potion…</div>
+                    <h4 style="margin:14px 0 8px 0; color:#4fc3f7;">Potions (press a number)</h4>
+                    <div class="rl-inv" id="rlStatusInv"></div>
+                    <div class="controls gen-controls" style="margin-top:10px;">
+                        <button id="rlStatusReset">↻ New mix</button>
+                    </div>
+                </div>
+                <div class="rl-col">
+                    <h4 style="margin:0 0 8px 0; color:#4fc3f7;">Log</h4>
+                    <div class="rl-log" id="rlStatusLog"></div>
+                </div>
+            </div>
+            <details>
+                <summary>📝 Click to see: timed status effects + identify-by-use</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Status effects are just {kind, turns, power} records on the actor,
+// ticked once per turn. New effect = new case here, nothing else.
+function tickStatuses(actor, log) {
+    for (const s of actor.statuses) {
+        if (s.kind === 'poison') { actor.hp -= s.power; log(`Poison bites you for ${s.power}.`); }
+        if (s.kind === 'regen')  { actor.hp = Math.min(actor.maxHp, actor.hp + s.power); }
+        s.turns--;
+    }
+    actor.statuses = actor.statuses.filter(s =&gt; s.turns &gt; 0);   // drop the expired
+}
+
+// Identification: each appearance (colour) maps to a hidden effect, shuffled
+// by the seed. Quaffing reveals the mapping for the rest of the run.
+function buildPotionTable(rng) {
+    const colours = ['murky', 'fizzy', 'glowing'];
+    const effects = rng.shuffle(['heal', 'poison', 'haste']);   // seeded permutation
+    return colours.map((c, i) =&gt; ({ colour: c, effect: effects[i], known: false }));
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface Status { kind: 'poison' | 'regen' | 'haste'; turns: number; power: number; }
+
+function tickStatuses(actor: { hp: number; maxHp: number; statuses: Status[] }, log: (s: string) =&gt; void): void {
+    for (const s of actor.statuses) {
+        if (s.kind === 'poison') { actor.hp -= s.power; log(`Poison bites you for ${s.power}.`); }
+        if (s.kind === 'regen')  { actor.hp = Math.min(actor.maxHp, actor.hp + s.power); }
+        s.turns--;
+    }
+    actor.statuses = actor.statuses.filter(s =&gt; s.turns &gt; 0);
+}</code></pre>
+                </div>
+                <div class="key-point">
+                    <strong>💡 Identification is information, not mechanics.</strong> The potion's effect never
+                    changes — only your <em>knowledge</em> of it does. That's why a seeded shuffle is enough:
+                    the danger is the player's uncertainty, and that's a feature you get almost for free.
+                </div>
+            </details>
+        </div>
+
+        <!-- ENERGY -->
+        <div id="energy" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>⚡ Energy &amp; speed — bending turn order</h2>
+            <p>
+                Until now everyone took exactly one turn each round. Real roguelikes use an <strong>energy</strong>
+                system: every actor banks energy equal to its <strong>speed</strong> each tick, and acts when it
+                has 100. A <span style="color:#ef5350">snake</span> (speed 200) acts twice for your every move;
+                a <span style="color:#9e6b6b">zombie</span> (speed 50) acts half as often. <strong>Click to
+                focus</strong> and take steps — watch the energy bars fill and the action counts diverge.
+            </p>
+            <div class="diagram"><canvas id="rlEnergyCanvas" class="rl-canvas" width="660" height="240" tabindex="0"></canvas></div>
+            <div class="controls gen-controls">
+                <button id="rlEnergyReset">↻ Reset counts</button>
+            </div>
+            <div id="rlEnergyHud" class="info-display" style="font-family:monospace;">click, then step — the snake acts twice per your move</div>
+            <details>
+                <summary>📝 Click to see: the energy/speed scheduler</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">const ACTION = 100;   // every action costs 100 energy
+
+// After the player acts, advance the world until the player can act again.
+// Faster actors cross the 100 threshold more often, so they act more often.
+function runScheduler(player, monsters, actOne) {
+    player.energy -= ACTION;
+    while (player.energy &lt; ACTION) {
+        for (const a of [player, ...monsters]) if (!a.dead) a.energy += a.speed;
+        for (const m of monsters) {
+            while (!m.dead &amp;&amp; m.energy &gt;= ACTION) { actOne(m); m.energy -= ACTION; }
+        }
+    }
+    // player.energy is now &gt;= 100 again → wait for input.
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const ACTION = 100;
+
+interface Actor { energy: number; speed: number; dead?: boolean; }
+
+function runScheduler(player: Actor, monsters: Actor[], actOne: (m: Actor) =&gt; void): void {
+    player.energy -= ACTION;
+    while (player.energy &lt; ACTION) {
+        for (const a of [player, ...monsters]) if (!a.dead) a.energy += a.speed;
+        for (const m of monsters) while (!m.dead &amp;&amp; m.energy &gt;= ACTION) { actOne(m); m.energy -= ACTION; }
+    }
+}</code></pre>
+                </div>
+                <div class="key-point">
+                    <strong>💡 Speed is just energy-per-tick.</strong> Haste? Temporarily raise the player's
+                    speed. Slow? Lower it. A "double move" potion, a hasted boss, a sluggish zombie — all one
+                    integer. No special-casing the turn loop; the threshold does the work.
+                </div>
+            </details>
+        </div>
+
+        <!-- AI -->
+        <div id="ai" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🧠 Monster minds — FSM &amp; behavior trees</h2>
+            <p>
+                Three monsters, three different brains. The <span style="color:#ef5350">brute (B)</span> runs a
+                <strong>state machine</strong>: sleep → chase → attack. The <span style="color:#ffa726">coward
+                (c)</span> is also an FSM but flips to <strong>flee</strong> when you get close. The
+                <span style="color:#4fc3f7">archer (a)</span> runs a <strong>behavior tree</strong>: keep
+                line of sight, hold a 3–5 tile range, and loose an arrow when it can. <strong>Click to
+                focus</strong> and move — each monster's current state is labelled above it.
+            </p>
+            <div class="diagram"><canvas id="rlAiCanvas" class="rl-canvas" width="700" height="420" tabindex="0"></canvas></div>
+            <div class="controls gen-controls">
+                <label>Seed <input type="number" id="rlAiSeed" value="42" min="1" max="999999" style="width:90px;"></label>
+                <button id="rlAiReset">↻ New room</button>
+            </div>
+            <div id="rlAiHud" class="info-display" style="font-family:monospace;">click, then move — watch the states change</div>
+            <details>
+                <summary>📝 Click to see: an FSM monster and a behavior-tree monster</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// FSM: the brute. One function, transitions chosen by distance + sight.
+function bruteTurn(m, player, level) {
+    const see = losLine(level, m.x, m.y, player.x, player.y).clear;
+    const d = manhattan(m, player);
+    switch (m.state) {
+        case 'sleep': if (see &amp;&amp; d &lt;= 8) m.state = 'chase'; break;
+        case 'chase':
+            if (d === 1) m.state = 'attack';
+            else stepToward(m, player);          // walk in
+            break;
+        case 'attack':
+            if (d === 1) attack(m, player);
+            else m.state = 'chase';
+            break;
+    }
+}
+
+// Behavior tree: the archer. Selector tries each branch until one succeeds.
+const archerTree = new Selector([
+    new Sequence([ new Cond(canShoot),  new Act(shootPlayer) ]),   // in range + LOS → shoot
+    new Sequence([ new Cond(tooClose),  new Act(stepAway)    ]),   // too close → back off
+    new Sequence([ new Cond(hasLos),    new Act(holdRange)   ]),   // keep distance
+    new Act(wander),                                              // fallback
+]);
+archerTree.run(archer);   // each turn</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Behavior-tree nodes return 'ok' | 'fail'. Selector = OR, Sequence = AND.
+type Status = 'ok' | 'fail';
+class Cond { constructor(private fn: (a: any) =&gt; boolean) {}
+    run(a: any): Status { return this.fn(a) ? 'ok' : 'fail'; } }
+class Act { constructor(private fn: (a: any) =&gt; void) {}
+    run(a: any): Status { this.fn(a); return 'ok'; } }
+class Sequence { constructor(private kids: any[]) {}
+    run(a: any): Status { for (const k of this.kids) if (k.run(a) === 'fail') return 'fail'; return 'ok'; } }
+class Selector { constructor(private kids: any[]) {}
+    run(a: any): Status { for (const k of this.kids) if (k.run(a) === 'ok') return 'ok'; return 'fail'; } }</code></pre>
+                </div>
+                <div class="key-point">
+                    <strong>💡 FSM vs behavior tree:</strong> an FSM is perfect when "what am I doing now"
+                    fully decides the next step (brute, coward). A behavior tree shines when you want
+                    <em>prioritised</em> behaviour — "shoot if you can, else reposition, else wander" — without
+                    a tangle of transitions. Most games use both, picking per monster.
+                </div>
+            </details>
+        </div>
+
+        <!-- MINI-PROJECT -->
+        <div id="mini-project" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🗡️ Mini-project — "Armed &amp; Dangerous"</h2>
+            <p>
+                The capstone runs the whole Expert toolkit on top of the Advanced tier's fog and pursuit: a
+                dark, generated dungeon you explore by FOV; weapons and armor to find and
+                <strong>equip</strong> (press a number in the backpack); unidentified potions to risk; status
+                effects that tick; an <strong>energy scheduler</strong> (the snake <code style="color:#ef5350">s</code>
+                is fast and poisons you, the zombie <code style="color:#9e6b6b">Z</code> is slow); and monsters
+                with the <strong>AI</strong> from the last demo. Gear up, fight smart, and reach the stairs
+                <code style="color:#ffd166">&gt;</code> alive.
+            </p>
+            <div class="rl-play-row">
+                <div class="rl-col" style="min-width:440px;">
+                    <div class="diagram"><canvas id="rlArmedCanvas" class="rl-canvas" width="700" height="420" tabindex="0"></canvas></div>
+                    <div class="controls gen-controls" style="margin-top:10px;">
+                        <label>Seed <input type="number" id="rlArmedSeed" value="1337" min="1" max="999999" style="width:90px;"></label>
+                        <button id="rlArmedRestart">↻ New run (apply seed)</button>
+                    </div>
+                    <div id="rlArmedHud" class="info-display" style="font-family:monospace; margin-top:10px;">click the dungeon to begin…</div>
+                </div>
+                <div class="rl-col">
+                    <h4 style="margin:0 0 8px 0; color:#4fc3f7;">Backpack (1–9 to equip / quaff)</h4>
+                    <div class="rl-inv" id="rlArmedInv"></div>
+                    <h4 style="margin:14px 0 8px 0; color:#4fc3f7;">Log</h4>
+                    <div class="rl-log" id="rlArmedLog"></div>
+                </div>
+            </div>
+            <div class="key-point">
+                <strong>💡 This is a small but complete roguelike.</strong> Procedural dungeon, FOV + fog,
+                pursuit AI, energy, items, equipment, status effects, identification, permadeath — composed,
+                not special-cased. The Simulations tier doesn't add a sixth pillar; it deepens the world
+                (cellular-automata caves, depth themes) and ties the whole thing into one shippable game with
+                a shareable seed.
+            </div>
+        </div>
+
+        <!-- RECAP -->
+        <div class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🧰 Recap — what you've got</h2>
+            <ul>
+                <li><strong>Items as data</strong> — entities with components, held uniformly in one inventory.</li>
+                <li><strong>Equipment &amp; derived stats</strong> — store the gear, compute the totals.</li>
+                <li><strong>Status effects &amp; identification</strong> — timed records that tick; risk born of uncertainty.</li>
+                <li><strong>Energy/speed scheduling</strong> — turn order that fast and slow actors bend.</li>
+                <li><strong>AI variety</strong> — FSM brutes and cowards, a behavior-tree archer.</li>
+                <li>A complete armed dungeon dive that composes all of it.</li>
+            </ul>
+            <div class="key-point">
+                <strong>💡 Next (Simulations):</strong> the final tier widens the world — <strong>cellular-automata
+                caves</strong>, <strong>level themes by depth</strong>, and bullet-proof <strong>deterministic
+                seeds</strong> with record/replay — and assembles everything into <em>"The Descent"</em>, the
+                complete, shareable game this whole track has been building toward.
+            </div>
+        </div>
+
+        <div class="section" style="text-align: center;">
+            <h2>✅ Expert Tier Complete</h2>
+            <p style="font-size: 1.1em; margin: 24px 0;">Loot, gear, effects, speed, and monster minds — the dungeon is now a real RPG.</p>
+            <a href="simulations.html" class="nav-button" style="font-size: 1.2em; padding: 20px 40px;">Continue to Simulations →</a>
+            <p style="margin-top: 20px;"><em>Simulations isn't written yet — coming in the next phase. Track progress on the <a href="index.html">track index</a>.</em></p>
+        </div>
+    </div>
+
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <!-- Load order: shared utils, the full roguelike engine (RogueRng; grid;
+         actor toolkit; dungeon generator; vision: FOV/LOS/Dijkstra), then this
+         tier's demos. Items/ECS, status, scheduler and AI are the tier's lesson
+         and live in expert-demos.js. -->
+    <script src="../shared/utils.js"></script>
+    <script src="../shared/code-tabs.js"></script>
+    <script src="engine/seeded-rng.js"></script>
+    <script src="engine/grid.js"></script>
+    <script src="engine/actors.js"></script>
+    <script src="engine/dungeon.js"></script>
+    <script src="engine/vision.js"></script>
+    <script src="expert-demos.js"></script>
+    <script src="../shared/export-demo.js"></script>
+</body>
+</html>

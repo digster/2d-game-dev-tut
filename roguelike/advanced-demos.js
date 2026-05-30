@@ -1,15 +1,11 @@
 // =============================================================================
 // ROGUELIKE — ADVANCED TIER DEMOS ("Sight & Pursuit")
 // =============================================================================
-// Six demos. The vision + pathing ALGORITHMS are defined as top-level globals
-// (not buried in IIFEs) for two reasons: every demo shares one implementation,
-// and they can be unit-tested directly from the console against a hand-built
-// Level (which is how the FOV shadow-casting was verified before trusting it).
-//
-//   losLine        — Bresenham line-of-sight ("can A see B?")
-//   computeFOV      — recursive shadowcasting field-of-view ("what can I see?")
-//   aStarPath       — A* shortest path on the grid (one smart chaser)
-//   dijkstraFrom    — multi-source distance field ("scent map", many chasers)
+// Six demos. The vision + pathing ALGORITHMS this tier teaches now live in
+// engine/vision.js (promoted there once the Expert capstone became a second
+// consumer): losLine, computeFOV, aStarPath, dijkstraFrom, stepDownhill. They
+// are top-level globals, so they're shared by every demo AND unit-testable
+// from the console (which is how the FOV shadow-casting was verified).
 //
 // DEPENDENCIES (loaded BEFORE this file by advanced.html):
 //   ../shared/utils.js   — clearCanvas
@@ -17,6 +13,8 @@
 //   engine/grid.js       — Tile, Level, RL, drawGlyphGrid
 //   engine/actors.js     — rl* toolkit (rlInstallCanvasKeys, rlTryMove, ...)
 //   engine/dungeon.js    — generateDungeon (+ dg* helpers)
+//   engine/vision.js     — losLine, computeFOV, aStarPath, dijkstraFrom,
+//                          stepDownhill, VIS_DIRS4
 // =============================================================================
 
 (function setupScrollToTop() {
@@ -27,139 +25,6 @@
     btn.style.opacity = '0';
     btn.style.transition = 'opacity 0.3s';
 })();
-
-const DIRS4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-
-// --- Line of sight (Bresenham) ----------------------------------------------
-function losLine(level, x0, y0, x1, y1) {
-    const cells = [];
-    let dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0);
-    let sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
-    let err = dx - dy, x = x0, y = y0, clear = true, blockedAt = null;
-    while (true) {
-        cells.push({ x, y });
-        if (x === x1 && y === y1) break;
-        if (!(x === x0 && y === y0) && level.isOpaque(x, y)) { clear = false; blockedAt = { x, y }; break; }
-        const e2 = 2 * err;
-        if (e2 > -dy) { err -= dy; x += sx; }
-        if (e2 < dx) { err += dx; y += sy; }
-    }
-    return { cells, clear, blockedAt };
-}
-
-// --- Recursive shadowcasting FOV (Björn Bergström's 8-octant classic) --------
-const FOV_MULT = [
-    [1, 0, 0, -1, -1, 0, 0, 1],   // xx
-    [0, 1, -1, 0, 0, -1, 1, 0],   // xy
-    [0, 1, 1, 0, 0, -1, -1, 0],   // yx
-    [1, 0, 0, 1, -1, 0, 0, -1],   // yy
-];
-function castLight(level, cx, cy, row, start, end, radius, xx, xy, yx, yy, mark) {
-    if (start < end) return;
-    const r2 = radius * radius;
-    let newStart = 0;
-    for (let j = row; j <= radius; j++) {
-        let dx = -j - 1, dy = -j, blocked = false;
-        while (dx <= 0) {
-            dx++;
-            const X = cx + dx * xx + dy * xy, Y = cy + dx * yx + dy * yy;
-            const lSlope = (dx - 0.5) / (dy + 0.5), rSlope = (dx + 0.5) / (dy - 0.5);
-            if (start < rSlope) continue;
-            if (end > lSlope) break;
-            if (dx * dx + dy * dy < r2) mark(X, Y);
-            if (blocked) {
-                if (level.isOpaque(X, Y)) { newStart = rSlope; continue; }
-                blocked = false; start = newStart;
-            } else if (level.isOpaque(X, Y) && j < radius) {
-                blocked = true;
-                castLight(level, cx, cy, j + 1, start, lSlope, radius, xx, xy, yx, yy, mark);
-                newStart = rSlope;
-            }
-        }
-        if (blocked) break;
-    }
-}
-function computeFOV(level, ox, oy, radius) {
-    const vis = new Uint8Array(level.width * level.height);
-    const mark = (x, y) => { if (level.inBounds(x, y)) vis[level.idx(x, y)] = 1; };
-    mark(ox, oy);
-    for (let oct = 0; oct < 8; oct++)
-        castLight(level, ox, oy, 1, 1.0, 0.0, radius, FOV_MULT[0][oct], FOV_MULT[1][oct], FOV_MULT[2][oct], FOV_MULT[3][oct], mark);
-    return vis;
-}
-
-// --- A* (binary-heap open set) ----------------------------------------------
-class RLHeap {
-    constructor() { this.n = []; this.p = []; }
-    get size() { return this.n.length; }
-    push(node, prio) { this.n.push(node); this.p.push(prio); this._up(this.n.length - 1); }
-    pop() {
-        const top = this.n[0], ln = this.n.pop(), lp = this.p.pop();
-        if (this.n.length) { this.n[0] = ln; this.p[0] = lp; this._down(0); }
-        return top;
-    }
-    _swap(a, b) { [this.n[a], this.n[b]] = [this.n[b], this.n[a]];[this.p[a], this.p[b]] = [this.p[b], this.p[a]]; }
-    _up(i) { while (i > 0) { const par = (i - 1) >> 1; if (this.p[par] <= this.p[i]) break; this._swap(i, par); i = par; } }
-    _down(i) { const n = this.n.length; for (; ;) { let s = i, l = 2 * i + 1, r = 2 * i + 2; if (l < n && this.p[l] < this.p[s]) s = l; if (r < n && this.p[r] < this.p[s]) s = r; if (s === i) break; this._swap(i, s); i = s; } }
-}
-function aStarPath(level, sx, sy, tx, ty) {
-    if (sx === tx && sy === ty) return [];
-    const W = level.width, N = W * level.height;
-    const g = new Float32Array(N).fill(Infinity), came = new Int32Array(N).fill(-1), closed = new Uint8Array(N);
-    const h = (x, y) => Math.abs(x - tx) + Math.abs(y - ty);
-    const start = sy * W + sx, goal = ty * W + tx;
-    g[start] = 0;
-    const open = new RLHeap(); open.push(start, h(sx, sy));
-    while (open.size) {
-        const cur = open.pop();
-        if (closed[cur]) continue;
-        closed[cur] = 1;
-        if (cur === goal) {
-            const path = []; let c = cur;
-            while (c !== start) { path.push({ x: c % W, y: (c / W) | 0 }); c = came[c]; }
-            return path.reverse();
-        }
-        const cx = cur % W, cy = (cur / W) | 0;
-        for (const [dx, dy] of DIRS4) {
-            const nx = cx + dx, ny = cy + dy;
-            if (!level.isWalkable(nx, ny)) continue;
-            const ni = ny * W + nx;
-            if (closed[ni]) continue;
-            const ng = g[cur] + 1;
-            if (ng < g[ni]) { g[ni] = ng; came[ni] = cur; open.push(ni, ng + h(nx, ny)); }
-        }
-    }
-    return [];   // unreachable
-}
-
-// --- Dijkstra distance field ("scent map") ----------------------------------
-function dijkstraFrom(level, sources) {
-    const W = level.width, dist = new Float32Array(W * level.height).fill(Infinity);
-    const queue = [];
-    for (const s of sources) { dist[s.y * W + s.x] = 0; queue.push([s.x, s.y]); }
-    for (let head = 0; head < queue.length; head++) {
-        const [x, y] = queue[head], d = dist[y * W + x];
-        for (const [dx, dy] of DIRS4) {
-            const nx = x + dx, ny = y + dy;
-            if (!level.isWalkable(nx, ny)) continue;
-            if (d + 1 < dist[ny * W + nx]) { dist[ny * W + nx] = d + 1; queue.push([nx, ny]); }
-        }
-    }
-    return dist;
-}
-// Step to the neighbour with the smallest distance that isn't blocked/occupied.
-function stepDownhill(level, m, dist, actors) {
-    const W = level.width;
-    let best = null, bestD = dist[m.y * W + m.x];
-    for (const [dx, dy] of DIRS4) {
-        const nx = m.x + dx, ny = m.y + dy;
-        if (!level.isWalkable(nx, ny)) continue;
-        if (actors && rlActorAt(actors, nx, ny, m)) continue;
-        const d = dist[ny * W + nx];
-        if (d < bestD) { bestD = d; best = { dx, dy }; }
-    }
-    return best;
-}
 
 // =============================================================================
 // DEMO 1 — losDemo : Bresenham line of sight (mouse-driven)
@@ -197,11 +62,11 @@ function stepDownhill(level, m, dist, actors) {
         clearCanvas(ctx, canvas.width, canvas.height, RL.bg);
         drawGlyphGrid(ctx, level, { cell });
         const los = losLine(level, player.x, player.y, target.x, target.y);
-        for (const c of los.cells) {                 // tint the line cells
+        for (const c of los.cells) {
             ctx.fillStyle = los.clear ? 'rgba(102,187,106,0.45)' : 'rgba(239,83,80,0.40)';
             ctx.fillRect(c.x * cell, c.y * cell, cell, cell);
         }
-        if (los.blockedAt) {                          // mark the offending wall
+        if (los.blockedAt) {
             ctx.strokeStyle = RL.bad; ctx.lineWidth = 2;
             const b = los.blockedAt;
             ctx.beginPath();
@@ -256,7 +121,6 @@ function stepDownhill(level, m, dist, actors) {
 
     function render() {
         clearCanvas(ctx, canvas.width, canvas.height, RL.bg);
-        // explored:()=>true draws the whole map dim, so the lit FOV stands out.
         drawGlyphGrid(ctx, level, { cell, visible: (x, y) => vis[level.idx(x, y)], explored: () => true });
         rlDrawEntities(ctx, 0, 0, cell, [{ x: player.x, y: player.y, ch: '@', color: RL.player }]);
         rlFocusHint(ctx, canvas.width, canvas.height, focus.focused);
@@ -298,7 +162,7 @@ function stepDownhill(level, m, dist, actors) {
         const r = action.wait ? 'moved' : rlTryMove(level, player, action, [player]);
         if (r !== 'moved' && !action.wait) return;
         for (const m of monsters) {                       // monsters wander each turn
-            const s = (new RogueRng((m.x * 73856093) ^ (m.y * 19349663) ^ Date.now())).pick(DIRS4);
+            const s = (new RogueRng((m.x * 73856093) ^ (m.y * 19349663) ^ Date.now())).pick(VIS_DIRS4);
             if (level.isWalkable(m.x + s[0], m.y + s[1])) { m.x += s[0]; m.y += s[1]; }
         }
         recompute();
@@ -341,13 +205,12 @@ function stepDownhill(level, m, dist, actors) {
         const rng = new RogueRng(readSeedA(seedEl));
         const d = generateDungeon(cols, rows, rng, { attempts: 26, minSize: 4, maxSize: 7 });
         level = d.level; player = d.spawn;
-        mon = { x: d.stairs.x, y: d.stairs.y };           // start the chaser at the far end
+        mon = { x: d.stairs.x, y: d.stairs.y };
         think();
     }
     const focus = rlInstallCanvasKeys(canvas, (action) => {
         const r = action.wait ? 'moved' : rlTryMove(level, player, action, [player, mon]);
         if (r === 'blocked') return;
-        // Monster turn: recompute LOS + path, step one tile along it.
         think();
         if (hasLos && path.length && !(path[0].x === player.x && path[0].y === player.y)) {
             mon.x = path[0].x; mon.y = path[0].y;
@@ -361,7 +224,7 @@ function stepDownhill(level, m, dist, actors) {
     function render() {
         clearCanvas(ctx, canvas.width, canvas.height, RL.bg);
         drawGlyphGrid(ctx, level, { cell });
-        if (hasLos) {                                     // draw the planned path
+        if (hasLos) {
             ctx.fillStyle = 'rgba(79,195,247,0.5)';
             for (const c of path) ctx.fillRect(c.x * cell + cell / 2 - 3, c.y * cell + cell / 2 - 3, 6, 6);
         }
@@ -397,7 +260,7 @@ function stepDownhill(level, m, dist, actors) {
     }
     function fieldFor(chase) {
         if (chase) return dist;
-        const f = new Float32Array(dist.length);          // flee = negate (Brogue uses ~-1.2)
+        const f = new Float32Array(dist.length);
         for (let i = 0; i < dist.length; i++) f[i] = dist[i] === Infinity ? Infinity : dist[i] * -1.2;
         return f;
     }
@@ -427,14 +290,14 @@ function stepDownhill(level, m, dist, actors) {
     function render() {
         clearCanvas(ctx, canvas.width, canvas.height, RL.bg);
         drawGlyphGrid(ctx, level, { cell });
-        for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {     // heatmap
+        for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
             const d = dist[level.idx(x, y)];
             if (d === Infinity || !level.isWalkable(x, y)) continue;
             const t = maxD ? d / maxD : 0;
             ctx.fillStyle = `hsla(${Math.round(240 * t)}, 70%, 50%, 0.32)`;
             ctx.fillRect(x * cell, y * cell, cell, cell);
         }
-        if (arrowsEl.checked) {                                            // gradient arrows
+        if (arrowsEl.checked) {
             ctx.strokeStyle = 'rgba(224,224,224,0.5)'; ctx.lineWidth = 1;
             for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
                 if (dist[level.idx(x, y)] === Infinity) continue;
@@ -527,7 +390,7 @@ function stepDownhill(level, m, dist, actors) {
                 rlLog(log, `The rat bites you for ${dmg}.`, 'mob');
                 if (player.hp <= 0) { player.dead = true; state = 'dead'; rlLog(log, 'You fall in the dark.', 'warn'); return; }
             } else {
-                const step = stepDownhill(level, m, scent, actors);   // roll down the scent map
+                const step = stepDownhill(level, m, scent, actors);
                 if (step) { m.x += step.dx; m.y += step.dy; }
             }
         }
@@ -552,7 +415,6 @@ function stepDownhill(level, m, dist, actors) {
         clearCanvas(ctx, canvas.width, canvas.height, RL.bg);
         drawGlyphGrid(ctx, level, { cell, visible: (x, y) => vis[level.idx(x, y)], explored: (x, y) => explored[level.idx(x, y)] });
         rlDrawFlashes(ctx, 0, 0, cell, flashes, now);
-        // Only draw monsters you can actually see.
         const shown = monsters.filter(m => !m.dead && vis[level.idx(m.x, m.y)]);
         rlDrawEntities(ctx, 0, 0, cell, shown.concat(player.dead ? [] : [{ x: player.x, y: player.y, ch: '@', color: RL.player }]));
         for (const m of shown) rlHpBar(ctx, 0, 0, cell, m.x, m.y, m.hp / m.maxHp, RL.bad);
@@ -563,7 +425,7 @@ function stepDownhill(level, m, dist, actors) {
     requestAnimationFrame(render);
 })();
 
-// --- tiny tier-local helpers (avoid colliding with the engine's dg*/rl*) -----
+// --- tiny tier-local helpers ------------------------------------------------
 function readSeedA(el) { return Math.max(1, parseInt(el.value, 10) || 1); }
 function countWalkableA(level) {
     let n = 0;

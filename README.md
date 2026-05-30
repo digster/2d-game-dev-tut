@@ -263,8 +263,8 @@ per-tier file structure mirroring the Fundamentals layout.
   `net_` namespace for the future per-tier bundles file. The track
   followed the established "one tier per commit" cadence used by
   racing-sim and voxel-worlds.
-- `roguelike/` — **scaffold + Beginner + Intermediate + Advanced tiers shipped;
-  further tiers landing iteratively.** Build a
+- `roguelike/` — **scaffold + Beginner + Intermediate + Advanced + Expert tiers
+  shipped; Simulations (grand capstone) landing next.** Build a
   complete, turn-based, deterministic grid roguelike (NetHack / Brogue / DCSS
   style) from an empty canvas to a playable, seed-shareable dungeon dive. This
   is the project's first **turn-based** content — the whole genre advances one
@@ -335,7 +335,25 @@ per-tier file structure mirroring the Fundamentals layout.
   (breaking line of sight to shake pursuers) emerges from the systems; reach the
   stairs to escape. The FOV shadow-casting was unit-tested (a wall is visible but
   the tiles behind it are correctly shadowed) before being trusted in the demos.
-  **Tier arc:** Beginner (grid + turn loop + bump-to-attack),
+  Those vision algorithms then graduated to **`roguelike/engine/vision.js`**
+  (`losLine`/`computeFOV`/`aStarPath`/`dijkstraFrom`/`stepDownhill`) once the
+  Expert capstone became their second consumer.
+  **Expert tier (Items, Effects &amp; Minds — 6 demos):** items as a tiny ECS
+  (`Item` entities with a component bag + an `ItemWorld.query(comp)`); an
+  inventory/equipment demo with **derived stats** (attack/defense computed from
+  the equipped gear, never stored — equipping a sword shifts the attack die from
+  1d3→1d8); **status effects + identification** (timed `{kind,turns,power}`
+  records ticked each turn — poison/regen/haste — plus seed-shuffled unidentified
+  potions revealed by quaffing); an **energy/speed scheduler** (every actor banks
+  `speed` energy per tick and acts at 100, so a speed-200 snake acts exactly 2×
+  and a speed-50 zombie ½× per player move); **monster AI variety** (an FSM brute
+  sleep→chase→attack, an FSM coward that flees, and a **behavior-tree** archer
+  that shoots / retreats / repositions / wanders); and the capstone **"Armed &amp;
+  Dangerous"** — the Advanced fog+FOV+pursuit world plus floor loot you pick up
+  and equip (number keys), unidentified potions, status effects, the energy
+  scheduler (fast venomous snake, slow zombie), and derived-stat combat; reach
+  the stairs alive. Inventory uses **number keys** (1–9) since the letter keys
+  are movement. **Tier arc:** Beginner (grid + turn loop + bump-to-attack),
   Intermediate (dungeon generation — rooms/corridors/BSP/drunkard's-walk),
   Advanced (recursive-shadowcasting FOV + fog of war + monster pathing/Dijkstra
   maps), Expert (items/inventory ECS + status effects + identification +
