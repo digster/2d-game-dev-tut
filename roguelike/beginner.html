@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beginner — Roguelike / Dungeon-Crawler Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <!-- Prism.js Syntax Highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+
+    <!-- Tier-local styles: the scrolling message log + the "click to focus"
+         hint. Everything else reuses shared/styles.css. -->
+    <style>
+        /* The canvases here are keyboard-driven, so make focus obvious and
+           stop the browser from scrolling when arrow keys are pressed. */
+        canvas.rl-canvas { cursor: pointer; outline: none; background: #0d1117; }
+        canvas.rl-canvas:focus { box-shadow: 0 0 0 2px #7CF2C8; }
+
+        /* A scrolling, monospace message log — the classic roguelike "what
+           just happened" panel. */
+        .rl-log {
+            font-family: 'Courier New', Consolas, monospace;
+            font-size: 0.9em;
+            background: #0d1117;
+            border: 1px solid #2d3354;
+            border-radius: 6px;
+            padding: 10px 14px;
+            color: #c9d1d9;
+            height: 150px;
+            overflow-y: auto;
+            line-height: 1.5;
+        }
+        .rl-log .you  { color: #7CF2C8; }
+        .rl-log .mob  { color: #ef5350; }
+        .rl-log .good { color: #66bb6a; }
+        .rl-log .warn { color: #ffa726; }
+        .rl-log .dim  { color: #6b7488; }
+
+        /* Side-by-side "playable column" layout for the combat-log demo. */
+        .rl-play-row {
+            display: flex;
+            gap: 18px;
+            flex-wrap: wrap;
+            align-items: flex-start;
+            justify-content: center;
+        }
+        .rl-play-row > .rl-col { flex: 1; min-width: 300px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🗡️ Beginner — The Grid &amp; The Turn</h1>
+        <p class="subtitle">Two ideas hold up every roguelike ever made: the world is a grid of tiles, and time moves one turn at a time. Build both, then fight a rat.</p>
+
+        <!-- Navigation -->
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="beginner.html" class="nav-button active">Beginner</a>
+            <a href="intermediate.html" class="nav-button">Intermediate →</a>
+        </div>
+
+        <!-- Table of Contents -->
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#intro">What makes a roguelike a <em>roguelike</em></a></li>
+                <li><a href="#grid">The grid &amp; ASCII glyphs — your first dungeon</a></li>
+                <li><a href="#turn">The turn loop — turn-based vs real-time</a></li>
+                <li><a href="#bump">Bump-to-attack — move or hit from one keypress</a></li>
+                <li><a href="#log">The message log + seeded combat</a></li>
+                <li><a href="#mini-project">Mini-Project: "One Room, One Rat"</a></li>
+            </ul>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- INTRO -->
+        <!-- ============================================ -->
+        <div id="intro" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🗝️ What makes a roguelike a <em>roguelike</em></h2>
+
+            <p>
+                The genre is named after <em>Rogue</em> (1980) and its descendants — NetHack, Brogue,
+                Dungeon Crawl Stone Soup. They look nothing alike on the surface, but they share a
+                skeleton, and two bones of that skeleton are non-negotiable:
+            </p>
+            <ul>
+                <li><strong>The world is a grid.</strong> Not pixels, not free-floating positions — a
+                    rectangular array of tiles, each one wall or floor or stairs. Everything (the player,
+                    monsters, items) lives <em>on</em> a tile, at integer coordinates.</li>
+                <li><strong>Time is turn-based.</strong> Nothing moves until you do. Press a key, you take
+                    one action, then every monster takes one action, then the world waits again. There is
+                    no clock ticking in the background — and that single fact rewrites the architecture of
+                    everything you've built in the other tracks.</li>
+            </ul>
+
+            <div class="key-point">
+                <strong>💡 Why this is its own track:</strong> every other track in this repo runs a
+                <em>real-time loop</em> — <code>requestAnimationFrame</code> fires 60 times a second
+                whether you touch the keyboard or not, and physics integrates against <code>dt</code>.
+                A roguelike inverts that: the simulation only advances when the player commits an action.
+                We'll build that inversion in the very first two demos, then spend the rest of the track
+                stacking the genre's classic systems on top of it.
+            </div>
+
+            <div class="concept-box">
+                <h4>🧱 Two helpers, loaded on every page in this track</h4>
+                <ul>
+                    <li><code>RogueRng</code> — a deterministic random-number generator. Same seed + same
+                        actions = same dungeon, same monsters, same dice. (Plus roguelike helpers:
+                        <code>dice(2,6)</code>, <code>pick(arr)</code>, <code>weighted(table)</code>.)</li>
+                    <li><code>Level</code> + <code>drawGlyphGrid</code> — the grid data structure (a flat
+                        <code>Uint8Array</code> of tile types with <code>isWalkable</code> / <code>isOpaque</code>
+                        queries) and the ASCII renderer that paints it onto a canvas as monospace glyphs.</li>
+                </ul>
+                <p>
+                    Both shipped in the scaffold commit. Open the <a href="index.html">track index</a> and
+                    scroll to the Scaffold Self-Check at the bottom — it proves both load and renders a
+                    little room with the exact glyphs you'll see below.
+                </p>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- GRID DEMO -->
+        <!-- ============================================ -->
+        <div id="grid" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🟦 The grid &amp; ASCII glyphs — your first dungeon</h2>
+
+            <p>
+                Here is a hand-built room. The walls are <code style="color:#8893b5">#</code>, the floor is
+                <code style="color:#3a4570">·</code>, the down-stairs are <code style="color:#ffd166">&gt;</code>,
+                and <code style="color:#7CF2C8">@</code> is you — the universal roguelike symbol for the player.
+                <strong>Click the dungeon to focus it</strong>, then walk around with the arrow keys,
+                <strong>WASD</strong>, or the classic vi-keys <strong>h&nbsp;j&nbsp;k&nbsp;l</strong>. Walls stop you.
+            </p>
+
+            <div class="diagram">
+                <canvas id="rlGridCanvas" class="rl-canvas" width="494" height="286" tabindex="0"></canvas>
+            </div>
+            <div class="controls">
+                <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                    <input type="checkbox" id="rlGridLines"> Show tile grid
+                </label>
+                <button id="rlGridReset">↻ Reset position</button>
+            </div>
+            <div id="rlGridHud" class="info-display" style="font-family:monospace;">click the dungeon, then move…</div>
+
+            <h3>How the grid is stored</h3>
+            <details>
+                <summary>📝 Click to see: a <code>Level</code> is just a flat array of tile types</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Tile types are small integers so the whole map fits in one Uint8Array.
+// WALL = 0 matters: a fresh array is all zeros, i.e. "solid rock" — and
+// generators CARVE floor into it (you'll do that in the Intermediate tier).
+const Tile = { WALL: 0, FLOOR: 1, STAIRS_DOWN: 2 };
+
+// Build a 19x11 room: solid rock, then hollow out the interior to floor.
+const level = new Level(19, 11, Tile.WALL);
+for (let y = 1; y &lt; 10; y++)
+    for (let x = 1; x &lt; 18; x++)
+        level.set(x, y, Tile.FLOOR);
+level.set(17, 9, Tile.STAIRS_DOWN);
+
+// The (x, y) -&gt; index math is the single most-used line in a roguelike.
+// Reading out of bounds returns WALL, so movement code never special-cases
+// the edges — the world is "walled in" by definition.
+const i = level.idx(x, y);          // y * width + x
+const standable = level.isWalkable(x, y);  // floor / stairs / door, not wall
+
+// The player is NOT in the array — it's a separate object holding a tile coord.
+const player = { x: 1, y: 1, ch: '@', color: '#7CF2C8' };</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const enum Tile { WALL = 0, FLOOR = 1, STAIRS_DOWN = 2 }
+
+interface Actor { x: number; y: number; ch: string; color: string; }
+
+const level = new Level(19, 11, Tile.WALL);
+for (let y = 1; y &lt; 10; y++)
+    for (let x = 1; x &lt; 18; x++)
+        level.set(x, y, Tile.FLOOR);
+level.set(17, 9, Tile.STAIRS_DOWN);
+
+const player: Actor = { x: 1, y: 1, ch: '@', color: '#7CF2C8' };
+const standable: boolean = level.isWalkable(player.x, player.y);</code></pre>
+                </div>
+                <div class="key-point">
+                    <strong>💡 The player lives outside the grid.</strong> The tile array only stores the
+                    <em>terrain</em>. Actors (player, monsters) and items are separate objects that hold a
+                    tile coordinate. That separation is what lets two things share knowledge of a tile —
+                    "is the floor at (5,5) occupied?" is answered by scanning actors, not by the map.
+                </div>
+            </details>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- TURN LOOP DEMO -->
+        <!-- ============================================ -->
+        <div id="turn" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>⏳ The turn loop — turn-based vs real-time</h2>
+
+            <p>
+                This is the heart of the genre. Below are <strong>two copies of the same room</strong>, each
+                with a goblin <code style="color:#ef5350">g</code> trying to reach you. <strong>Click to focus</strong>,
+                then move with the arrow keys / WASD / hjkl and watch the difference:
+            </p>
+            <ul>
+                <li><strong>LEFT — real-time:</strong> the goblin steps toward you on a timer (about three
+                    steps a second) <em>whether you move or not</em>. Sit still and it still closes in.</li>
+                <li><strong>RIGHT — turn-based:</strong> the goblin steps <em>exactly once for each step you
+                    take</em>. Sit still and it freezes. The world holds its breath until you act.</li>
+            </ul>
+
+            <div class="diagram">
+                <canvas id="rlTurnCanvas" class="rl-canvas" width="540" height="288" tabindex="0"></canvas>
+            </div>
+            <div class="controls">
+                <button id="rlTurnReset">↻ Reset</button>
+            </div>
+            <div id="rlTurnHud" class="info-display" style="font-family:monospace;">click, then move — and try sitting still…</div>
+
+            <div class="concept-box">
+                <h4>🔍 What to notice</h4>
+                <p>
+                    Take ten seconds to think between moves. In the real-time room the goblin used those ten
+                    seconds to walk right up to you; in the turn-based room it didn't move at all. <strong>That
+                    pause is the genre's superpower</strong> — it's why roguelikes can be brutally tactical:
+                    you always have all the time in the world to plan the single best move, and the
+                    consequences only unfold when you commit.
+                </p>
+            </div>
+
+            <details>
+                <summary>📝 Click to see: a real-time loop vs a turn-based loop, side by side</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// ── REAL-TIME (every other track in this repo) ───────────────────
+// The simulation advances on a clock, regardless of input.
+function frame(now) {
+    const dt = (now - last) / 1000; last = now;
+    world.update(dt);            // monsters move, physics integrates...
+    render();
+    requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);    // runs forever
+
+// ── TURN-BASED (a roguelike) ─────────────────────────────────────
+// The simulation advances ONLY when the player commits an action.
+canvas.addEventListener('keydown', (e) =&gt; {
+    const step = keyToStep(e);   // arrow / WASD / hjkl -&gt; {dx, dy} or null
+    if (!step) return;
+
+    const result = tryMove(player, step);   // 'moved' | 'attacked' | 'blocked'
+    if (result === 'blocked') return;        // walked into a wall: FREE retry
+
+    // The player spent a turn — now everyone else gets one.
+    for (const monster of monsters) takeMonsterTurn(monster);
+    turnCount++;
+    render();                    // we only redraw when something happened
+});</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">type Step = { dx: number; dy: number };
+type MoveResult = 'moved' | 'attacked' | 'blocked';
+
+// Turn-based: input drives the simulation, not a clock.
+canvas.addEventListener('keydown', (e: KeyboardEvent) =&gt; {
+    const step: Step | null = keyToStep(e);
+    if (!step) return;
+
+    const result: MoveResult = tryMove(player, step);
+    if (result === 'blocked') return;   // no turn spent
+
+    for (const monster of monsters) takeMonsterTurn(monster);
+    turnCount++;
+    render();
+});</code></pre>
+                </div>
+                <div class="key-point">
+                    <strong>💡 The whole genre fits in that second block.</strong> "Player acts → if the
+                    action was real, everyone else acts → redraw." Everything we add later — pathfinding,
+                    items, status effects, speed — slots into <code>takeMonsterTurn</code> or
+                    <code>tryMove</code>. Notice we only <code>render()</code> after something changed; there's
+                    no background loop burning CPU while you think.
+                </div>
+            </details>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- BUMP-TO-ATTACK DEMO -->
+        <!-- ============================================ -->
+        <div id="bump" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>👊 Bump-to-attack — move or hit from one keypress</h2>
+
+            <p>
+                Roguelikes almost never have a separate "attack" button. Instead, <strong>walking into
+                something attacks it</strong>. One keypress, and the game decides: is the target tile empty
+                floor? Then move there. Is something standing on it? Then attack that thing instead, and
+                stay put. <strong>Click to focus</strong> and bump into the training dummies
+                <code style="color:#ef5350">d</code> — each hit rolls <code>1d6</code> damage.
+            </p>
+
+            <div class="diagram">
+                <canvas id="rlBumpCanvas" class="rl-canvas" width="442" height="234" tabindex="0"></canvas>
+            </div>
+            <div class="controls">
+                <button id="rlBumpReset">↻ Reset dummies</button>
+            </div>
+            <div id="rlBumpHud" class="info-display" style="font-family:monospace;">click, then bump a dummy…</div>
+
+            <details>
+                <summary>📝 Click to see: the move-or-attack resolution (the one branch that defines the feel)</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// One keypress -&gt; one of three outcomes. Only the first two cost a turn.
+function tryMove(actor, step) {
+    const tx = actor.x + step.dx;
+    const ty = actor.y + step.dy;
+
+    // 1) Is a creature standing on the target tile? Bump = attack.
+    const target = actorAt(tx, ty);
+    if (target &amp;&amp; target !== actor) {
+        attack(actor, target);
+        return 'attacked';
+    }
+
+    // 2) Is the target tile open floor? Step onto it.
+    if (level.isWalkable(tx, ty) &amp;&amp; !actorAt(tx, ty)) {
+        actor.x = tx;
+        actor.y = ty;
+        return 'moved';
+    }
+
+    // 3) A wall (or the map edge). Nothing happens — and no turn is spent.
+    return 'blocked';
+}
+
+function attack(attacker, target) {
+    const dmg = rng.dice(1, 6);          // 1d6 — deterministic given the seed
+    target.hp -= dmg;
+    log(`${attacker.name} hits ${target.name} for ${dmg}.`);
+    if (target.hp &lt;= 0) { target.dead = true; log(`${target.name} dies!`); }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">type Step = { dx: number; dy: number };
+type MoveResult = 'moved' | 'attacked' | 'blocked';
+
+interface Actor { x: number; y: number; hp: number; name: string; dead?: boolean; }
+
+function tryMove(actor: Actor, step: Step): MoveResult {
+    const tx = actor.x + step.dx, ty = actor.y + step.dy;
+
+    const target = actorAt(tx, ty);
+    if (target &amp;&amp; target !== actor) { attack(actor, target); return 'attacked'; }
+
+    if (level.isWalkable(tx, ty) &amp;&amp; !actorAt(tx, ty)) {
+        actor.x = tx; actor.y = ty; return 'moved';
+    }
+    return 'blocked';
+}</code></pre>
+                </div>
+                <div class="key-point">
+                    <strong>💡 Walls don't cost a turn; attacks do.</strong> That <code>'blocked'</code>
+                    return is doing real work — bumping a wall is a free retry, so monsters don't get a free
+                    turn just because you misjudged a corner. Attacking, though, <em>is</em> your action for
+                    the turn: you can't hit and step in the same move.
+                </div>
+            </details>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- MESSAGE LOG DEMO -->
+        <!-- ============================================ -->
+        <div id="log" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>📜 The message log + seeded combat</h2>
+
+            <p>
+                Bumping a passive dummy is one thing — but a real fight has <strong>turn order</strong>:
+                you act, then the enemy acts back. And because so much happens off-screen-ish (dice rolls,
+                deaths, misses), every roguelike has a <strong>message log</strong> narrating it. Here's a
+                tiny duel: you <code style="color:#7CF2C8">@</code> (20 HP, 1d6) versus a rat
+                <code style="color:#ef5350">r</code> (8 HP, 1d4). Corner it. <strong>Click to focus</strong>,
+                then move/attack — the log tells the story, and the seed makes the dice reproducible.
+            </p>
+
+            <div class="rl-play-row">
+                <div class="rl-col">
+                    <div class="diagram" style="padding:10px;">
+                        <canvas id="rlLogCanvas" class="rl-canvas" width="338" height="234" tabindex="0"></canvas>
+                    </div>
+                    <div class="controls" style="margin-top:10px;">
+                        <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                            Seed
+                            <input type="number" id="rlLogSeed" value="7" min="1" max="999999" style="width:90px;">
+                        </label>
+                        <button id="rlLogReset">↻ New duel</button>
+                    </div>
+                </div>
+                <div class="rl-col">
+                    <h4 style="margin:0 0 8px 0; color:#4fc3f7;">Message log</h4>
+                    <div class="rl-log" id="rlLogPanel"></div>
+                    <div id="rlLogHud" class="info-display" style="font-family:monospace; margin-top:10px;">click the map, then fight…</div>
+                </div>
+            </div>
+
+            <div class="concept-box">
+                <h4>🎲 Why a <em>seeded</em> log matters</h4>
+                <p>
+                    Combat is dice, and dice are random — but in this track "random" means
+                    <code>RogueRng</code>, not <code>Math.random()</code>. Set the same seed, fight the rat
+                    with the same moves, and you'll get the same hits, the same damage, the same death turn,
+                    every single time. That reproducibility is what makes a bug filable ("seed 7, move right
+                    three times, the rat should be dead") and what powers the shareable "daily challenge"
+                    you'll build in the Simulations tier.
+                </p>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- MINI-PROJECT -->
+        <!-- ============================================ -->
+        <div id="mini-project" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🐀 Mini-project — "One Room, One Rat"</h2>
+
+            <p>
+                Capstone time. Everything from this tier in one playable loop: a room (with a few pillars to
+                duck behind), the player <code style="color:#7CF2C8">@</code>, and a rat
+                <code style="color:#ef5350">r</code> that starts <em>asleep</em> across the room, wakes when
+                you get close, then hunts you down. Bump-to-attack both ways, a live message log, HP, and a
+                win/lose ending. <strong>Click to focus</strong>, then descend on the stairs
+                <code style="color:#ffd166">&gt;</code> once the rat is dead.
+            </p>
+
+            <div class="rl-play-row">
+                <div class="rl-col" style="min-width:420px;">
+                    <div class="diagram">
+                        <canvas id="rlCapCanvas" class="rl-canvas" width="504" height="312" tabindex="0"></canvas>
+                    </div>
+                    <div class="controls" style="margin-top:10px;">
+                        <label style="color:#c9d1d9; display:inline-flex; align-items:center; gap:8px;">
+                            Seed
+                            <input type="number" id="rlCapSeed" value="1337" min="1" max="999999" style="width:90px;">
+                        </label>
+                        <button id="rlCapRestart">↻ New room (apply seed)</button>
+                    </div>
+                </div>
+                <div class="rl-col">
+                    <h4 style="margin:0 0 8px 0; color:#4fc3f7;">Message log</h4>
+                    <div class="rl-log" id="rlCapLog" style="height:210px;"></div>
+                    <div id="rlCapHud" class="info-display" style="font-family:monospace; margin-top:10px;">click the dungeon to begin…</div>
+                </div>
+            </div>
+
+            <div class="key-point">
+                <strong>💡 You just built a complete roguelike turn loop.</strong> Player acts → if it was a
+                real action, the rat acts → redraw → check for a winner. It's tiny, but the skeleton is
+                identical to the full game in the Simulations tier — that one will just have <em>more</em>:
+                a generated dungeon instead of a hand-built room, a field-of-view instead of full sight,
+                many monsters with real pathfinding, and items. Same loop underneath.
+            </div>
+
+            <details>
+                <summary>📝 Click to see: how the sleeping rat wakes and hunts (no pathfinding yet)</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// The rat's whole brain for this tier. (The Advanced tier replaces the
+// "step toward" line with real A* / Dijkstra pathing around walls.)
+function takeRatTurn(rat, player) {
+    // Asleep until the player is close — a stand-in for the real
+    // field-of-view check you'll build in the Advanced tier.
+    const dist = Math.abs(rat.x - player.x) + Math.abs(rat.y - player.y); // Manhattan
+    if (rat.asleep) {
+        if (dist &lt;= rat.senseRange) { rat.asleep = false; log('The rat notices you!'); }
+        else return;             // keep snoozing, no action
+    }
+
+    // Adjacent? Bite. Otherwise greedily step one tile closer.
+    if (dist === 1) { attack(rat, player); return; }
+    const step = stepToward(rat, player);     // greedy cardinal step
+    tryMove(rat, step);
+}
+
+// Greedy one-tile step toward a target, with a simple wall fallback:
+// try the bigger axis first, then the other, then give up (wait).
+function stepToward(from, to) {
+    const dx = Math.sign(to.x - from.x), dy = Math.sign(to.y - from.y);
+    const tries = Math.abs(to.x - from.x) &gt; Math.abs(to.y - from.y)
+        ? [{dx, dy: 0}, {dx: 0, dy}]
+        : [{dx: 0, dy}, {dx, dy: 0}];
+    for (const t of tries)
+        if (level.isWalkable(from.x + t.dx, from.y + t.dy)) return t;
+    return { dx: 0, dy: 0 };     // boxed in — wait this turn
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface Rat { x: number; y: number; asleep: boolean; senseRange: number; }
+
+function takeRatTurn(rat: Rat, player: Actor): void {
+    const dist = Math.abs(rat.x - player.x) + Math.abs(rat.y - player.y);
+    if (rat.asleep) {
+        if (dist &lt;= rat.senseRange) { rat.asleep = false; log('The rat notices you!'); }
+        else return;
+    }
+    if (dist === 1) { attack(rat, player); return; }
+    tryMove(rat, stepToward(rat, player));
+}</code></pre>
+                </div>
+                <div class="key-point">
+                    <strong>💡 "Greedy step toward" is not pathfinding.</strong> It walks straight at you and
+                    gets stuck on the far side of a wall — try luring the rat around a pillar. Fixing that is
+                    exactly what the Advanced tier's A* and Dijkstra maps are for. Starting with the naive
+                    version makes the upgrade <em>feel</em> like an upgrade.
+                </div>
+            </details>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- RECAP -->
+        <!-- ============================================ -->
+        <div class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🧰 Recap — what you've got</h2>
+            <ul>
+                <li>A <strong>grid</strong> world (<code>Level</code> = flat <code>Uint8Array</code> of tile types) rendered as <strong>ASCII glyphs</strong>.</li>
+                <li>The <strong>turn loop</strong> — the genre-defining inversion: the simulation advances only when the player acts.</li>
+                <li><strong>Bump-to-attack</strong> — one keypress resolves to move, attack, or blocked, and only real actions cost a turn.</li>
+                <li>A <strong>message log</strong> and <strong>seeded combat</strong>, so fights are narrated and reproducible.</li>
+                <li>A complete, playable micro-roguelike: <em>One Room, One Rat</em>.</li>
+            </ul>
+            <div class="key-point">
+                <strong>💡 What you DON'T have yet (the Intermediate-tier promise):</strong> your dungeon is
+                a single room you typed out by hand. Real roguelikes generate a fresh, sprawling dungeon
+                every run. The Intermediate tier is all about that — placing rooms, digging corridors, BSP
+                partitioning, and organic drunkard's-walk caves — and ends with you descending stairs into a
+                freshly generated level.
+            </div>
+        </div>
+
+        <!-- Next Steps -->
+        <div class="section" style="text-align: center;">
+            <h2>✅ Beginner Tier Complete</h2>
+            <p style="font-size: 1.1em; margin: 24px 0;">
+                You can render a grid, take turns, fight by bumping, and narrate it all — the skeleton every
+                later tier hangs flesh on.
+            </p>
+            <a href="intermediate.html" class="nav-button" style="font-size: 1.2em; padding: 20px 40px;">
+                Continue to Intermediate →
+            </a>
+            <p style="margin-top: 20px;"><em>Intermediate isn't written yet — coming in the next phase. Track progress on the <a href="index.html">track index</a>.</em></p>
+        </div>
+    </div>
+
+    <!-- Scroll to Top Button -->
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <!-- Load order: shared utils first (Vector2D, lerp, clamp, ...), then the
+         roguelike engine helpers (RogueRng, Level/Tile/RL/drawGlyphGrid on
+         window), then this tier's demos. code-tabs powers the JS/TS toggles. -->
+    <script src="../shared/utils.js"></script>
+    <script src="../shared/code-tabs.js"></script>
+    <script src="engine/seeded-rng.js"></script>
+    <script src="engine/grid.js"></script>
+    <script src="beginner-demos.js"></script>
+
+    <!-- Shared export-demo injector. The <details> blocks here intentionally
+         omit data-demo-id (these demos are keyboard-driven, and the export
+         scaffold only renders button controls), so the injector finds nothing
+         to attach and stays silent — same opt-out the racing-sim tier used. -->
+    <script src="../shared/export-demo.js"></script>
+</body>
+</html>

@@ -263,7 +263,8 @@ per-tier file structure mirroring the Fundamentals layout.
   `net_` namespace for the future per-tier bundles file. The track
   followed the established "one tier per commit" cadence used by
   racing-sim and voxel-worlds.
-- `roguelike/` — **scaffold shipped; tiers landing iteratively.** Build a
+- `roguelike/` — **scaffold + Beginner tier shipped; further tiers landing
+  iteratively.** Build a
   complete, turn-based, deterministic grid roguelike (NetHack / Brogue / DCSS
   style) from an empty canvas to a playable, seed-shareable dungeon dive. This
   is the project's first **turn-based** content — the whole genre advances one
@@ -283,7 +284,20 @@ per-tier file structure mirroring the Fundamentals layout.
   fog-of-war visibility mask). The landing page's self-check proves determinism
   (seed 1337 → identical numbers), exercises the RNG/Level helpers, and renders
   a hand-built room (`#` walls, `·` floor, `>` stairs, `@` player, `r` rat) to
-  prove the renderer. **Tier arc:** Beginner (grid + turn loop + bump-to-attack),
+  prove the renderer. **Beginner tier (The Grid &amp; The Turn — 5 demos):** a
+  walk-around grid (arrows / WASD / vi-keys, walls block, click-to-focus
+  keyboard handling so multiple demos don't fight over the arrow keys); a
+  turn-based-vs-real-time demo (two copies of one room — the left goblin steps
+  on a 350 ms timer regardless of input, the right goblin steps once per player
+  action, so "sit still and the real-time monster still closes in" lands
+  viscerally); a bump-to-attack demo (one keypress resolves to move / attack /
+  blocked against passive training dummies with HP bars + 1d6 hits); a
+  combat-log duel with turn order, retaliation, death, and a seeded
+  reproducible message log; and the capstone **"One Room, One Rat"** — a
+  complete playable micro-roguelike (a pillared room, a sleeping rat that wakes
+  on proximity and hunts via greedy step-toward, bump combat both ways, a live
+  log, HP, win-by-descending-the-stairs / lose-by-death, all reproducible from
+  a seed). **Tier arc:** Beginner (grid + turn loop + bump-to-attack),
   Intermediate (dungeon generation — rooms/corridors/BSP/drunkard's-walk),
   Advanced (recursive-shadowcasting FOV + fog of war + monster pathing/Dijkstra
   maps), Expert (items/inventory ECS + status effects + identification +

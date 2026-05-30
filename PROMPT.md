@@ -888,3 +888,73 @@ Beginner tier ("The Grid & The Turn"): beginner.html + beginner-demos.js
 — grid&glyphs, turn loop (turn-based vs real-time), bump-to-attack,
 message log + seeded combat, capstone "One Room, One Rat". Flip the
 Beginner roadmap card to Ready and add its TOC sub-links.
+
+
+# 2026-05-30 (pt.2) — Roguelike: Beginner tier (The Grid & The Turn)
+
+Prompt: "Okay, work on the next iteration." (Continue the roguelike track,
+tier by tier.)
+
+## Shipped this commit
+
+beginner.html + beginner-demos.js, 5 demos (4 teaching + capstone), built
+on the scaffold's RogueRng + Level/drawGlyphGrid:
+
+1. gridGlyphDemo — walk a @ around a hand-built room; walls block; toggle
+   tile grid. Teaches Level + glyph rendering + "the player is a separate
+   object, not in the tile array".
+2. turnLoopDemo — TWO copies of one room side by side. LEFT goblin steps on
+   a 350 ms real-time timer regardless of input; RIGHT goblin steps once per
+   player action. The genre's defining inversion, made visceral by "sit still
+   and watch only the real-time monster close in".
+3. bumpAttackDemo — one keypress -> move / attack / blocked, against passive
+   dummies (1d6, HP bars, corpses). Only move/attack cost a turn.
+4. combatLogDemo — a duel with turn order + retaliation + death + a seeded,
+   reproducible scrolling message log.
+5. oneRoomOneRatDemo (CAPSTONE) — complete micro-roguelike: pillared room,
+   sleeping rat that wakes on proximity and hunts via greedy step-toward,
+   bump combat both ways, live log, HP, win (descend stairs) / lose (death),
+   all reproducible from a seed.
+
+Shared rl* toolkit in the demos file (collision-safe, no shadowing of
+shared/utils.js globals): rlKeyToStep (arrows/WASD/hjkl + '.'/space wait),
+rlTryMove (the move/attack/blocked resolver), rlStepToward/rlStepCandidates
+(greedy cardinal pursuit — explicitly NOT pathfinding, that's Advanced),
+rlInstallCanvasKeys (click-to-focus + preventDefault so demos don't fight
+over arrow keys / scroll the page), rlLog, rlFocusHint, HP bars, flashes.
+
+## Bug caught & fixed mid-iteration
+
+turnLoopDemo's reset() reset the goblins + counters but NOT the player
+position, so after earlier moves the real-time goblin spawned next to the
+player and reported "caught you!" after one step. Fixed: reset() now
+restores player to PSTART. (Verification also confirmed the real-time
+goblin advances on its timer — the bug was purely the stale player pos.)
+
+## Verification
+
+`python3 -m http.server 8765`, beginner.html in-browser, console CLEAN
+(zero logs/errors) throughout. Drove every demo via synthetic keydowns:
+- Demo 1: (1,1)->(3,2) moves; wall bump clamps at x=1 with last='blocked'.
+- Demo 2 (post-fix): 3 turns -> turn-based goblin 3 steps, player home; the
+  real-time goblin stepped on its own timer between frames (rtSteps grew
+  with wall-clock time, 0 with player input).
+- Demo 3: bump destroys a dummy ("You hit the dummy for 4. It is destroyed!").
+- Demo 4: played to "The rat dies! You win." AND proved determinism — same
+  seed (7) + same inputs => byte-identical message log across two runs.
+- Demo 5: marched to the rat (woke: "The rat notices you!"), killed it
+  (rat dead 0/10), descended -> "🏆 you descended — you win!". Screenshot
+  shows the pillared room, @ on >, rat corpse %, colour-coded combat log.
+- code-tabs: 4 containers, JS/TS buttons, Prism highlighting active.
+
+Indexes updated: roguelike/index.html (Beginner card -> Ready + nav link;
+Intermediate -> "Building next"), root index.html TOC (Beginner sub-link),
+README.md (Beginner tier documented).
+
+## Next
+
+Intermediate tier ("Building the Dungeon"): rooms + carving, corridors, BSP
+partitioning, drunkard's walk, populate (spawn/stairs/monsters by seed +
+flood-fill connectivity), capstone "Explore the Dungeon" (descend stairs to
+a freshly generated level). Reuse RogueRng + Level; the generated map
+replaces the hand-built room.
