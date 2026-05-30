@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced — Roguelike / Dungeon-Crawler Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+    <style>
+        canvas.rl-canvas { cursor: pointer; outline: none; background: #0d1117; max-width: 100%; }
+        canvas.rl-canvas:focus { box-shadow: 0 0 0 2px #7CF2C8; }
+        .rl-log {
+            font-family: 'Courier New', Consolas, monospace; font-size: 0.9em;
+            background: #0d1117; border: 1px solid #2d3354; border-radius: 6px;
+            padding: 10px 14px; color: #c9d1d9; height: 210px; overflow-y: auto; line-height: 1.5;
+        }
+        .rl-log .you { color: #7CF2C8; } .rl-log .mob { color: #ef5350; }
+        .rl-log .good { color: #66bb6a; } .rl-log .warn { color: #ffa726; } .rl-log .dim { color: #6b7488; }
+        .rl-play-row { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-start; justify-content: center; }
+        .rl-play-row > .rl-col { flex: 1; min-width: 300px; }
+        .gen-controls label { color: #c9d1d9; display: inline-flex; align-items: center; gap: 8px; margin-right: 6px; }
+        .gen-controls .val { font-family: monospace; color: #4fc3f7; min-width: 46px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔦 Advanced — Sight &amp; Pursuit</h1>
+        <p class="subtitle">A dungeon you can see all of isn't scary. Now build the dark: line of sight, recursive-shadowcasting field-of-view, fog of war — then give the monsters eyes and a way to hunt you through it.</p>
+
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="intermediate.html" class="nav-button">← Intermediate</a>
+            <a href="advanced.html" class="nav-button active">Advanced</a>
+            <a href="expert.html" class="nav-button">Expert →</a>
+        </div>
+
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#intro">Why sight changes everything</a></li>
+                <li><a href="#los">Line of sight (Bresenham)</a></li>
+                <li><a href="#fov">Recursive shadowcasting field-of-view</a></li>
+                <li><a href="#fog">Fog of war &amp; the remembered map</a></li>
+                <li><a href="#astar">Monster pathing with A*</a></li>
+                <li><a href="#dijkstra">Dijkstra "scent" maps</a></li>
+                <li><a href="#mini-project">Mini-Project: "The Hunt"</a></li>
+            </ul>
+        </div>
+
+        <!-- INTRO -->
+        <div id="intro" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>👁️ Why sight changes everything</h2>
+            <p>
+                Until now you could see the whole map. That's not a roguelike — it's a board game. The dread
+                of a dungeon crawl comes from <strong>not knowing what's around the corner</strong>. This
+                tier builds that, in two halves:
+            </p>
+            <ul>
+                <li><strong>What YOU can see.</strong> <em>Line of sight</em> answers "is there a clear line to that tile?"; <em>field of view</em> answers the bigger question "which of <em>all</em> tiles can I currently see?"; <em>fog of war</em> remembers where you've been but greys out what you can't see right now.</li>
+                <li><strong>What the MONSTERS can see — and how they chase.</strong> The same line-of-sight check decides when a monster notices you; then <em>A*</em> and <em>Dijkstra maps</em> get it to you across the dungeon you can't fully see.</li>
+            </ul>
+            <div class="key-point">
+                <strong>💡 Symmetry you can exploit:</strong> sight is mutual. If you can't see the monster, it
+                (usually) can't see you — so breaking line of sight is how you escape. The capstone turns that
+                into a stealth game: duck behind a wall and the hunt goes cold.
+            </div>
+        </div>
+
+        <!-- LOS -->
+        <div id="los" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>📏 Line of sight (Bresenham)</h2>
+            <p>
+                The atom of vision: given two tiles, is the straight line between them clear of walls?
+                Bresenham's line algorithm — the same one used to draw pixel lines — walks the grid cells
+                along that line. If any cell between the endpoints is a wall, sight is blocked.
+                <strong>Move your mouse</strong> over the map; the line from the
+                <code style="color:#7CF2C8">@</code> turns <span style="color:#66bb6a">green</span> when
+                clear and <span style="color:#ef5350">red</span> when a wall is in the way.
+            </p>
+            <div class="diagram"><canvas id="rlLosCanvas" class="rl-canvas" width="700" height="420"></canvas></div>
+            <div class="controls gen-controls">
+                <label>Seed <input type="number" id="rlLosSeed" value="42" min="1" max="999999" style="width:90px;"></label>
+                <button id="rlLosGen">↻ New layout</button>
+            </div>
+            <div id="rlLosHud" class="info-display" style="font-family:monospace;">move the mouse over the map…</div>
+            <details>
+                <summary>📝 Click to see: Bresenham line-of-sight check</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Walk the grid cells along the line (x0,y0)->(x1,y1). Sight is clear unless
+// a wall sits strictly BETWEEN the endpoints (you can still SEE a wall you bump).
+function losLine(level, x0, y0, x1, y1) {
+    const cells = [];
+    let dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0);
+    let sx = x0 &lt; x1 ? 1 : -1, sy = y0 &lt; y1 ? 1 : -1;
+    let err = dx - dy, x = x0, y = y0;
+    let clear = true, blockedAt = null;
+    while (true) {
+        cells.push({ x, y });
+        if (x === x1 &amp;&amp; y === y1) break;
+        // A wall between the endpoints blocks the line.
+        if (!(x === x0 &amp;&amp; y === y0) &amp;&amp; level.isOpaque(x, y)) { clear = false; blockedAt = { x, y }; break; }
+        const e2 = 2 * err;
+        if (e2 &gt; -dy) { err -= dy; x += sx; }
+        if (e2 &lt; dx)  { err += dx; y += sy; }
+    }
+    return { cells, clear, blockedAt };
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface LosResult { cells: {x:number;y:number}[]; clear: boolean; blockedAt: {x:number;y:number} | null; }
+
+function losLine(level: Level, x0: number, y0: number, x1: number, y1: number): LosResult {
+    const cells: {x:number;y:number}[] = [];
+    let dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0);
+    let sx = x0 &lt; x1 ? 1 : -1, sy = y0 &lt; y1 ? 1 : -1;
+    let err = dx - dy, x = x0, y = y0, clear = true;
+    let blockedAt: {x:number;y:number} | null = null;
+    while (true) {
+        cells.push({ x, y });
+        if (x === x1 &amp;&amp; y === y1) break;
+        if (!(x === x0 &amp;&amp; y === y0) &amp;&amp; level.isOpaque(x, y)) { clear = false; blockedAt = { x, y }; break; }
+        const e2 = 2 * err;
+        if (e2 &gt; -dy) { err -= dy; x += sx; }
+        if (e2 &lt; dx)  { err += dx; y += sy; }
+    }
+    return { cells, clear, blockedAt };
+}</code></pre>
+                </div>
+                <div class="key-point">
+                    <strong>💡 LOS is cheap but not symmetric-perfect.</strong> A single Bresenham line is great
+                    for "does this monster see the player?" but if you used it for the player's whole view
+                    you'd get ugly artefacts (some tiles visible, their neighbours not). For the player you
+                    want a proper field-of-view — the next demo.
+                </div>
+            </details>
+        </div>
+
+        <!-- FOV -->
+        <div id="fov" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🔦 Recursive shadowcasting field-of-view</h2>
+            <p>
+                Field of view answers "which tiles can I see <em>at all</em>?" — and it has to be fast,
+                artefact-free, and symmetric. The classic answer is <strong>recursive shadowcasting</strong>:
+                split the area around the player into 8 octants, scan each one row by row, and track the
+                <em>slopes</em> of the shadows that walls cast. Tiles inside a shadow are skipped; walls start
+                new shadows. <strong>Click to focus</strong>, walk the <code style="color:#7CF2C8">@</code>
+                around, and watch the lit area flow around corners. The dimmed tiles are out of view.
+            </p>
+            <div class="diagram"><canvas id="rlFovCanvas" class="rl-canvas" width="700" height="420" tabindex="0"></canvas></div>
+            <div class="controls gen-controls">
+                <label>Sight radius <input type="range" id="rlFovRadius" min="3" max="14" value="8" style="width:150px;"><span class="val" id="rlFovRadiusVal">8</span></label>
+                <label>Seed <input type="number" id="rlFovSeed" value="42" min="1" max="999999" style="width:90px;"></label>
+                <button id="rlFovGen">↻ New dungeon</button>
+            </div>
+            <div id="rlFovHud" class="info-display" style="font-family:monospace;">click, then move to look around…</div>
+            <details>
+                <summary>📝 Click to see: recursive shadowcasting (the 8-octant classic)</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Eight octant transforms (Björn Bergström's classic shadowcasting).
+const FOV_MULT = [
+    [1, 0, 0, -1, -1, 0, 0, 1],   // xx
+    [0, 1, -1, 0, 0, -1, 1, 0],   // xy
+    [0, 1, 1, 0, 0, -1, -1, 0],   // yx
+    [1, 0, 0, 1, -1, 0, 0, -1],   // yy
+];
+
+function computeFOV(level, ox, oy, radius) {
+    const vis = new Uint8Array(level.width * level.height);
+    const mark = (x, y) =&gt; { if (level.inBounds(x, y)) vis[level.idx(x, y)] = 1; };
+    mark(ox, oy);                                   // you always see your own tile
+    for (let oct = 0; oct &lt; 8; oct++)
+        castLight(level, ox, oy, 1, 1.0, 0.0, radius,
+                  FOV_MULT[0][oct], FOV_MULT[1][oct], FOV_MULT[2][oct], FOV_MULT[3][oct], mark);
+    return vis;
+}
+
+function castLight(level, cx, cy, row, start, end, radius, xx, xy, yx, yy, mark) {
+    if (start &lt; end) return;
+    const r2 = radius * radius;
+    let newStart = 0;
+    for (let j = row; j &lt;= radius; j++) {
+        let dx = -j - 1, dy = -j, blocked = false;
+        while (dx &lt;= 0) {
+            dx++;
+            const X = cx + dx * xx + dy * xy, Y = cy + dx * yx + dy * yy;
+            const lSlope = (dx - 0.5) / (dy + 0.5), rSlope = (dx + 0.5) / (dy - 0.5);
+            if (start &lt; rSlope) continue;
+            if (end &gt; lSlope) break;
+            if (dx * dx + dy * dy &lt; r2) mark(X, Y);     // within the sight circle
+            if (blocked) {                               // we're scanning a run of walls
+                if (level.isOpaque(X, Y)) { newStart = rSlope; continue; }
+                blocked = false; start = newStart;
+            } else if (level.isOpaque(X, Y) &amp;&amp; j &lt; radius) {
+                blocked = true;                          // a wall starts a shadow:
+                castLight(level, cx, cy, j + 1, start, lSlope, radius, xx, xy, yx, yy, mark);
+                newStart = rSlope;                       // ...recurse for the lit part beside it
+            }
+        }
+        if (blocked) break;
+    }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">type Mark = (x: number, y: number) =&gt; void;
+
+function computeFOV(level: Level, ox: number, oy: number, radius: number): Uint8Array {
+    const vis = new Uint8Array(level.width * level.height);
+    const mark: Mark = (x, y) =&gt; { if (level.inBounds(x, y)) vis[level.idx(x, y)] = 1; };
+    mark(ox, oy);
+    for (let oct = 0; oct &lt; 8; oct++)
+        castLight(level, ox, oy, 1, 1.0, 0.0, radius,
+                  FOV_MULT[0][oct], FOV_MULT[1][oct], FOV_MULT[2][oct], FOV_MULT[3][oct], mark);
+    return vis;
+}
+// castLight signature identical to the JS version above.</code></pre>
+                </div>
+                <div class="key-point">
+                    <strong>💡 Why slopes, not rays?</strong> Casting a ray to every tile re-walks the same near
+                    cells over and over and leaves gaps. Shadowcasting instead tracks the angular <em>interval</em>
+                    each wall blocks and skips whole shadowed spans at once — it touches every visible tile exactly
+                    once, which is why it's the genre standard. Don't be discouraged if the slope bookkeeping looks
+                    fiddly; it's the kind of algorithm you implement once, test hard, and never touch again.
+                </div>
+            </details>
+        </div>
+
+        <!-- FOG -->
+        <div id="fog" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🌫️ Fog of war &amp; the remembered map</h2>
+            <p>
+                Real dungeon crawling has three tile states, not two: <strong>unseen</strong> (pitch black —
+                you've never been there), <strong>remembered</strong> (you've seen it before; the terrain is
+                drawn dim, but you can't see what's there <em>now</em>), and <strong>visible</strong> (lit by
+                your current FOV). Monsters and items only render when actually visible — step away and they
+                vanish back into the dark. <strong>Click to focus</strong> and explore; the map fills in as
+                you go.
+            </p>
+            <div class="diagram"><canvas id="rlFogCanvas" class="rl-canvas" width="700" height="420" tabindex="0"></canvas></div>
+            <div class="controls gen-controls">
+                <label>Seed <input type="number" id="rlFogSeed" value="7" min="1" max="999999" style="width:90px;"></label>
+                <button id="rlFogGen">↻ New dungeon</button>
+            </div>
+            <div id="rlFogHud" class="info-display" style="font-family:monospace;">click, then explore…</div>
+            <div class="concept-box">
+                <h4>🧠 Two bitmaps, recomputed each turn</h4>
+                <p>
+                    <code>visible</code> is thrown away and recomputed (one <code>computeFOV</code> call) every
+                    time the player moves. <code>explored</code> is permanent: each turn you <em>OR</em> the new
+                    visible set into it. Rendering then just asks each tile which of the three buckets it's in.
+                    Monsters check <code>visible</code> before drawing — that single check is the whole "they
+                    disappear when you look away" effect.
+                </p>
+            </div>
+        </div>
+
+        <!-- A* -->
+        <div id="astar" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🧭 Monster pathing with A*</h2>
+            <p>
+                A monster that sees you needs to <em>get</em> to you — around walls, not through them. That's
+                <a href="../advanced.html#pathfinding">A* pathfinding</a> (from the Fundamentals), now on the
+                dungeon grid. The rat here computes a fresh A* path to the <code style="color:#7CF2C8">@</code>
+                each turn <strong>only while it has line of sight</strong>; lose its line and it stops chasing.
+                <strong>Click to focus</strong>, move around, and watch its planned path (the dotted trail)
+                bend around corners — a huge upgrade over the Beginner tier's "walk straight at you and get stuck".
+            </p>
+            <div class="diagram"><canvas id="rlAstarCanvas" class="rl-canvas" width="700" height="420" tabindex="0"></canvas></div>
+            <div class="controls gen-controls">
+                <label>Seed <input type="number" id="rlAstarSeed" value="42" min="1" max="999999" style="width:90px;"></label>
+                <button id="rlAstarGen">↻ New dungeon</button>
+            </div>
+            <div id="rlAstarHud" class="info-display" style="font-family:monospace;">click, then move — watch the path replan…</div>
+            <div class="key-point">
+                <strong>💡 A* is perfect for ONE chaser.</strong> It finds the shortest path and you can see it
+                planning. But run A* for twenty monsters every turn and you're recomputing twenty overlapping
+                searches toward the same target. For the many-monsters case there's a cheaper trick — the next demo.
+            </div>
+        </div>
+
+        <!-- DIJKSTRA -->
+        <div id="dijkstra" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🗺️ Dijkstra "scent" maps</h2>
+            <p>
+                Brogue's signature trick: instead of each monster pathing to the player, compute <strong>one</strong>
+                distance field — the number of steps from every floor tile to the player — and let every monster
+                just <strong>step to its lowest-numbered neighbour</strong>. One flood fill serves any number of
+                monsters. It's the Intermediate tier's flood fill, but recording <em>distance</em> instead of
+                just "reached". Toggle the arrows to see the gradient every monster rolls down; toggle "flee map"
+                to negate it (cowards run uphill, away from you). <strong>Click to focus</strong> and move — the
+                two chasers follow the scent.
+            </p>
+            <div class="diagram"><canvas id="rlDijkstraCanvas" class="rl-canvas" width="700" height="420" tabindex="0"></canvas></div>
+            <div class="controls gen-controls">
+                <label>Seed <input type="number" id="rlDijkstraSeed" value="42" min="1" max="999999" style="width:90px;"></label>
+                <label><input type="checkbox" id="rlDijkstraArrows" checked> Show gradient arrows</label>
+                <label><input type="checkbox" id="rlDijkstraFlee"> Flee map (negate)</label>
+                <button id="rlDijkstraGen">↻ New dungeon</button>
+            </div>
+            <div id="rlDijkstraHud" class="info-display" style="font-family:monospace;">click, then move…</div>
+            <details>
+                <summary>📝 Click to see: the Dijkstra distance map (multi-source BFS)</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Distance (in steps) from every floor tile to the nearest source.
+// For the "scent" map the only source is the player's tile.
+function dijkstraFrom(level, sources) {
+    const dist = new Float32Array(level.width * level.height).fill(Infinity);
+    const queue = [];
+    for (const s of sources) { dist[level.idx(s.x, s.y)] = 0; queue.push([s.x, s.y]); }
+    for (let head = 0; head &lt; queue.length; head++) {     // BFS (uniform step cost)
+        const [x, y] = queue[head], d = dist[level.idx(x, y)];
+        for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+            const nx = x + dx, ny = y + dy;
+            if (!level.isWalkable(nx, ny)) continue;
+            if (d + 1 &lt; dist[level.idx(nx, ny)]) { dist[level.idx(nx, ny)] = d + 1; queue.push([nx, ny]); }
+        }
+    }
+    return dist;
+}
+
+// A monster chases by stepping to the neighbour with the SMALLEST distance.
+function stepDownhill(level, m, dist) {
+    let best = null, bestD = dist[level.idx(m.x, m.y)];
+    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+        const nx = m.x + dx, ny = m.y + dy;
+        if (level.isWalkable(nx, ny) &amp;&amp; dist[level.idx(nx, ny)] &lt; bestD) { bestD = dist[level.idx(nx, ny)]; best = { dx, dy }; }
+    }
+    return best;   // null if already adjacent / no downhill step
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function dijkstraFrom(level: Level, sources: {x:number;y:number}[]): Float32Array {
+    const dist = new Float32Array(level.width * level.height).fill(Infinity);
+    const queue: [number, number][] = [];
+    for (const s of sources) { dist[level.idx(s.x, s.y)] = 0; queue.push([s.x, s.y]); }
+    for (let head = 0; head &lt; queue.length; head++) {
+        const [x, y] = queue[head], d = dist[level.idx(x, y)];
+        for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+            const nx = x + dx, ny = y + dy;
+            if (level.isWalkable(nx, ny) &amp;&amp; d + 1 &lt; dist[level.idx(nx, ny)]) {
+                dist[level.idx(nx, ny)] = d + 1; queue.push([nx, ny]);
+            }
+        }
+    }
+    return dist;
+}</code></pre>
+                </div>
+                <div class="key-point">
+                    <strong>💡 One map, N monsters, and flee for free.</strong> Recompute the field once per turn
+                    (the player is the only thing that moved). Chase = roll downhill. Flee = multiply the whole
+                    field by −1.2 and re-roll downhill, and cowards flow <em>away</em> while naturally avoiding
+                    dead ends. Brogue runs its entire bestiary on a handful of these maps.
+                </div>
+            </details>
+        </div>
+
+        <!-- MINI-PROJECT -->
+        <div id="mini-project" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🩸 Mini-project — "The Hunt"</h2>
+            <p>
+                Capstone: everything at once. A generated dungeon under fog of war, your FOV lighting the way,
+                and monsters <code style="color:#ef5350">r</code> that <strong>sleep until they see you</strong>
+                (line of sight + your FOV radius), then hunt you down a shared Dijkstra map — and
+                <strong>lose your trail when you break line of sight</strong> for a few turns. Fight in the open
+                or play it as stealth: slip around a corner and the hunt goes cold. Reach the stairs
+                <code style="color:#ffd166">&gt;</code> to escape.
+            </p>
+            <div class="rl-play-row">
+                <div class="rl-col" style="min-width:440px;">
+                    <div class="diagram"><canvas id="rlHuntCanvas" class="rl-canvas" width="700" height="420" tabindex="0"></canvas></div>
+                    <div class="controls gen-controls" style="margin-top:10px;">
+                        <label>Seed <input type="number" id="rlHuntSeed" value="1337" min="1" max="999999" style="width:90px;"></label>
+                        <button id="rlHuntRestart">↻ New hunt (apply seed)</button>
+                    </div>
+                </div>
+                <div class="rl-col">
+                    <h4 style="margin:0 0 8px 0; color:#4fc3f7;">Message log</h4>
+                    <div class="rl-log" id="rlHuntLog"></div>
+                    <div id="rlHuntHud" class="info-display" style="font-family:monospace; margin-top:10px;">click the dungeon to begin…</div>
+                </div>
+            </div>
+            <div class="key-point">
+                <strong>💡 Stealth falls out of the systems for free.</strong> You didn't write a "stealth mode" —
+                it emerged from three honest pieces: monsters see via line of sight, they chase a Dijkstra map,
+                and they forget after losing sight. Compose correct systems and the gameplay writes itself. The
+                Expert tier keeps composing: items, inventory, status effects, and monsters with genuinely
+                different minds.
+            </div>
+        </div>
+
+        <!-- RECAP -->
+        <div class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🧰 Recap — what you've got</h2>
+            <ul>
+                <li><strong>Line of sight</strong> (Bresenham) — the "can A see B?" primitive.</li>
+                <li><strong>Recursive shadowcasting FOV</strong> — fast, artefact-free "what can I see?".</li>
+                <li><strong>Fog of war</strong> — unseen / remembered / visible, with monsters hidden outside your view.</li>
+                <li><strong>A*</strong> for a single smart chaser, and <strong>Dijkstra maps</strong> for cheap many-monster chase + flee.</li>
+                <li>A stealth-capable hunt that emerges from composing those systems.</li>
+            </ul>
+            <div class="key-point">
+                <strong>💡 Next (Expert):</strong> the dungeon is dark and the monsters hunt — but you're still
+                just a fist. The Expert tier adds <strong>items as data</strong> (an ECS inventory), wearable
+                <strong>equipment</strong>, <strong>status effects</strong> (poison, confusion, haste), the
+                <strong>identification</strong> game, an <strong>energy/speed scheduler</strong> so fast monsters
+                act twice, and a roster of monsters with genuinely different <strong>AI</strong>.
+            </div>
+        </div>
+
+        <div class="section" style="text-align: center;">
+            <h2>✅ Advanced Tier Complete</h2>
+            <p style="font-size: 1.1em; margin: 24px 0;">You built the dark and gave the monsters eyes. The dungeon finally feels dangerous.</p>
+            <a href="expert.html" class="nav-button" style="font-size: 1.2em; padding: 20px 40px;">Continue to Expert →</a>
+            <p style="margin-top: 20px;"><em>Expert isn't written yet — coming in the next phase. Track progress on the <a href="index.html">track index</a>.</em></p>
+        </div>
+    </div>
+
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <!-- Load order: shared utils, engine (RogueRng; grid; actor toolkit; the
+         reusable dungeon generator promoted here as its 3rd consumer), then
+         this tier's demos. FOV / LOS / A* / Dijkstra are the tier's lesson and
+         live (as testable top-level functions) in advanced-demos.js. -->
+    <script src="../shared/utils.js"></script>
+    <script src="../shared/code-tabs.js"></script>
+    <script src="engine/seeded-rng.js"></script>
+    <script src="engine/grid.js"></script>
+    <script src="engine/actors.js"></script>
+    <script src="engine/dungeon.js"></script>
+    <script src="advanced-demos.js"></script>
+    <script src="../shared/export-demo.js"></script>
+</body>
+</html>

@@ -1021,3 +1021,63 @@ Advanced tier ("Sight & Pursuit"): Bresenham line-of-sight, recursive
 shadowcasting FOV, fog of war / map memory, A* monster pathing (promote a
 reusable dungeon generator to engine/ here — the 3rd consumer), Dijkstra
 "scent" maps, capstone "The Hunt".
+
+
+# 2026-05-30 (pt.4) — Roguelike: Advanced tier (Sight & Pursuit)
+
+Prompt: "Okay, work on the next iteration." → continue tier by tier.
+
+## Promote first
+
+generateDungeon + dg* helpers (rooms+corridors, keepLargest, flood-fill) moved
+to engine/dungeon.js — the Intermediate generator's 3rd consumer (FOV/fog/A*/
+Dijkstra/capstone all need a dungeon). advanced.html loads engine/dungeon.js.
+
+## Shipped this commit
+
+advanced.html + advanced-demos.js, 6 demos. Vision/pathing algorithms are
+TOP-LEVEL globals (shared by demos + unit-testable from the console):
+- losLine(level,x0,y0,x1,y1) — Bresenham LOS {cells, clear, blockedAt}.
+- computeFOV(level,ox,oy,radius) — recursive shadowcasting (8-octant classic,
+  FOV_MULT + castLight). The marquee new algorithm.
+- aStarPath(level,sx,sy,tx,ty) — A* with a binary heap (RLHeap), 4-connected.
+- dijkstraFrom(level,sources) — multi-source BFS distance field; stepDownhill.
+
+Demos: 1 losDemo (mouse-driven line, green/red, marks blocking wall);
+2 fovDemo (move to look around, radius slider, whole map dim + lit FOV);
+3 fogDemo (unseen/remembered/visible, monsters hidden outside FOV, explored %);
+4 astarDemo (one chaser replans via A* only while it has LOS, draws path);
+5 dijkstraDemo (one scent map → 2 chasers roll downhill; heatmap + arrow
+overlay; flee/negate toggle); 6 huntDemo CAPSTONE (fog + FOV + LOS aggro +
+shared Dijkstra chase + forget-after-FORGET-turns; stealth emerges; reach
+stairs to escape / die).
+
+## Verification
+
+`python3 -m http.server 8765`, advanced.html, console CLEAN throughout.
+- UNIT-TESTED the algorithms against a hand-built 11x11 room with one wall
+  pillar at (7,5), player at (5,5):
+  - FOV: wall (7,5) visible, tiles (8,5)/(9,5) BEHIND it correctly shadowed
+    (fovShadowCorrect=true); open cells visible.
+  - LOS: (5,5)->(9,5) blocked at (7,5); (5,5)->(5,9) clear.
+  - Dijkstra: dist to (8,5) = 5 (routed around, not straight-line 3).
+  - A*: path length 5, ends at (8,5) (routes around the wall).
+- Demos init: FOV recomputes on move (68→63 visible); Dijkstra max dist 31;
+  fog explored % grows; hunt 4 rats / HP 26.
+- Capstone (seed 1337, randomised play): rats spotted ("A rat spots you"),
+  hunted, bit, were killed (rats 0), and player ESCAPED via the stairs
+  ("🏆 escaped — you win!", turn 1519). Death state also reachable.
+- Screenshot: Dijkstra heatmap (warm near player → cool far, max 31) + arrows.
+
+Indexes: roguelike/index.html (Advanced → Ready + nav; Expert → Building next),
+root index.html TOC (Advanced sub-link), README.md (Advanced tier +
+engine/dungeon.js), ARCHITECTURE.md (dungeon.js as 4th engine file; note the
+"top-level so testable" pattern).
+
+## Next
+
+Expert tier ("Items, Effects & Minds"): items as ECS data (reuse the repo's
+Entity/World pattern), inventory + equipment UI (keyboard-driven), status
+effects + identification (unidentified potions/scrolls), energy/speed turn
+scheduler (fast monsters act twice), monster AI variety (FSM + behavior trees),
+capstone "Armed & Dangerous".

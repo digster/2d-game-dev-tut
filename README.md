@@ -263,8 +263,8 @@ per-tier file structure mirroring the Fundamentals layout.
   `net_` namespace for the future per-tier bundles file. The track
   followed the established "one tier per commit" cadence used by
   racing-sim and voxel-worlds.
-- `roguelike/` — **scaffold + Beginner + Intermediate tiers shipped; further
-  tiers landing iteratively.** Build a
+- `roguelike/` — **scaffold + Beginner + Intermediate + Advanced tiers shipped;
+  further tiers landing iteratively.** Build a
   complete, turn-based, deterministic grid roguelike (NetHack / Brogue / DCSS
   style) from an empty canvas to a playable, seed-shareable dungeon dive. This
   is the project's first **turn-based** content — the whole genre advances one
@@ -316,7 +316,26 @@ per-tier file structure mirroring the Fundamentals layout.
   a freshly generated deeper level via a depth-derived seed, reach depth 5 to
   win / die to lose). The generators (placeRooms/connectRooms/BSP/drunkard/
   floodFill/regions) live in `intermediate-demos.js` — they're the tier's lesson,
-  not shared infrastructure. **Tier arc:** Beginner (grid + turn loop + bump-to-attack),
+  not shared infrastructure. The connected rooms-and-corridors generator then
+  graduated to **`roguelike/engine/dungeon.js`** (`generateDungeon` + `dg*`
+  helpers) once the Advanced tier became its third consumer.
+  **Advanced tier (Sight &amp; Pursuit — 6 demos):** the vision + pathing
+  algorithms are defined as top-level globals (testable from the console, and
+  shared by every demo): **`losLine`** (Bresenham line-of-sight), **`computeFOV`**
+  (recursive shadowcasting, the 8-octant classic — the marquee new algorithm),
+  **`aStarPath`** (binary-heap A*), **`dijkstraFrom`** (multi-source distance
+  field). Demos: a mouse-driven LOS line (green/red, marks the blocking wall); a
+  move-to-look-around FOV demo (sight-radius slider, walls cast shadows); fog of
+  war with a remembered map (unseen / remembered / visible, monsters hidden
+  outside the FOV); A* monster pathing (one chaser replans only while it has LOS,
+  draws its path); Dijkstra "scent" maps (one flood fill drives many chasers down
+  a distance gradient, with a heatmap + gradient-arrow overlay and a flee/negate
+  toggle); and the capstone **"The Hunt"** — fog + FOV + LOS-based aggro + a
+  shared Dijkstra chase map + a forget-after-losing-sight timer, so stealth
+  (breaking line of sight to shake pursuers) emerges from the systems; reach the
+  stairs to escape. The FOV shadow-casting was unit-tested (a wall is visible but
+  the tiles behind it are correctly shadowed) before being trusted in the demos.
+  **Tier arc:** Beginner (grid + turn loop + bump-to-attack),
   Intermediate (dungeon generation — rooms/corridors/BSP/drunkard's-walk),
   Advanced (recursive-shadowcasting FOV + fog of war + monster pathing/Dijkstra
   maps), Expert (items/inventory ECS + status effects + identification +

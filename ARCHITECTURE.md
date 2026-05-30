@@ -50,10 +50,15 @@ tier reuses); and `actors.js` (the `rl*` turn/movement/combat/input/render
 toolkit — `rlTryMove`, `rlStepToward`, `rlInstallCanvasKeys`, `rlDrawEntities`,
 `rlLog`, …). `actors.js` was extracted from the Beginner tier the moment the
 Intermediate capstone became its second consumer — exactly the "≥ 2 tier files
-⇒ promote to a sibling folder" trigger above. These three expose their names on
-`window`, pre-checked against `shared/utils.js`. Tier-*specific* algorithms
-(dungeon generators, and later FOV/scheduler/ECS) stay inline in their
-`<tier>-demos.js` because they're the lesson, not shared infrastructure.
+⇒ promote to a sibling folder" trigger above. these expose their names on
+`window`, pre-checked against `shared/utils.js`. A fourth, `dungeon.js`
+(`generateDungeon` + `dg*` helpers), joined when the Advanced tier became the
+third consumer of the rooms-and-corridors generator the Intermediate tier
+teaches inline. Tier-*specific* algorithms still stay inline in their
+`<tier>-demos.js` because they're the lesson, not shared infrastructure — e.g.
+the Advanced tier's `losLine`/`computeFOV`/`aStarPath`/`dijkstraFrom` are
+top-level functions in `advanced-demos.js` (top-level so they're unit-testable
+from the console, not just usable by the demos).
 
 **Why tiers are separate files:** content is split beginner → intermediate →
 expert → raymarching → stylization → distortion → advanced → simulations so each
