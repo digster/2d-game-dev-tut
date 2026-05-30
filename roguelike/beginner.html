@@ -570,12 +570,14 @@ function takeRatTurn(rat: Rat, player: Actor): void {
     <div class="scroll-to-top" id="scrollToTop">↑</div>
 
     <!-- Load order: shared utils first (Vector2D, lerp, clamp, ...), then the
-         roguelike engine helpers (RogueRng, Level/Tile/RL/drawGlyphGrid on
-         window), then this tier's demos. code-tabs powers the JS/TS toggles. -->
+         roguelike engine helpers (RogueRng; Level/Tile/RL/drawGlyphGrid; the
+         shared actor/turn/input toolkit rl*), then this tier's demos.
+         code-tabs powers the JS/TS toggles. -->
     <script src="../shared/utils.js"></script>
     <script src="../shared/code-tabs.js"></script>
     <script src="engine/seeded-rng.js"></script>
     <script src="engine/grid.js"></script>
+    <script src="engine/actors.js"></script>
     <script src="beginner-demos.js"></script>
 
     <!-- Shared export-demo injector. The <details> blocks here intentionally

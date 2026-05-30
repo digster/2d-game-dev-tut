@@ -263,8 +263,8 @@ per-tier file structure mirroring the Fundamentals layout.
   `net_` namespace for the future per-tier bundles file. The track
   followed the established "one tier per commit" cadence used by
   racing-sim and voxel-worlds.
-- `roguelike/` — **scaffold + Beginner tier shipped; further tiers landing
-  iteratively.** Build a
+- `roguelike/` — **scaffold + Beginner + Intermediate tiers shipped; further
+  tiers landing iteratively.** Build a
   complete, turn-based, deterministic grid roguelike (NetHack / Brogue / DCSS
   style) from an empty canvas to a playable, seed-shareable dungeon dive. This
   is the project's first **turn-based** content — the whole genre advances one
@@ -297,7 +297,26 @@ per-tier file structure mirroring the Fundamentals layout.
   complete playable micro-roguelike (a pillared room, a sleeping rat that wakes
   on proximity and hunts via greedy step-toward, bump combat both ways, a live
   log, HP, win-by-descending-the-stairs / lose-by-death, all reproducible from
-  a seed). **Tier arc:** Beginner (grid + turn loop + bump-to-attack),
+  a seed). The Beginner tier's shared turn/movement/combat/input/render toolkit
+  was then promoted to **`roguelike/engine/actors.js`** (the `rl*` helpers:
+  `rlTryMove`, `rlStepToward`, `rlInstallCanvasKeys`, `rlDrawEntities`, `rlLog`,
+  …) so every later tier reuses one copy instead of re-declaring it.
+  **Intermediate tier (Building the Dungeon — 6 demos):** procedural generation
+  built up a layer per demo, each re-rollable from a seed — room scattering with
+  overlap rejection (+ outline overlay); L-shaped corridor connection (+ a
+  connection-graph overlay and a live flood-fill "all connected ✓" check); **BSP
+  partitioning** (recursive longer-axis splits, one room per leaf, connect-on-
+  the-way-up, with a partition-tree overlay and a max-depth slider); an
+  **animated drunkard's-walk** cave carver (fill-% and walker-count sliders);
+  a **population + connectivity** demo (seed-placed spawn/stairs/monsters/items
+  with a BFS **flood-fill reachability overlay** — multi-walker caves show
+  isolated pockets in red, and "keep largest region" walls them off); and the
+  capstone **"Explore the Dungeon"** — a playable, multi-level rooms-and-corridors
+  dungeon (bump combat with wandering rats, press `>` on the stairs to descend to
+  a freshly generated deeper level via a depth-derived seed, reach depth 5 to
+  win / die to lose). The generators (placeRooms/connectRooms/BSP/drunkard/
+  floodFill/regions) live in `intermediate-demos.js` — they're the tier's lesson,
+  not shared infrastructure. **Tier arc:** Beginner (grid + turn loop + bump-to-attack),
   Intermediate (dungeon generation — rooms/corridors/BSP/drunkard's-walk),
   Advanced (recursive-shadowcasting FOV + fog of war + monster pathing/Dijkstra
   maps), Expert (items/inventory ECS + status effects + identification +

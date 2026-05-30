@@ -44,10 +44,16 @@ sibling subfolder named after their concern; helpers used across multiple tracks
 go in `shared/`. `roguelike/engine/` is the second instance of this pattern:
 `seeded-rng.js` (`RogueRng` — a superset of netcode's `SeededRng`, deliberately
 re-named and kept track-local rather than shared so the track is self-contained
-and can teach roguelike-flavoured RNG helpers) and `grid.js` (`Tile`/`Level`/`RL`/
+and can teach roguelike-flavoured RNG helpers); `grid.js` (`Tile`/`Level`/`RL`/
 `drawGlyphGrid` — the turn-based grid core + ASCII glyph renderer every roguelike
-tier reuses). Both expose their names on `window`, pre-checked against
-`shared/utils.js`.
+tier reuses); and `actors.js` (the `rl*` turn/movement/combat/input/render
+toolkit — `rlTryMove`, `rlStepToward`, `rlInstallCanvasKeys`, `rlDrawEntities`,
+`rlLog`, …). `actors.js` was extracted from the Beginner tier the moment the
+Intermediate capstone became its second consumer — exactly the "≥ 2 tier files
+⇒ promote to a sibling folder" trigger above. These three expose their names on
+`window`, pre-checked against `shared/utils.js`. Tier-*specific* algorithms
+(dungeon generators, and later FOV/scheduler/ECS) stay inline in their
+`<tier>-demos.js` because they're the lesson, not shared infrastructure.
 
 **Why tiers are separate files:** content is split beginner → intermediate →
 expert → raymarching → stylization → distortion → advanced → simulations so each

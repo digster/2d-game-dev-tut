@@ -958,3 +958,66 @@ partitioning, drunkard's walk, populate (spawn/stairs/monsters by seed +
 flood-fill connectivity), capstone "Explore the Dungeon" (descend stairs to
 a freshly generated level). Reuse RogueRng + Level; the generated map
 replaces the hand-built room.
+
+
+# 2026-05-30 (pt.3) — Roguelike: Intermediate tier (Building the Dungeon)
+
+Prompt: "Okay, work on the next iteration." → continue tier by tier.
+
+## Refactor first (DRY before duplicating into 4 tiers)
+
+Promoted the Beginner tier's shared turn/movement/combat/input/render toolkit
+out of beginner-demos.js into engine/actors.js (rlKeyToStep, rlTryMove,
+rlStepToward/Candidates, rlActorAt, rlManhattan, rlMakeRoom,
+rlInstallCanvasKeys, rlDrawEntities, rlEntityList, rlHpBar, rlPushFlash/
+rlDrawFlashes, rlFocusHint, rlLog). beginner.html now loads engine/actors.js;
+beginner-demos.js keeps only its 5 demo IIFEs. This is ARCHITECTURE.md's
+"≥2 tier files ⇒ promote to sibling folder" rule firing (the Intermediate
+capstone is the 2nd consumer). Re-verified Beginner still works post-refactor.
+
+## Shipped this commit
+
+intermediate.html + intermediate-demos.js, 6 demos. Generators live inline in
+the tier file (they're the lesson): placeRooms (overlap reject), connectRooms
+(L-corridors), bspBuild/bspMakeRooms/bspConnect (BSP), makeDrunkard/caveGen
+(drunkard's walk), floodFill/regionsOf/keepLargestRegion (connectivity),
+randomFloorIn/Tile, countWalkable.
+
+1. roomsDemo — scatter rooms, reject overlaps (attempts slider, outline overlay).
+2. corridorsDemo — L-corridors connect rooms; connection-graph overlay; live
+   flood-fill "all connected ✓"; random-elbow toggle.
+3. bspDemo — recursive longer-axis split, one room per leaf, connect-on-unwind;
+   partition-tree overlay; max-depth slider.
+4. drunkDemo — animated drunkard's-walk caves; fill-% + walker-count sliders.
+5. populateDemo — seed-placed spawn/stairs/monsters/items + BFS flood-fill
+   reachability overlay (green/red); generator toggle (rooms vs multi-walker
+   cave); "keep largest region" connectivity repair.
+6. exploreDungeonDemo (CAPSTONE) — playable multi-level dungeon; bump combat
+   with wandering rats; press > on stairs to descend to a freshly generated
+   deeper level (depth-derived seed); reach depth 5 to win / die to lose.
+
+## Verification
+
+`python3 -m http.server 8765`, intermediate.html, console CLEAN throughout.
+- All generators connected on load: corridors 535/535, BSP 390/390, drunkard
+  carved to target.
+- Flood-fill teaching proven: cave seed 3 → 255/374 (⚠119 isolated); enable
+  "keep largest region" → 255/255 (all reachable ✓).
+- Capstone (seed 1337, randomised exploration): movement (turn 1346), combat
+  (rat killed + rat bit player), DESCENT (depth 1→2, "You descend"), and the
+  death terminal state (HP 0 → 💀). Win path is the same descend mechanism.
+- Screenshot: BSP demo with partition overlay (15 leaves / 15 rooms, all
+  connected).
+- code-tabs: JS/TS toggles + Prism highlighting active on all 5 code blocks.
+
+Indexes updated: roguelike/index.html (Intermediate → Ready + nav link;
+Advanced → "Building next"), root index.html TOC (Intermediate sub-link),
+README.md (Intermediate tier + actors.js documented), ARCHITECTURE.md
+(engine/actors.js noted as the promotion-trigger example).
+
+## Next
+
+Advanced tier ("Sight & Pursuit"): Bresenham line-of-sight, recursive
+shadowcasting FOV, fog of war / map memory, A* monster pathing (promote a
+reusable dungeon generator to engine/ here — the 3rd consumer), Dijkstra
+"scent" maps, capstone "The Hunt".
