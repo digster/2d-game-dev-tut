@@ -54,10 +54,16 @@ Intermediate capstone became its second consumer — exactly the "≥ 2 tier fil
 `window`, pre-checked against `shared/utils.js`. A fourth, `dungeon.js`
 (`generateDungeon` + `dg*` helpers), joined when the Advanced tier became the
 third consumer of the rooms-and-corridors generator the Intermediate tier
-teaches inline; and a fifth, `vision.js`
+teaches inline; a fifth, `vision.js`
 (`losLine`/`computeFOV`/`aStarPath`/`dijkstraFrom`/`stepDownhill`), promoted out
 of the Advanced tier's `advanced-demos.js` once the Expert capstone became a
-second consumer. Tier-*specific* algorithms still stay inline in their
+second consumer; and a sixth, `rpg.js` (`Item`/`attackDice`/`tickStatuses`/
+`speedOf`/`applyConsumable`, …), which packages the Expert tier's RPG systems
+for the Simulations grand capstone. Note the two distinct promotion styles:
+`actors.js`/`vision.js` were *moved* (the origin tier now loads the engine copy),
+whereas `dungeon.js`/`rpg.js` are *lib copies* (the origin tier still teaches the
+system inline) — so `rpg.js` is loaded only on `simulations.html`, never on
+`expert.html`, since a second `class Item` on one page is a redeclaration error. Tier-*specific* algorithms still stay inline in their
 `<tier>-demos.js` because they're the lesson, not shared infrastructure — e.g.
 the Advanced tier's `losLine`/`computeFOV`/`aStarPath`/`dijkstraFrom` are
 top-level functions in `advanced-demos.js` (top-level so they're unit-testable

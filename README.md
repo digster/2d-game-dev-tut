@@ -263,8 +263,7 @@ per-tier file structure mirroring the Fundamentals layout.
   `net_` namespace for the future per-tier bundles file. The track
   followed the established "one tier per commit" cadence used by
   racing-sim and voxel-worlds.
-- `roguelike/` — **scaffold + Beginner + Intermediate + Advanced + Expert tiers
-  shipped; Simulations (grand capstone) landing next.** Build a
+- `roguelike/` — **fully shipped — all 5 tiers + grand capstone.** Build a
   complete, turn-based, deterministic grid roguelike (NetHack / Brogue / DCSS
   style) from an empty canvas to a playable, seed-shareable dungeon dive. This
   is the project's first **turn-based** content — the whole genre advances one
@@ -353,7 +352,28 @@ per-tier file structure mirroring the Fundamentals layout.
   and equip (number keys), unidentified potions, status effects, the energy
   scheduler (fast venomous snake, slow zombie), and derived-stat combat; reach
   the stairs alive. Inventory uses **number keys** (1–9) since the letter keys
-  are movement. **Tier arc:** Beginner (grid + turn loop + bump-to-attack),
+  are movement. The Expert RPG systems were also packaged into
+  **`roguelike/engine/rpg.js`** (`Item`/`attackDice`/`tickStatuses`/`speedOf`/
+  `applyConsumable`, …) — the dungeon.js-style "teach inline, ship a lib copy"
+  split — so the grand capstone can compose them (loaded only where the Expert
+  inline copy isn't, to avoid a `class Item` redeclaration).
+  **Simulations tier (The Whole Dungeon — 4 demos, track capstone):** an
+  animated **cellular-automata cave** generator (5-of-9 majority rule over a 3×3
+  Moore neighbourhood — the stable rule that condenses noise into caverns rather
+  than eroding it — with initial-fill/iteration sliders and a flood-fill
+  "keep largest region" connectivity guarantee); a **level-themes-by-depth**
+  demo (a data-driven recipe table mapping depth → generator + palette tint +
+  monster table: tidy rooms up top, cellular caves below); a **determinism
+  record/replay** demo (every keypress recorded, then a fresh sim built from the
+  same seed is fed the same inputs and its final-state hash compared — lands
+  bit-identical, the property the netcode track's rollback also needs); and the
+  grand capstone **"The Descent"** — a complete, permadeath, seed-shareable
+  roguelike composing every system: themed procgen floors (rooms→caves by
+  depth), FOV + fog of war, energy-scheduled monsters with LOS aggro + Dijkstra
+  chase (fast venomous snake, slow zombie), floor loot you pick up and equip
+  (number keys), unidentified potions, status effects, derived-stat combat,
+  descent via `>` to depth 8, and a score. The cave/theme code lives in
+  `simulations-demos.js` (the tier's lesson). **Tier arc:** Beginner (grid + turn loop + bump-to-attack),
   Intermediate (dungeon generation — rooms/corridors/BSP/drunkard's-walk),
   Advanced (recursive-shadowcasting FOV + fog of war + monster pathing/Dijkstra
   maps), Expert (items/inventory ECS + status effects + identification +

@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulations — Roguelike / Dungeon-Crawler Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+    <style>
+        canvas.rl-canvas { cursor: pointer; outline: none; background: #0d1117; max-width: 100%; }
+        canvas.rl-canvas:focus { box-shadow: 0 0 0 2px #7CF2C8; }
+        .rl-log, .rl-inv {
+            font-family: 'Courier New', Consolas, monospace; font-size: 0.9em;
+            background: #0d1117; border: 1px solid #2d3354; border-radius: 6px;
+            padding: 10px 14px; color: #c9d1d9; line-height: 1.6;
+        }
+        .rl-log { height: 200px; overflow-y: auto; }
+        .rl-inv { min-height: 110px; }
+        .rl-log .you { color: #7CF2C8; } .rl-log .mob { color: #ef5350; }
+        .rl-log .good { color: #66bb6a; } .rl-log .warn { color: #ffa726; } .rl-log .dim { color: #6b7488; }
+        .rl-inv .row { display: flex; gap: 8px; } .rl-inv .key { color: #4fc3f7; width: 1.4em; }
+        .rl-inv .eq { color: #66bb6a; } .rl-inv .muted { color: #6b7488; }
+        .rl-play-row { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-start; justify-content: center; }
+        .rl-play-row > .rl-col { flex: 1; min-width: 300px; }
+        .gen-controls label { color: #c9d1d9; display: inline-flex; align-items: center; gap: 8px; margin-right: 6px; }
+        .gen-controls .val { font-family: monospace; color: #4fc3f7; min-width: 46px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏰 Simulations — The Whole Dungeon</h1>
+        <p class="subtitle">The finale. Organic cave generation, level themes that change with depth, bullet-proof deterministic seeds — and "The Descent", the complete roguelike this whole track has been building toward.</p>
+
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="expert.html" class="nav-button">← Expert</a>
+            <a href="simulations.html" class="nav-button active">Simulations</a>
+        </div>
+
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#intro">Tying it all together</a></li>
+                <li><a href="#cave">Cellular-automata caves</a></li>
+                <li><a href="#themes">Level themes by depth</a></li>
+                <li><a href="#determinism">Deterministic seeds &amp; record/replay</a></li>
+                <li><a href="#mini-project">Grand Capstone: "The Descent"</a></li>
+            </ul>
+        </div>
+
+        <!-- INTRO -->
+        <div id="intro" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>🎬 Tying it all together</h2>
+            <p>
+                Four tiers built the parts: a grid and a turn; generated dungeons; sight and pursuit; items,
+                effects, and minds. This tier widens the world and then assembles <em>everything</em> into one
+                shippable game:
+            </p>
+            <ul>
+                <li><strong>Cellular-automata caves</strong> — a third generator, for organic caverns that feel grown, not built.</li>
+                <li><strong>Level themes by depth</strong> — a "recipe" system: which generator, which palette, which monsters, chosen by how deep you are.</li>
+                <li><strong>Deterministic seeds + record/replay</strong> — the guarantee that makes "daily challenge" seeds and bug reports possible.</li>
+                <li><strong>"The Descent"</strong> — the complete, permadeath, seed-shareable roguelike: procgen levels, fog of war, hunting AI on an energy scheduler, loot you identify and equip, status effects, depth, and a score.</li>
+            </ul>
+            <div class="key-point">
+                <strong>💡 Nothing here is new physics — it's composition.</strong> The capstone doesn't add a
+                sixth pillar; it proves the five you built compose into a real game. That's the whole thesis of
+                the track: small, correct systems, layered.
+            </div>
+        </div>
+
+        <!-- CAVE -->
+        <div id="cave" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>🪨 Cellular-automata caves</h2>
+            <p>
+                Rooms-and-corridors look architected; the drunkard's walk is connected-but-blobby. For
+                natural-looking caverns, start from <strong>random noise</strong> (≈45% wall) and repeatedly
+                apply one rule: <em>a cell becomes wall if 5+ of the nine cells in its 3×3 neighbourhood
+                (itself included) are walls, else floor</em> — a 5-of-9 majority vote.
+                A few iterations and the noise <strong>condenses</strong> into smooth caves and pillars. Watch
+                it settle, then "keep largest region" flood-fills away the disconnected pockets.
+            </p>
+            <div class="diagram"><canvas id="rlCaCanvas" class="rl-canvas" width="700" height="392"></canvas></div>
+            <div class="controls gen-controls">
+                <label>Seed <input type="number" id="rlCaSeed" value="42" min="1" max="999999" style="width:90px;"></label>
+                <label>Initial wall % <input type="range" id="rlCaFill" min="35" max="60" value="45" style="width:130px;"><span class="val" id="rlCaFillVal">45%</span></label>
+                <label>Iterations <input type="range" id="rlCaIters" min="0" max="8" value="5" style="width:120px;"><span class="val" id="rlCaItersVal">5</span></label>
+                <label><input type="checkbox" id="rlCaConnect" checked> Keep largest region</label>
+                <button id="rlCaGen">↻ Regenerate</button>
+            </div>
+            <div id="rlCaHud" class="info-display" style="font-family:monospace;">generating…</div>
+            <details>
+                <summary>📝 Click to see: one cellular-automata smoothing step</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Count wall neighbours in the 8-cell ring. Out-of-bounds counts as wall,
+// so the cave naturally seals itself against the map border.
+function wallNeighbours(level, x, y) {
+    let n = 0;
+    for (let dy = -1; dy &lt;= 1; dy++)
+        for (let dx = -1; dx &lt;= 1; dx++)
+            if (!(dx === 0 &amp;&amp; dy === 0) &amp;&amp; level.get(x + dx, y + dy) === Tile.WALL) n++;
+    return n;
+}
+
+// One smoothing pass — the 5-of-9 majority rule (count the 3x3 INCLUDING the
+// centre). Read from `level`, write a new grid (never read your own
+// half-written output) and swap. The 8-neighbour-only variant erodes walls to
+// nothing; including the centre makes solid regions self-stabilise into caves.
+function caStep(level) {
+    const next = level.clone();
+    for (let y = 1; y &lt; level.height - 1; y++)
+        for (let x = 1; x &lt; level.width - 1; x++) {
+            const walls = wallNeighbours(level, x, y) + (level.get(x, y) === Tile.WALL ? 1 : 0);
+            next.set(x, y, walls &gt;= 5 ? Tile.WALL : Tile.FLOOR);
+        }
+    return next;
+}
+
+// Full generator: seed noise, smooth N times, then guarantee connectivity.
+function caCave(w, h, rng, { fill, iterations }) {
+    let level = new Level(w, h, Tile.WALL);
+    for (let y = 1; y &lt; h - 1; y++)
+        for (let x = 1; x &lt; w - 1; x++)
+            level.set(x, y, rng.next() &lt; fill ? Tile.WALL : Tile.FLOOR);
+    for (let i = 0; i &lt; iterations; i++) level = caStep(level);
+    dgKeepLargest(level);     // flood-fill away disconnected pockets (Intermediate tier)
+    return level;
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function caStep(level: Level): Level {
+    const next = level.clone();
+    for (let y = 1; y &lt; level.height - 1; y++)
+        for (let x = 1; x &lt; level.width - 1; x++)
+            next.set(x, y, wallNeighbours(level, x, y) &gt;= 5 ? Tile.WALL : Tile.FLOOR);
+    return next;
+}</code></pre>
+                </div>
+                <div class="key-point">
+                    <strong>💡 Double-buffer or it lies.</strong> If <code>caStep</code> wrote into the same grid
+                    it's reading, later cells in the pass would see already-updated neighbours and the rule would
+                    smear. Reading <code>level</code> and writing <code>next</code> (then swapping) is the same
+                    discipline as Conway's Life and the Noita sand sim — the iteration is only correct on a
+                    consistent snapshot.
+                </div>
+            </details>
+        </div>
+
+        <!-- THEMES -->
+        <div id="themes" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>🎨 Level themes by depth</h2>
+            <p>
+                A great dungeon <em>changes</em> as you go down. A <strong>level recipe</strong> ties depth to a
+                generator, a palette, and a monster/item table: the upper halls are tidy
+                <strong>rooms</strong>; the mid caverns switch to <strong>cellular caves</strong>; the deep is
+                darker and meaner. Drag the depth slider to roll the recipe for that floor — the generator, the
+                wall tint, and the spawn table all change.
+            </p>
+            <div class="diagram"><canvas id="rlThemeCanvas" class="rl-canvas" width="700" height="392"></canvas></div>
+            <div class="controls gen-controls">
+                <label>Seed <input type="number" id="rlThemeSeed" value="42" min="1" max="999999" style="width:90px;"></label>
+                <label>Depth <input type="range" id="rlThemeDepth" min="1" max="9" value="1" style="width:160px;"><span class="val" id="rlThemeDepthVal">1</span></label>
+                <button id="rlThemeGen">↻ Regenerate</button>
+            </div>
+            <div id="rlThemeHud" class="info-display" style="font-family:monospace;">depth 1…</div>
+            <details>
+                <summary>📝 Click to see: a depth → recipe table</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// A "recipe" maps a band of depths to a generator + palette + spawn table.
+const THEMES = [
+    { name: 'Upper Halls', maxDepth: 3, gen: 'rooms', tint: null,      mobs: ['rat', 'kobold'] },
+    { name: 'The Caverns', maxDepth: 6, gen: 'cave',  tint: '#1a130a', mobs: ['bat', 'snake'] },
+    { name: 'The Deep',    maxDepth: 99, gen: 'cave', tint: '#160a14', mobs: ['ogre', 'wraith'] },
+];
+const themeForDepth = (d) =&gt; THEMES.find(t =&gt; d &lt;= t.maxDepth);
+
+// One entry point picks the generator from the recipe — callers don't branch.
+function generateThemed(w, h, rng, depth) {
+    const theme = themeForDepth(depth);
+    const level = theme.gen === 'cave'
+        ? caCave(w, h, rng, { fill: 0.45, iterations: 5 })
+        : generateDungeon(w, h, rng, { attempts: 30 }).level;
+    return { level, theme };
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface Theme { name: string; maxDepth: number; gen: 'rooms' | 'cave'; tint: string | null; mobs: string[]; }
+
+const THEMES: Theme[] = [
+    { name: 'Upper Halls', maxDepth: 3, gen: 'rooms', tint: null,      mobs: ['rat', 'kobold'] },
+    { name: 'The Caverns', maxDepth: 6, gen: 'cave',  tint: '#1a130a', mobs: ['bat', 'snake'] },
+    { name: 'The Deep',    maxDepth: 99, gen: 'cave', tint: '#160a14', mobs: ['ogre', 'wraith'] },
+];</code></pre>
+                </div>
+                <div class="key-point">
+                    <strong>💡 Data, not code branches.</strong> The descent's "feel" lives in a table you can
+                    tweak without touching the engine. Want a fungal level at depth 4 with confusion-spore
+                    monsters? Add a row. This is the same data-driven instinct as the Noita material table and
+                    the netcode preset list.
+                </div>
+            </details>
+        </div>
+
+        <!-- DETERMINISM -->
+        <div id="determinism" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>🎯 Deterministic seeds &amp; record/replay</h2>
+            <p>
+                The promise the whole track relied on: <strong>same seed + same actions ⇒ same outcome</strong>,
+                exactly. That's what lets players share a "daily challenge" seed, and what lets you file a bug as
+                "seed 1337, then ↓↓→, the snake should be dead". <strong>Click to focus</strong> and play a few
+                moves in this small dungeon — every keypress is <strong>recorded</strong>. Then hit
+                <strong>Verify replay</strong>: a fresh game is built from the same seed and fed the same inputs,
+                and its final state is compared to yours. It lands bit-identical, every time.
+            </p>
+            <div class="rl-play-row">
+                <div class="rl-col" style="min-width:440px;">
+                    <div class="diagram"><canvas id="rlDetCanvas" class="rl-canvas" width="700" height="360" tabindex="0"></canvas></div>
+                    <div class="controls gen-controls" style="margin-top:10px;">
+                        <label>Seed <input type="number" id="rlDetSeed" value="2026" min="1" max="999999" style="width:90px;"></label>
+                        <button id="rlDetReplay">✓ Verify replay</button>
+                        <button id="rlDetReset">↻ Reset</button>
+                    </div>
+                </div>
+                <div class="rl-col">
+                    <div id="rlDetHud" class="info-display" style="font-family:monospace;">click, then move (every key is recorded)</div>
+                    <div id="rlDetResult" class="info-display" style="font-family:monospace; margin-top:10px; min-height:80px;">— no replay yet —</div>
+                </div>
+            </div>
+            <div class="concept-box">
+                <h4>🧬 What "deterministic" really demands</h4>
+                <p>
+                    Two things: a <strong>seeded RNG</strong> (<code>RogueRng</code> — no <code>Math.random()</code>
+                    anywhere) and a <strong>fixed update order</strong> (the energy scheduler processes actors in
+                    a stable sequence). Get those right and the entire game becomes a pure function of
+                    <code>(seed, inputs)</code> — which is exactly the property the netcode track's rollback and
+                    replay systems also depend on. Determinism isn't a feature you add; it's a discipline you keep.
+                </p>
+            </div>
+        </div>
+
+        <!-- GRAND CAPSTONE -->
+        <div id="mini-project" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>🗡️ Grand Capstone — "The Descent"</h2>
+            <p>
+                Everything. A complete, playable, permadeath roguelike in one canvas. Descend through themed,
+                procedurally generated floors (tidy <strong>rooms</strong> up top, organic <strong>caves</strong>
+                below) under <strong>fog of war</strong> lit by your <strong>field of view</strong>. Monsters
+                hunt you on an <strong>energy scheduler</strong> with line-of-sight aggro — the snake
+                <code style="color:#ef5350">s</code> is fast and venomous, the zombie
+                <code style="color:#9e6b6b">Z</code> slow but tough. Find and <strong>equip</strong> weapons and
+                armor (number keys), risk <strong>unidentified potions</strong>, weather <strong>status
+                effects</strong>, and press <strong>&gt;</strong> on the stairs to go deeper. Reach
+                <strong>depth 8</strong> to escape with your life — and a score. Same seed, same run.
+            </p>
+            <div class="rl-play-row">
+                <div class="rl-col" style="min-width:460px;">
+                    <div class="diagram"><canvas id="rlDescentCanvas" class="rl-canvas" width="700" height="420" tabindex="0"></canvas></div>
+                    <div class="controls gen-controls" style="margin-top:10px;">
+                        <label>Seed <input type="number" id="rlDescentSeed" value="1337" min="1" max="999999" style="width:90px;"></label>
+                        <button id="rlDescentRestart">↻ New game (apply seed)</button>
+                    </div>
+                    <div id="rlDescentHud" class="info-display" style="font-family:monospace; margin-top:10px;">click the dungeon to begin…</div>
+                </div>
+                <div class="rl-col">
+                    <h4 style="margin:0 0 8px 0; color:#4fc3f7;">Backpack (1–9 to equip / quaff)</h4>
+                    <div class="rl-inv" id="rlDescentInv"></div>
+                    <h4 style="margin:14px 0 8px 0; color:#4fc3f7;">Log</h4>
+                    <div class="rl-log" id="rlDescentLog"></div>
+                </div>
+            </div>
+            <div class="key-point">
+                <strong>🏆 That's the track.</strong> From an empty canvas to a complete, deterministic,
+                seed-shareable dungeon crawler — grid, turns, procgen, FOV, fog, pathing, items, effects, AI,
+                and depth — every system built from scratch and composed. The same engine modules
+                (<code>RogueRng</code>, <code>Level</code>, the actor toolkit, the dungeon generator, the vision
+                kit, the RPG kit) power every demo in every tier. Go change the seed and play your dungeon.
+            </div>
+        </div>
+
+        <!-- RECAP -->
+        <div class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>🧰 Recap — the whole track</h2>
+            <ul>
+                <li><strong>Beginner</strong> — grid, ASCII glyphs, the turn loop, bump-to-attack, a message log.</li>
+                <li><strong>Intermediate</strong> — rooms, corridors, BSP, drunkard's walk, flood-fill connectivity.</li>
+                <li><strong>Advanced</strong> — line of sight, recursive-shadowcasting FOV, fog of war, A* &amp; Dijkstra pursuit.</li>
+                <li><strong>Expert</strong> — items as data, equipment &amp; derived stats, status effects &amp; identification, energy/speed scheduling, AI variety.</li>
+                <li><strong>Simulations</strong> — cellular-automata caves, depth themes, deterministic record/replay, and the complete game.</li>
+            </ul>
+            <div class="key-point">
+                <strong>🎉 Track complete.</strong> You've built a real roguelike, from the grid up. Tweak the
+                generators, add a monster archetype, design a new level theme, or bolt on a new status effect —
+                the architecture is built to extend. Happy crawling.
+            </div>
+        </div>
+
+        <div class="section" style="text-align: center;">
+            <h2>🏁 Roguelike Track Complete</h2>
+            <p style="font-size: 1.1em; margin: 24px 0;">Five tiers, from one room and one rat to a full deterministic dungeon dive.</p>
+            <a href="index.html" class="nav-button" style="font-size: 1.2em; padding: 20px 40px;">Back to the Track Index</a>
+        </div>
+    </div>
+
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <!-- Load order: shared utils, then the full roguelike engine (RogueRng;
+         grid; actor toolkit; dungeon generator; vision FOV/LOS/Dijkstra; the
+         RPG kit items/status/scheduler), then this tier's demos. The cave CA
+         and level-theme recipes are this tier's lesson and live in
+         simulations-demos.js. -->
+    <script src="../shared/utils.js"></script>
+    <script src="../shared/code-tabs.js"></script>
+    <script src="engine/seeded-rng.js"></script>
+    <script src="engine/grid.js"></script>
+    <script src="engine/actors.js"></script>
+    <script src="engine/dungeon.js"></script>
+    <script src="engine/vision.js"></script>
+    <script src="engine/rpg.js"></script>
+    <script src="simulations-demos.js"></script>
+    <script src="../shared/export-demo.js"></script>
+</body>
+</html>

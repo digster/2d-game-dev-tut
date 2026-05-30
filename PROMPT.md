@@ -1149,3 +1149,72 @@ deterministic seed + record/replay proof, and "The Descent" — the complete
 playable roguelike assembling every system (procgen levels, FOV+fog, energy AI,
 items/equipment/identification, status effects, depth, permadeath, score,
 shareable seed). Mark the track COMPLETE.
+
+
+# 2026-05-30 (pt.6) — Roguelike: Simulations tier — TRACK COMPLETE
+
+Prompt: "Okay. Work on the next iteration." → final tier.
+
+## Promote first
+
+Packaged the Expert RPG systems into engine/rpg.js (Item/ItemWorld/mk*,
+attackDice/defenseOf, addStatus/tickStatuses/hasStatus/statusText/speedOf,
+applyConsumable, ACTION) — the dungeon.js-style "teach inline + lib copy" split
+(Expert keeps its inline copies; rpg.js loaded ONLY on simulations.html, since
+two `class Item` on one page = redeclaration error). 6 engine files now.
+
+## Shipped this commit
+
+simulations.html + simulations-demos.js, 4 demos. New (the lesson): caCave/
+caStep/wallNeighbours (cellular caves), THEMES/themeForDepth/generateThemed.
+
+1. cellularCaveDemo — animated noise→cave condensation (fill/iteration sliders),
+   5-of-9 majority rule, keep-largest connectivity.
+2. themesDemo — depth→recipe (rooms shallow, caves deep) + palette tint + mob table.
+3. determinismDemo — record every keypress, replay from same seed, compare a
+   state hash → bit-identical.
+4. theDescentDemo (GRAND CAPSTONE) — complete permadeath roguelike: themed procgen
+   floors (rooms→caves), FOV+fog, energy-scheduled LOS-aggro + Dijkstra-chase
+   monsters (fast venomous snake, slow zombie, theme bestiary), floor loot +
+   equip (1–9) + unidentified potions + status effects + derived-stat combat,
+   descend via > to depth 8, score.
+
+## Bug caught & fixed mid-iteration
+
+Cave CA eroded to ~89% floor: the pure 8-neighbour ">=5" rule, at 45% fill,
+drives wall density toward ~4% each pass. Fixed to the STABLE 5-of-9 majority
+(count the 3x3 INCLUDING the centre) → caves settle at ~45-69% floor. Updated
+the teaching code block + prose to match.
+
+## Verification
+
+`python3 -m http.server 8765`, simulations.html, console CLEAN throughout.
+- Cave (post-fix): seeds 42/7/99/1337 → floor 47-69%, ALL regions==1 (connected).
+- Themes: generateThemed d1→rooms, d5→cave; themeForDepth d1/d5/d9 =
+  Upper Halls/The Caverns/The Deep; spawns walkable.
+- Determinism: 8 recorded moves → "✓ bit-identical" (live hash == replay hash).
+- Grand capstone (seed 1337, randomised play): found loot, EQUIPPED (atk die
+  changed, [E] shown), 8 kills, took damage, DESCENDED to depth 3, permadeath
+  with score 500. (Theme switch to Caverns is depth 4+, unit-verified via
+  generateThemed; random-walker died at depth 3 first.)
+- Screenshot: cellular cave settled (floor 69%, regions 1, connected ✓).
+
+Indexes: roguelike/index.html (Simulations → Ready + nav; roadmap "all five
+complete"), root index.html (Simulations TOC link + card "all 5 tiers"),
+README.md (track fully shipped + Simulations tier + engine/rpg.js),
+ARCHITECTURE.md (rpg.js = 6th engine file; the two promotion styles).
+
+## Track total
+
+5 tiers, 27 demos, 6 engine modules (seeded-rng, grid, actors, dungeon, vision,
+rpg). From a hand-typed room + one rat to a complete, deterministic,
+seed-shareable dungeon crawler — grid, turns, procgen (rooms/BSP/drunkard/CA),
+recursive-shadowcasting FOV, fog of war, A*/Dijkstra pursuit, items/ECS,
+equipment, status effects, identification, energy/speed scheduling, AI variety,
+depth themes, permadeath, score. Determinism (RogueRng + fixed update order) was
+the thread from the scaffold self-check to the replay verifier. Track COMPLETE.
+
+## Next
+
+Nothing on this track. Deferred: per-tier bundles-rl_*.js Export files (demos are
+keyboard/canvas-driven, so they currently opt out of the Export button).
