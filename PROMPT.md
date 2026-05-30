@@ -829,3 +829,62 @@ and the replay verifier. Track COMPLETE.
 
 Nothing on this track. Deferred: per-tier bundles-*.js Export files.
 Future tracks: platformer/, roguelike/, or another systems track.
+
+
+# 2026-05-30 — Roguelike: scaffold (engine + landing page)
+
+Prompt (paraphrased): "A roguelike game track was suggested earlier
+(screenshots: NetHack/Brogue/DCSS, tier arc Beginner→…→Simulations).
+Use it to make the plan, but add anything required to make it
+comprehensive and complete." Confirmed: deliver iteratively tier-by-tier
+(one commit each); the screenshots are inspiration only, so the track
+uses the repo's own B→I→A→E→S difficulty order (FOV/fog → Advanced;
+items/AI/effects → Expert) rather than the screenshots' labels.
+
+The project's first TURN-BASED track. The whole genre advances one turn
+at a time instead of on a real-time loop — the architectural pivot the
+Beginner tier will teach. It's also the natural capstone genre: it
+composes Fundamentals already taught (procgen, shadow casting, A*, ECS,
+FSMs, behavior trees) into a game you can lose.
+
+## Shipped this commit (scaffold only — mirrors the netcode scaffold)
+
+- `roguelike/engine/seeded-rng.js` — `RogueRng` on window. Superset of
+  netcode's `SeededRng`: same mulberry32 core (so seeds are consistent
+  repo-wide) + roguelike helpers `between`, `pick`, `shuffle` (in-place
+  Fisher–Yates), `weighted` (loot/spawn tables), `dice(n,sides)`
+  (tabletop NdS). Track-local on purpose (self-contained track + teaches
+  roguelike RNG idioms) rather than elevated to shared/.
+- `roguelike/engine/grid.js` — the shared turn-based grid core:
+  `Tile` enum (WALL=0 so a fresh grid is solid rock that generators
+  carve), flat-`Uint8Array` `Level` (idx/inBounds/get/set/isWalkable/
+  isOpaque/clone/count; out-of-bounds reads as WALL so callers skip
+  edge-casing), the `RL` palette + `TILE_GLYPH` table, and
+  `drawGlyphGrid(ctx, level, opts)` — the ASCII renderer (monospace
+  glyphs, optional entities, optional visible/explored fog mask for
+  later tiers). Names pre-checked vs shared/utils.js.
+- `roguelike/index.html` — landing page mirroring netcode/index.html:
+  five-tier roadmap cards (Beginner = "Building next", rest "Coming
+  soon"), Fundamentals prerequisites, and a self-check that proves
+  determinism + the helpers + renders a hand-built room.
+- Root `index.html` — ROGUE nav-button card (Tracks section) + nested
+  TOC entry. README.md, ARCHITECTURE.md (engine/ = 2nd instance of the
+  netcode/net/ per-track-helper pattern) updated.
+
+## Verification
+
+`python3 -m http.server 8765`, opened roguelike/index.html in-browser.
+- Console: ZERO logs/errors.
+- Self-check all green: RogueRng deterministic (seed 1337 →
+  [0.1844, 0.1900, 0.8105]); dice/pick/weighted in range; Level
+  queries agree.
+- Renderer: scaffoldCanvas painted (65,045 non-bg px) — screenshot
+  shows the room with #/·/>/@/r glyphs in the right palette.
+- Links: root card + TOC resolve; roguelike/index.html → 200.
+
+## Next
+
+Beginner tier ("The Grid & The Turn"): beginner.html + beginner-demos.js
+— grid&glyphs, turn loop (turn-based vs real-time), bump-to-attack,
+message log + seeded combat, capstone "One Room, One Rat". Flip the
+Beginner roadmap card to Ready and add its TOC sub-links.

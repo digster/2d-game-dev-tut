@@ -263,6 +263,34 @@ per-tier file structure mirroring the Fundamentals layout.
   `net_` namespace for the future per-tier bundles file. The track
   followed the established "one tier per commit" cadence used by
   racing-sim and voxel-worlds.
+- `roguelike/` — **scaffold shipped; tiers landing iteratively.** Build a
+  complete, turn-based, deterministic grid roguelike (NetHack / Brogue / DCSS
+  style) from an empty canvas to a playable, seed-shareable dungeon dive. This
+  is the project's first **turn-based** content — the whole genre advances one
+  turn at a time instead of on a real-time loop, which rewires the architecture.
+  It is also the natural capstone genre: it composes Fundamentals already taught
+  (procgen, shadow casting, A*, ECS, FSMs, behavior trees) into a game you can
+  lose. See `roguelike/index.html` for the five-tier roadmap. The scaffold added
+  the landing page (five-tier roadmap + Fundamentals prerequisites + a live
+  self-check) and two foundational helpers in `roguelike/engine/` (the
+  `netcode/net/` pattern, since they're shared across every tier):
+  `seeded-rng.js` (`RogueRng` — mulberry32, the same PRNG the netcode and
+  racing-sim tracks use, plus roguelike helpers `pick`/`shuffle`/`weighted`/
+  `dice` for loot and spawn tables) and `grid.js` (the `Tile` enum, a flat
+  `Uint8Array`-backed `Level` class with `isWalkable`/`isOpaque` queries, the
+  shared `RL` palette + glyph table, and `drawGlyphGrid` — the ASCII renderer
+  that paints a `Level` as monospace glyphs with optional entities and a
+  fog-of-war visibility mask). The landing page's self-check proves determinism
+  (seed 1337 → identical numbers), exercises the RNG/Level helpers, and renders
+  a hand-built room (`#` walls, `·` floor, `>` stairs, `@` player, `r` rat) to
+  prove the renderer. **Tier arc:** Beginner (grid + turn loop + bump-to-attack),
+  Intermediate (dungeon generation — rooms/corridors/BSP/drunkard's-walk),
+  Advanced (recursive-shadowcasting FOV + fog of war + monster pathing/Dijkstra
+  maps), Expert (items/inventory ECS + status effects + identification +
+  energy-speed scheduling + AI variety), Simulations (cellular-automata caves +
+  depth themes + the full playable game, "The Descent"). Demo IDs reserve the
+  `rl_` namespace for future per-tier bundles. Follows the "one tier per commit"
+  cadence.
 
 ## Shared assets
 

@@ -41,7 +41,13 @@ This is cheaper than promoting them to `shared/` because they're netcode-specifi
 — if a second track ever needed them, **that** would be the moment to elevate.
 The general rule: helpers used by ≥ 2 tier files inside the same track go in a
 sibling subfolder named after their concern; helpers used across multiple tracks
-go in `shared/`.
+go in `shared/`. `roguelike/engine/` is the second instance of this pattern:
+`seeded-rng.js` (`RogueRng` — a superset of netcode's `SeededRng`, deliberately
+re-named and kept track-local rather than shared so the track is self-contained
+and can teach roguelike-flavoured RNG helpers) and `grid.js` (`Tile`/`Level`/`RL`/
+`drawGlyphGrid` — the turn-based grid core + ASCII glyph renderer every roguelike
+tier reuses). Both expose their names on `window`, pre-checked against
+`shared/utils.js`.
 
 **Why tiers are separate files:** content is split beginner → intermediate →
 expert → raymarching → stylization → distortion → advanced → simulations so each
