@@ -382,7 +382,7 @@ per-tier file structure mirroring the Fundamentals layout.
   `rl_` namespace for future per-tier bundles. Follows the "one tier per commit"
   cadence.
 
-- `platformer/` — **scaffold shipped; tiers landing one per commit.** Build a
+- `platformer/` — **Beginner tier shipped; further tiers landing one per commit.** Build a
   tight, juicy 2D platformer (Celeste / Hollow Knight style) — the repo's first
   **real-time character-control** track. Where the other genre tracks build a
   *world*, this one builds a *character* and teaches the "game feel" stack that has
@@ -404,9 +404,18 @@ per-tier file structure mirroring the Fundamentals layout.
   enum, `TileMap`, `PF` palette, `drawTileMap` with built-in viewport culling),
   `physics.js` (`AABB` + `moveAndCollide` — per-axis AABB-vs-tile resolution, the
   single most-reused primitive), and `input.js` (`pfInstallKeys` held-key input
-  with edge detection + `pfLoop` fixed-timestep accumulator). Demo IDs reserve the
-  `pf_` namespace; demos are keyboard/canvas-driven so (like roguelike/netcode)
-  they omit `data-demo-id` to opt out of the Export button for now.
+  with edge detection + `pfLoop` fixed-timestep accumulator). **Beginner tier
+  ("Ground &amp; Gravity", 5 demos):** a falling-box gravity/loop demo (fading
+  trail shows acceleration; gravity slider; terminal-velocity clamp), a
+  gravity-off per-axis collision demo (fly a box into solids, the
+  `{left,right,up,down}` hit flags in the HUD, slide along walls), a grounded +
+  simple-jump demo (jump only when `hit.down`, with a live `v²/2g` jump-height
+  readout), a run-feel demo (the SAME input drives an INSTANT box vs an
+  ACCEL+FRICTION box side by side, with velocity bars), and the capstone
+  **"First Steps"** — a complete playable level composing run + jump + gravity +
+  tilemap collision, reach the gold flag / fall in the pit and respawn. Demo IDs
+  reserve the `pf_` namespace; demos are keyboard/canvas-driven so (like
+  roguelike/netcode) they omit `data-demo-id` to opt out of the Export button for now.
 
 ## Shared assets
 

@@ -1232,3 +1232,14 @@ ships the scaffold: platformer/index.html (landing + roadmap + self-check) and t
 platformer/engine/ helpers (tilemap, physics/AABB-collision, input + fixed-timestep
 loop). Keep both indexes + README + ARCHITECTURE consistent; verify console-clean
 in-browser before the commit message.
+
+# 2026-05-31 (pt.2) — Platformer: Beginner tier ("Ground & Gravity")
+
+"Okay, work on the next iteration." → "Continue." — second iteration on the
+platformer track, following the scaffold + one-tier-per-commit cadence. Ship the
+Beginner tier: platformer/beginner.html + beginner-demos.js, 5 IIFE demos
+(gravity/loop, per-axis collision, grounded+jump, run accel/friction, and the
+"First Steps" mini-project), each adding exactly one idea on top of the scaffold
+engine. Flip the landing-page Beginner card to Ready + add a Beginner nav button;
+drop the "(coming soon)" marker on the root index Beginner sublink. Keep docs in
+sync and verify console-clean in-browser before the commit message.

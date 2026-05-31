@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beginner — Platformer Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <!-- Prism.js Syntax Highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+
+    <!-- Tier-local styles: the keyboard-driven canvases want an obvious focus
+         ring, and the slider rows read better with a little structure.
+         Everything else reuses shared/styles.css. -->
+    <style>
+        canvas.pf-canvas { cursor: pointer; outline: none; background: #0d1117; border-radius: 6px; }
+        canvas.pf-canvas:focus { box-shadow: 0 0 0 2px #7CF2C8; }
+        /* slider rows: label · slider · live value */
+        .pf-slider { display: inline-flex; align-items: center; gap: 8px; color: #c9d1d9; font-size: 0.92em; }
+        .pf-slider input[type="range"] { width: 130px; }
+        .pf-slider .val { color: #4fc3f7; font-family: monospace; min-width: 2.5em; display: inline-block; }
+        .pf-key { font-family: monospace; background: #0d1117; border: 1px solid #2d3354; border-radius: 4px; padding: 1px 6px; color: #7CF2C8; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏃 Beginner — Ground &amp; Gravity</h1>
+        <p class="subtitle">Solid ground under a falling box. We build the platformer loop, then the one collision routine everything else stands on, then a jump, then a run — and finish by playing a tiny level.</p>
+
+        <!-- Navigation -->
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="beginner.html" class="nav-button active">Beginner</a>
+        </div>
+
+        <!-- Table of Contents -->
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#intro">What a platformer really is (a loop + a box + a grid)</a></li>
+                <li><a href="#gravity">Gravity &amp; the game loop — a falling box</a></li>
+                <li><a href="#collision">Per-axis collision — the primitive everything stands on</a></li>
+                <li><a href="#jump">Grounded &amp; the jump</a></li>
+                <li><a href="#run">Running — acceleration, max speed &amp; friction</a></li>
+                <li><a href="#mini-project">Mini-Project: "First Steps"</a></li>
+            </ul>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- INTRO -->
+        <!-- ============================================ -->
+        <div id="intro" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🧱 What a platformer really is</h2>
+            <p>
+                Strip away the art and a 2D platformer is three things working together, sixty times a
+                second:
+            </p>
+            <ul>
+                <li><strong>A loop</strong> that advances the world by a tiny, <em>fixed</em> slice of time
+                    every step — read input, move things, draw.</li>
+                <li><strong>A box</strong> (the player) with a position and a velocity, pulled down by
+                    gravity.</li>
+                <li><strong>A grid</strong> of solid tiles (the level) that the box is not allowed to pass
+                    through.</li>
+            </ul>
+            <p>
+                That's the whole skeleton. Coyote time, wall-jumps, dashes, cameras — everything later in
+                this track is a refinement of these three. So we build them first, in order, each demo
+                adding exactly one idea.
+            </p>
+
+            <div class="key-point">
+                <strong>💡 Why a <em>fixed</em> timestep?</strong> If you move the player by
+                <code>velocity × (time since last frame)</code>, the game behaves differently on a 30 Hz
+                laptop and a 240 Hz monitor — and physics can even glitch when a frame hitches. Instead we
+                advance the simulation in fixed 1/60-second steps and let rendering happen whenever it can.
+                The scaffold's <code>pfLoop</code> already does this; we just feed it an
+                <code>update(dt)</code> and a <code>render()</code>.
+            </div>
+
+            <div class="concept-box">
+                <h4>🧰 The engine, loaded on every page in this track</h4>
+                <ul>
+                    <li><code>TileMap</code> + <code>drawTileMap</code> — the level grid and its renderer
+                        (solid blocks; later, one-way platforms and slopes).</li>
+                    <li><code>AABB</code> + <code>moveAndCollide</code> — the player's box and the routine
+                        that moves it through the grid and stops it at solids. <strong>This is the most
+                        important function in the track.</strong></li>
+                    <li><code>pfInstallKeys</code> + <code>pfLoop</code> — held-key input (with click-to-focus)
+                        and the fixed-timestep loop.</li>
+                </ul>
+                <p>Open the <a href="index.html">track index</a> and scroll to the Scaffold Self-Check to see
+                    them proven — a box dropped onto a floor lands exactly on top.</p>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- GRAVITY -->
+        <!-- ============================================ -->
+        <div id="gravity" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🌍 Gravity &amp; the game loop</h2>
+            <p>
+                Every step, gravity adds a bit to the box's downward velocity, and that velocity moves the
+                box. Two lines. Watch the box fall, speed up, and land — the fading trail shows it
+                <em>accelerating</em> (the gaps grow each step). Drag the gravity slider; toggle the trail.
+            </p>
+            <div class="diagram">
+                <canvas id="pfGravityCanvas" class="pf-canvas" width="640" height="384"></canvas>
+            </div>
+            <div class="controls">
+                <span class="pf-slider">gravity
+                    <input type="range" id="pfGravityG" min="200" max="3000" step="50" value="1500">
+                    <span class="val" id="pfGravityGVal">1500</span> px/s²
+                </span>
+                <label class="pf-slider"><input type="checkbox" id="pfGravityTrail" checked> show trail</label>
+                <button id="pfGravityDrop">↻ Drop again</button>
+            </div>
+            <div id="pfGravityHud" class="info-display" style="font-family:monospace;">dropping…</div>
+
+            <details>
+                <summary>📝 Click to see: the entire loop is two lines of physics</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">const GRAVITY = 1500;    // px/s²  — a downward acceleration
+const TERMINAL = 900;    // px/s   — fastest you may fall
+let vy = 0;              // px/s   — current vertical velocity
+
+function update(dt) {            // dt is a FIXED 1/60 s, every step
+  vy = Math.min(vy + GRAVITY * dt, TERMINAL);   // 1) accelerate
+  moveAndCollide(box, 0, vy * dt, box.map);     // 2) move by v·dt, stop at solids
+}
+
+// pfLoop calls update() in fixed steps and render() once per frame:
+pfLoop(update, render).start();</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const GRAVITY = 1500;    // px/s²  — a downward acceleration
+const TERMINAL = 900;    // px/s   — fastest you may fall
+let vy = 0;              // px/s   — current vertical velocity
+
+function update(dt: number): void {       // dt is a FIXED 1/60 s, every step
+  vy = Math.min(vy + GRAVITY * dt, TERMINAL);   // 1) accelerate
+  moveAndCollide(box, 0, vy * dt, map);          // 2) move by v·dt, stop at solids
+}
+
+pfLoop(update, render).start();</code></pre>
+                </div>
+            </details>
+            <div class="key-point">
+                <strong>Why clamp to a terminal velocity?</strong> It keeps falls feeling controlled — but
+                it also keeps each step's movement smaller than a tile, which is exactly what
+                <code>moveAndCollide</code> needs to never tunnel through thin floors. (High-speed tunneling
+                is a whole topic in the Simulations tier.)
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- COLLISION -->
+        <!-- ============================================ -->
+        <div id="collision" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🧊 Per-axis collision — the primitive</h2>
+            <p>
+                Gravity is off here so collision is the only thing happening. Fly the box around with
+                <span class="pf-key">arrows</span> / <span class="pf-key">WASD</span>; it stops flush
+                against any solid tile, and you can <strong>slide</strong> along a wall. The HUD shows which
+                sides are touching — the <code>{left, right, up, down}</code> flags <code>moveAndCollide</code>
+                returns.
+            </p>
+            <div class="diagram">
+                <canvas id="pfCollisionCanvas" class="pf-canvas" width="640" height="384" tabindex="0"></canvas>
+            </div>
+            <div class="controls">
+                <label class="pf-slider"><input type="checkbox" id="pfCollisionGrid"> show tile grid</label>
+                <button id="pfCollisionReset">↻ Reset position</button>
+            </div>
+            <div id="pfCollisionHud" class="info-display" style="font-family:monospace;">click, then move…</div>
+
+            <h3>Why one axis at a time?</h3>
+            <p>
+                <code>moveAndCollide</code> moves the box <strong>horizontally and resolves</strong>, then
+                <strong>vertically and resolves</strong> — never both at once. That separation is the whole
+                trick: "walk into a wall" and "land on a floor" stay independent, so a box sliding across a
+                tiled floor doesn't snag on the seams between tiles.
+            </p>
+            <details>
+                <summary>📝 Click to see: the shape of the per-axis resolver</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// (this is engine/physics.js — you just CALL it)
+function moveAndCollide(box, vx, vy, map) {
+  const hit = { left:false, right:false, up:false, down:false };
+
+  box.x += vx;                       // 1) move on X...
+  if (vx > 0 && solidAhead(box.right, map)) { box.x = snapLeftOfWall();  hit.right = true; }
+  if (vx < 0 && solidAhead(box.left,  map)) { box.x = snapRightOfWall(); hit.left  = true; }
+
+  box.y += vy;                       // 2) ...THEN move on Y (using the fixed x)
+  if (vy > 0 && solidBelow(box.bottom, map)) { box.y = snapOntoFloor();  hit.down = true; }
+  if (vy < 0 && solidAbove(box.top,    map)) { box.y = snapBelowRoof();  hit.up   = true; }
+
+  return hit;                        // who did we touch this step?
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface Hit { left: boolean; right: boolean; up: boolean; down: boolean; }
+
+function moveAndCollide(box: AABB, vx: number, vy: number, map: TileMap): Hit {
+  const hit: Hit = { left:false, right:false, up:false, down:false };
+
+  box.x += vx;                       // 1) move on X...
+  if (vx > 0 && solidAhead(box.right, map)) { box.x = snapLeftOfWall();  hit.right = true; }
+  if (vx < 0 && solidAhead(box.left,  map)) { box.x = snapRightOfWall(); hit.left  = true; }
+
+  box.y += vy;                       // 2) ...THEN move on Y (using the fixed x)
+  if (vy > 0 && solidBelow(box.bottom, map)) { box.y = snapOntoFloor();  hit.down = true; }
+  if (vy < 0 && solidAbove(box.top,    map)) { box.y = snapBelowRoof();  hit.up   = true; }
+
+  return hit;
+}</code></pre>
+                </div>
+            </details>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- JUMP -->
+        <!-- ============================================ -->
+        <div id="jump" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>⬆️ Grounded &amp; the jump</h2>
+            <p>
+                A jump is just a sudden upward velocity — but only allowed when you're standing on
+                something. "Standing on something" is exactly <code>hit.down</code> from the last move, which
+                we remember as <code>onGround</code>. Walk with <span class="pf-key">←</span>
+                <span class="pf-key">→</span>, jump with <span class="pf-key">↑</span> or
+                <span class="pf-key">Space</span>. There's no double-jump — that's a deliberate choice we
+                revisit in the next tier.
+            </p>
+            <div class="diagram">
+                <canvas id="pfJumpCanvas" class="pf-canvas" width="640" height="384" tabindex="0"></canvas>
+            </div>
+            <div class="controls">
+                <span class="pf-slider">gravity
+                    <input type="range" id="pfJumpGrav" min="800" max="3000" step="50" value="1700">
+                    <span class="val" id="pfJumpGravVal">1700</span>
+                </span>
+                <span class="pf-slider">jump strength
+                    <input type="range" id="pfJumpStr" min="300" max="800" step="10" value="560">
+                    <span class="val" id="pfJumpStrVal">560</span>
+                </span>
+                <button id="pfJumpReset">↻ Reset</button>
+            </div>
+            <div id="pfJumpHud" class="info-display" style="font-family:monospace;">click, then move &amp; jump…</div>
+
+            <details>
+                <summary>📝 Click to see: grounded + jump in the update step</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">let vx = 0, vy = 0, onGround = false;
+
+function update(dt) {
+  vx = input.axisX() * MOVE_SPEED;                 // -1 / 0 / +1  →  left/right
+
+  if (input.pressed('jump') && onGround) vy = -JUMP;   // launch — only if grounded
+
+  vy = Math.min(vy + GRAVITY * dt, TERMINAL);      // gravity
+  const hit = moveAndCollide(box, vx * dt, vy * dt, map);
+
+  if (hit.down) vy = 0;                            // landed
+  if (hit.up && vy < 0) vy = 0;                    // bonked head
+  onGround = hit.down;                             // remember for next step's jump
+  input.endFrame();                               // consume this step's key edges
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">let vx = 0, vy = 0;
+let onGround = false;
+
+function update(dt: number): void {
+  vx = input.axisX() * MOVE_SPEED;
+
+  if (input.pressed('jump') && onGround) vy = -JUMP;
+
+  vy = Math.min(vy + GRAVITY * dt, TERMINAL);
+  const hit = moveAndCollide(box, vx * dt, vy * dt, map);
+
+  if (hit.down) vy = 0;
+  if (hit.up && vy < 0) vy = 0;
+  onGround = hit.down;
+  input.endFrame();
+}</code></pre>
+                </div>
+            </details>
+            <div class="key-point">
+                <strong>Jump height is physics, not magic:</strong> a launch speed <em>v</em> against
+                gravity <em>g</em> reaches <code>v² / (2g)</code> pixels high. The HUD shows it live — nudge
+                the sliders and watch the number (and the box) agree.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- RUN -->
+        <!-- ============================================ -->
+        <div id="run" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🏃 Running — acceleration, max speed &amp; friction</h2>
+            <p>
+                The same <span class="pf-key">←</span> <span class="pf-key">→</span> input drives
+                <strong>two</strong> boxes. The top one snaps instantly to full speed and back to zero — it
+                feels robotic. The bottom one <em>accelerates</em> toward max speed and <em>decelerates</em>
+                via friction when you let go — it feels alive. Same controls, completely different feel. Tune
+                the three knobs and find a feel you like.
+            </p>
+            <div class="diagram">
+                <canvas id="pfRunCanvas" class="pf-canvas" width="640" height="384" tabindex="0"></canvas>
+            </div>
+            <div class="controls">
+                <span class="pf-slider">acceleration
+                    <input type="range" id="pfRunAccel" min="300" max="4000" step="50" value="1500">
+                    <span class="val" id="pfRunAccelVal">1500</span>
+                </span>
+                <span class="pf-slider">friction
+                    <input type="range" id="pfRunFric" min="300" max="4000" step="50" value="1800">
+                    <span class="val" id="pfRunFricVal">1800</span>
+                </span>
+                <span class="pf-slider">max speed
+                    <input type="range" id="pfRunMax" min="80" max="400" step="5" value="215">
+                    <span class="val" id="pfRunMaxVal">215</span>
+                </span>
+                <button id="pfRunReset">↻ Reset</button>
+            </div>
+            <div id="pfRunHud" class="info-display" style="font-family:monospace;">click, then hold ←/→…</div>
+
+            <details>
+                <summary>📝 Click to see: accelerate while held, friction when released</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">const ax = input.axisX();              // -1 / 0 / +1
+if (ax !== 0) {
+  vx += ax * ACCEL * dt;               // push toward the held direction
+} else {
+  const drop = FRICTION * dt;          // no input → bleed speed toward 0
+  vx = Math.abs(vx) <= drop ? 0 : vx - Math.sign(vx) * drop;
+}
+vx = clamp(vx, -MAX_SPEED, MAX_SPEED); // never exceed top speed
+moveAndCollide(box, vx * dt, 0, map);</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const ax = input.axisX();              // -1 / 0 / +1
+if (ax !== 0) {
+  vx += ax * ACCEL * dt;
+} else {
+  const drop = FRICTION * dt;
+  vx = Math.abs(vx) <= drop ? 0 : vx - Math.sign(vx) * drop;
+}
+vx = clamp(vx, -MAX_SPEED, MAX_SPEED);
+moveAndCollide(box, vx * dt, 0, map);</code></pre>
+                </div>
+            </details>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- MINI-PROJECT -->
+        <!-- ============================================ -->
+        <div id="mini-project" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🎮 Mini-Project: "First Steps"</h2>
+            <p>
+                Everything at once: run (accel + friction), jump (grounded), gravity, and per-axis tilemap
+                collision, on a hand-built level. Climb the platforms and reach the <strong>gold flag</strong>.
+                Miss a jump into the pit and you respawn — a free reminder that off the edge of the tilemap is
+                just empty air, so you fall off the map.
+                <span class="pf-key">←</span> <span class="pf-key">→</span> run,
+                <span class="pf-key">↑</span> / <span class="pf-key">Space</span> jump.
+            </p>
+            <div class="diagram">
+                <canvas id="pfFirstCanvas" class="pf-canvas" width="640" height="384" tabindex="0"></canvas>
+            </div>
+            <div class="controls">
+                <button id="pfFirstReset">↻ Reset</button>
+            </div>
+            <div id="pfFirstHud" class="info-display" style="font-family:monospace;">click, then run &amp; jump to the flag…</div>
+
+            <details>
+                <summary>📝 Click to see: the whole Beginner controller in one update()</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">function update(dt) {
+  // 1. horizontal: accelerate while held, friction when released
+  const ax = input.axisX();
+  if (ax !== 0) vx += ax * ACCEL * dt;
+  else { const d = FRICTION * dt; vx = Math.abs(vx) <= d ? 0 : vx - Math.sign(vx) * d; }
+  vx = clamp(vx, -MAX_SPEED, MAX_SPEED);
+
+  // 2. jump only when grounded
+  if (input.pressed('jump') && onGround) vy = -JUMP;
+
+  // 3. gravity, then move & resolve against the tilemap
+  vy = Math.min(vy + GRAVITY * dt, TERMINAL);
+  const hit = moveAndCollide(box, vx * dt, vy * dt, map);
+  if (hit.down) vy = 0;
+  if (hit.up && vy < 0) vy = 0;
+  if (hit.left || hit.right) vx = 0;
+  onGround = hit.down;
+
+  // 4. lose (fell off) / win (touched the goal)
+  if (box.top > WORLD_H + 60) respawn();
+  if (box.intersects(goal)) won = true;
+  input.endFrame();
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function update(dt: number): void {
+  // 1. horizontal: accelerate while held, friction when released
+  const ax = input.axisX();
+  if (ax !== 0) vx += ax * ACCEL * dt;
+  else { const d = FRICTION * dt; vx = Math.abs(vx) <= d ? 0 : vx - Math.sign(vx) * d; }
+  vx = clamp(vx, -MAX_SPEED, MAX_SPEED);
+
+  // 2. jump only when grounded
+  if (input.pressed('jump') && onGround) vy = -JUMP;
+
+  // 3. gravity, then move & resolve against the tilemap
+  vy = Math.min(vy + GRAVITY * dt, TERMINAL);
+  const hit = moveAndCollide(box, vx * dt, vy * dt, map);
+  if (hit.down) vy = 0;
+  if (hit.up && vy < 0) vy = 0;
+  if (hit.left || hit.right) vx = 0;
+  onGround = hit.down;
+
+  // 4. lose (fell off) / win (touched the goal)
+  if (box.top > WORLD_H + 60) respawn();
+  if (box.intersects(goal)) won = true;
+  input.endFrame();
+}</code></pre>
+                </div>
+            </details>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- RECAP / NEXT -->
+        <!-- ============================================ -->
+        <div class="recap">
+            <h2>✅ Recap — what you built</h2>
+            <ul>
+                <li><strong>The fixed-timestep loop</strong> — <code>update(dt)</code> in 1/60 s steps, render whenever.</li>
+                <li><strong>Gravity &amp; integration</strong> — accelerate velocity, move by <code>v · dt</code>, clamp to terminal.</li>
+                <li><strong>Per-axis AABB-vs-tilemap collision</strong> — move X &amp; resolve, then Y; the <code>{left,right,up,down}</code> flags.</li>
+                <li><strong>Grounded + jump</strong> — <code>onGround = hit.down</code>; launch only when grounded.</li>
+                <li><strong>Run feel</strong> — acceleration toward max speed, friction back to zero.</li>
+            </ul>
+            <div class="key-point">
+                <strong>Next up — <span class="level-indicator level-intermediate">INTERMEDIATE</span> "Game Feel":</strong>
+                that jump works, but it isn't <em>kind</em> yet. The next tier adds the forgiveness windows
+                and curve tweaks that make a jump feel right — coyote time, jump buffering, variable jump
+                height, apex hangtime, and corner correction. <em>(Coming next commit.)</em>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scroll to Top Button -->
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <!-- Dependencies, then the engine, then this tier's demos. Order matters:
+         utils.js (clearCanvas/clamp) and the engine globals must exist before
+         beginner-demos.js runs. -->
+    <script src="../shared/utils.js"></script>
+    <script src="../shared/code-tabs.js"></script>
+    <script src="engine/tilemap.js"></script>
+    <script src="engine/physics.js"></script>
+    <script src="engine/input.js"></script>
+    <script src="beginner-demos.js"></script>
+</body>
+</html>
