@@ -382,6 +382,32 @@ per-tier file structure mirroring the Fundamentals layout.
   `rl_` namespace for future per-tier bundles. Follows the "one tier per commit"
   cadence.
 
+- `platformer/` — **scaffold shipped; tiers landing one per commit.** Build a
+  tight, juicy 2D platformer (Celeste / Hollow Knight style) — the repo's first
+  **real-time character-control** track. Where the other genre tracks build a
+  *world*, this one builds a *character* and teaches the "game feel" stack that has
+  no home elsewhere in the repo: coyote time, jump buffering, variable jump height,
+  apex hangtime, corner correction, wall-jump, dash, plus camera/parallax/juice and
+  the perf work to make it scale. See `platformer/index.html` for the five-tier
+  roadmap. The screenshots that prompted the track are inspiration only; their order
+  is remapped into the repo's own difficulty order. **Tier arc:** Beginner
+  (Ground & Gravity — the fixed-timestep loop + AABB-on-tilemap collision),
+  Intermediate (Game Feel — coyote/buffer/variable-jump/apex/corner-correction + a
+  player FSM), Advanced (Abilities & Moving Geometry — wall-slide/jump, dash,
+  one-way platforms, slopes, moving platforms/conveyors), Expert (Camera, Parallax
+  & Juice — follow camera with deadzone/look-ahead, screen shake, parallax,
+  particles, squash-and-stretch), Simulations (Performance, Scale & the grand
+  capstone "Summit" — viewport culling, particle pooling, broad-phase collision,
+  chunked/streamed levels, render caching). The **scaffold** shipped three shared
+  helpers in `platformer/engine/` (the netcode/net + roguelike/engine pattern,
+  names on `window`, pre-checked vs `shared/utils.js`): `tilemap.js` (`PFTile`
+  enum, `TileMap`, `PF` palette, `drawTileMap` with built-in viewport culling),
+  `physics.js` (`AABB` + `moveAndCollide` — per-axis AABB-vs-tile resolution, the
+  single most-reused primitive), and `input.js` (`pfInstallKeys` held-key input
+  with edge detection + `pfLoop` fixed-timestep accumulator). Demo IDs reserve the
+  `pf_` namespace; demos are keyboard/canvas-driven so (like roguelike/netcode)
+  they omit `data-demo-id` to opt out of the Export button for now.
+
 ## Shared assets
 
 All pages load CSS and JS from `shared/`:

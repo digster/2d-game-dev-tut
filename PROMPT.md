@@ -1218,3 +1218,17 @@ the thread from the scaffold self-check to the replay verifier. Track COMPLETE.
 
 Nothing on this track. Deferred: per-tier bundles-rl_*.js Export files (demos are
 keyboard/canvas-driven, so they currently opt out of the Export button).
+
+# 2026-05-31 — New track: Platformer (Celeste / Hollow Knight style) — scaffold
+
+Plan and build a Platformer "character feel" track, prompted by two screenshots from
+an earlier session (Celeste / Hollow Knight style; side-scroll platformer). Treat the
+screenshots as inspiration only — add/change whatever makes it a comprehensive,
+complete track. Decisions (via AskUserQuestion): scaffold-first then one tier per
+commit; tier split at my best judgment (remap the screenshots into the repo's own
+Beginner→Intermediate→Advanced→Expert→Simulations order, abilities in Advanced);
+Simulations tier = Performance & Optimization (not speedrun frame-rules). This pass
+ships the scaffold: platformer/index.html (landing + roadmap + self-check) and three
+platformer/engine/ helpers (tilemap, physics/AABB-collision, input + fixed-timestep
+loop). Keep both indexes + README + ARCHITECTURE consistent; verify console-clean
+in-browser before the commit message.

@@ -67,7 +67,18 @@ system inline) — so `rpg.js` is loaded only on `simulations.html`, never on
 `<tier>-demos.js` because they're the lesson, not shared infrastructure — e.g.
 the Advanced tier's `losLine`/`computeFOV`/`aStarPath`/`dijkstraFrom` are
 top-level functions in `advanced-demos.js` (top-level so they're unit-testable
-from the console, not just usable by the demos).
+from the console, not just usable by the demos). `platformer/engine/` is the
+**third** instance of this per-track helper-folder pattern: `tilemap.js`
+(`PFTile`/`TileMap`/`PF`/`drawTileMap`), `physics.js` (`AABB`/`moveAndCollide` —
+per-axis AABB-vs-tile collision, the single most-reused platformer primitive),
+and `input.js` (`pfInstallKeys` held-key input + `pfLoop` fixed-timestep
+accumulator), all on `window`, pre-checked vs `shared/utils.js`. The platformer
+differs from the roguelike in being **real-time, not turn-based** — a continuous
+fixed-timestep loop (`pfLoop`) with held-key + edge-detected input, vs the
+roguelike's one-action-per-keypress `rlInstallCanvasKeys`. Its taught,
+tier-specific algorithms (swept-slope collision, one-way drop-through, the camera,
+the game-feel kit) start inline in their tier and promote to `engine/` only on the
+2nd consumer (flagged candidates: `engine/camera.js`, `engine/player.js`).
 
 **Why tiers are separate files:** content is split beginner → intermediate →
 expert → raymarching → stylization → distortion → advanced → simulations so each
