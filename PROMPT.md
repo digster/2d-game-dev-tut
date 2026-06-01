@@ -1243,3 +1243,16 @@ Beginner tier: platformer/beginner.html + beginner-demos.js, 5 IIFE demos
 engine. Flip the landing-page Beginner card to Ready + add a Beginner nav button;
 drop the "(coming soon)" marker on the root index Beginner sublink. Keep docs in
 sync and verify console-clean in-browser before the commit message.
+
+# 2026-05-31 (pt.3) — Platformer: Intermediate tier ("Game Feel")
+
+"Okay, work on the next iteration." → "Continue." — third platformer iteration,
+one tier per commit. Topics fixed by the landing-page Intermediate card. Ship
+platformer/intermediate.html + intermediate-demos.js, 6 demos all driving one
+configurable PlayerBody controller (coyote time, jump buffering, variable jump
+height, apex hangtime + asymmetric gravity + fast-fall, corner correction, and a
+player FSM with squash-and-stretch), capped by the "Feel Lab" raw-vs-juiced
+mini-project. Flip the landing Intermediate card to Ready + nav buttons; drop the
+"(coming soon)" marker on the root index Intermediate sublink. Console-test each
+feel mechanic headlessly, keep docs in sync, verify console-clean before the
+commit message.

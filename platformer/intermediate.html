@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Intermediate — Platformer Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <!-- Prism.js Syntax Highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+    <style>
+        canvas.pf-canvas { cursor: pointer; outline: none; background: #0d1117; border-radius: 6px; }
+        canvas.pf-canvas:focus { box-shadow: 0 0 0 2px #7CF2C8; }
+        .pf-slider { display: inline-flex; align-items: center; gap: 8px; color: #c9d1d9; font-size: 0.92em; }
+        .pf-slider input[type="range"] { width: 120px; }
+        .pf-slider .val { color: #4fc3f7; font-family: monospace; min-width: 2.5em; display: inline-block; }
+        .pf-key { font-family: monospace; background: #0d1117; border: 1px solid #2d3354; border-radius: 4px; padding: 1px 6px; color: #7CF2C8; }
+        /* simple FSM diagram */
+        .fsm { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin: 16px 0; }
+        .fsm .st { background: #252b4a; border: 2px solid #2d3354; border-radius: 10px; padding: 10px 16px; font-family: monospace; color: #c9d1d9; }
+        .fsm .st b { display: block; font-size: 1.05em; }
+        .fsm .st.idle b { color: #7CF2C8; } .fsm .st.run b { color: #7CF2C8; }
+        .fsm .st.jump b { color: #66bb6a; } .fsm .st.fall b { color: #ffa726; } .fsm .st.land b { color: #4fc3f7; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎮 Intermediate — Game Feel</h1>
+        <p class="subtitle">The Beginner jump <em>works</em>. Now we make it feel <em>right</em> — the forgiveness windows and curve tweaks that separate a tech demo from a game you don't want to put down.</p>
+
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="beginner.html" class="nav-button">← Beginner</a>
+            <a href="intermediate.html" class="nav-button active">Intermediate</a>
+        </div>
+
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#intro">What "game feel" actually is</a></li>
+                <li><a href="#coyote">Coyote time — jump just after a ledge</a></li>
+                <li><a href="#buffer">Jump buffering — jump just before landing</a></li>
+                <li><a href="#variable">Variable jump height — tap vs hold</a></li>
+                <li><a href="#gravity">Apex hangtime, asymmetric gravity &amp; fast-fall</a></li>
+                <li><a href="#corner">Corner correction — head-bonk forgiveness</a></li>
+                <li><a href="#fsm">The player state machine</a></li>
+                <li><a href="#mini-project">Mini-Project: "Feel Lab"</a></li>
+            </ul>
+        </div>
+
+        <!-- INTRO -->
+        <div id="intro" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>✨ What "game feel" actually is</h2>
+            <p>
+                Play the Beginner mini-project and then play Celeste, and the difference isn't the physics
+                equations — they're nearly identical. The difference is a stack of small <em>forgiveness
+                rules</em> and <em>curve tweaks</em> that quietly cover for human reaction time and make the
+                avatar feel like an extension of your hand. None of them are hard; together they're
+                everything.
+            </p>
+            <p>Every demo below drives the <strong>same controller</strong> with one feature toggled, so you
+                can feel each in isolation. The capstone turns them all on at once.</p>
+            <div class="key-point">
+                <strong>💡 The golden rule of feel:</strong> the player is never wrong. If a jump <em>looks</em>
+                like it should have worked, it should have worked. Coyote time, jump buffering, and corner
+                correction all exist to honour the player's intent, not the simulation's pixel-exact truth.
+            </div>
+        </div>
+
+        <!-- COYOTE -->
+        <div id="coyote" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🐺 Coyote time</h2>
+            <p>
+                Named after the cartoon coyote who hangs in the air before falling: for a few milliseconds
+                <em>after</em> you walk off a ledge, you can still jump. Run off the platform and try to jump
+                a hair too late — with coyote time on (the player flashes gold during the grace window), it
+                still launches. <span class="pf-key">←</span> <span class="pf-key">→</span> run,
+                <span class="pf-key">↑</span>/<span class="pf-key">Space</span> jump.
+            </p>
+            <div class="diagram">
+                <canvas id="pfCoyoteCanvas" class="pf-canvas" width="640" height="384" tabindex="0"></canvas>
+            </div>
+            <div class="controls">
+                <label class="pf-slider"><input type="checkbox" id="pfCoyoteOn" checked> coyote time</label>
+                <span class="pf-slider">window
+                    <input type="range" id="pfCoyoteMs" min="0" max="200" step="10" value="100">
+                    <span class="val" id="pfCoyoteMsVal">100</span> ms
+                </span>
+                <button id="pfCoyoteReset">↻ Reset</button>
+            </div>
+            <div id="pfCoyoteHud" class="info-display" style="font-family:monospace;">click, then run off the edge…</div>
+            <details>
+                <summary>📝 Click to see: coyote time is one countdown timer</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// each step: refill the window while grounded, drain it in the air
+if (onGround) coyoteLeft = COYOTE_TIME;          // e.g. 0.09 s
+else          coyoteLeft = Math.max(0, coyoteLeft - dt);
+
+// you may jump if grounded OR still inside the grace window
+const canJump = onGround || coyoteLeft > 0;
+if (jumpPressed &amp;&amp; canJump) { vy = -JUMP; coyoteLeft = 0; }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">if (onGround) coyoteLeft = COYOTE_TIME;
+else          coyoteLeft = Math.max(0, coyoteLeft - dt);
+
+const canJump: boolean = onGround || coyoteLeft > 0;
+if (jumpPressed &amp;&amp; canJump) { vy = -JUMP; coyoteLeft = 0; }</code></pre>
+                </div>
+            </details>
+        </div>
+
+        <!-- BUFFER -->
+        <div id="buffer" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>⏱️ Jump buffering</h2>
+            <p>
+                The mirror image of coyote time. If you press jump a few frames <em>before</em> you land, the
+                press is remembered and fires the instant you touch down — so an eager early press is never
+                swallowed. Jump around and mash <span class="pf-key">↑</span>/<span class="pf-key">Space</span>
+                just before landing; with buffering on, the player flashes purple while a press is queued.
+            </p>
+            <div class="diagram">
+                <canvas id="pfBufferCanvas" class="pf-canvas" width="640" height="384" tabindex="0"></canvas>
+            </div>
+            <div class="controls">
+                <label class="pf-slider"><input type="checkbox" id="pfBufferOn" checked> jump buffer</label>
+                <span class="pf-slider">window
+                    <input type="range" id="pfBufferMs" min="0" max="250" step="10" value="120">
+                    <span class="val" id="pfBufferMsVal">120</span> ms
+                </span>
+                <button id="pfBufferReset">↻ Reset</button>
+            </div>
+            <div id="pfBufferHud" class="info-display" style="font-family:monospace;">click, then jump &amp; mash before landing…</div>
+            <details>
+                <summary>📝 Click to see: jump buffering is the same timer, the other way round</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// start the window when jump is pressed; drain it otherwise
+if (jumpPressed) bufferLeft = BUFFER_TIME;       // e.g. 0.11 s
+else             bufferLeft = Math.max(0, bufferLeft - dt);
+
+// fire as soon as a jump is allowed AND a press is still queued
+if (bufferLeft > 0 &amp;&amp; (onGround || coyoteLeft > 0)) {
+  vy = -JUMP; bufferLeft = 0; coyoteLeft = 0;
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">if (jumpPressed) bufferLeft = BUFFER_TIME;
+else             bufferLeft = Math.max(0, bufferLeft - dt);
+
+if (bufferLeft > 0 &amp;&amp; (onGround || coyoteLeft > 0)) {
+  vy = -JUMP; bufferLeft = 0; coyoteLeft = 0;
+}</code></pre>
+                </div>
+            </details>
+        </div>
+
+        <!-- VARIABLE -->
+        <div id="variable" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>📏 Variable jump height</h2>
+            <p>
+                A quick tap should be a small hop; holding the button should be a full jump. The trick:
+                when you <em>release</em> the button while still rising, cut the upward velocity. The two
+                dotted lines mark the short-hop and full-jump apex heights — tap and hold to land between
+                them. <span class="pf-key">↑</span>/<span class="pf-key">Space</span> to jump.
+            </p>
+            <div class="diagram">
+                <canvas id="pfVariableCanvas" class="pf-canvas" width="640" height="384" tabindex="0"></canvas>
+            </div>
+            <div class="controls">
+                <label class="pf-slider"><input type="checkbox" id="pfVariableOn" checked> variable height (release to cut)</label>
+                <button id="pfVariableReset">↻ Reset</button>
+            </div>
+            <div id="pfVariableHud" class="info-display" style="font-family:monospace;">click, then tap vs hold jump…</div>
+            <details>
+                <summary>📝 Click to see: release-to-cut</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">if (jumpPressed &amp;&amp; canJump) { vy = -JUMP; jumping = true; }
+
+// released the button while still going up? snip the rise short.
+if (jumping &amp;&amp; !jumpHeld &amp;&amp; vy &lt; 0) {
+  vy *= CUT_FACTOR;        // e.g. 0.45 — a tap reaches ~CUT² of full height
+  jumping = false;
+}
+if (vy >= 0) jumping = false;   // past the apex; nothing left to cut</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">if (jumpPressed &amp;&amp; canJump) { vy = -JUMP; jumping = true; }
+
+if (jumping &amp;&amp; !jumpHeld &amp;&amp; vy &lt; 0) {
+  vy *= CUT_FACTOR;
+  jumping = false;
+}
+if (vy >= 0) jumping = false;</code></pre>
+                </div>
+            </details>
+        </div>
+
+        <!-- GRAVITY -->
+        <div id="gravity" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🪶 Apex hangtime, asymmetric gravity &amp; fast-fall</h2>
+            <p>
+                Real jumps feel floaty at the top and snappy on the way down. Three tweaks get you there:
+                make <strong>fall gravity stronger than rise gravity</strong>, <strong>reduce gravity near
+                the apex</strong> so the peak lingers (the player flashes gold during the hang), and let the
+                player <strong>hold <span class="pf-key">↓</span> to fast-fall</strong>. Jump around and watch
+                the arc trail; tune the three gravities.
+            </p>
+            <div class="diagram">
+                <canvas id="pfGravityFeelCanvas" class="pf-canvas" width="640" height="384" tabindex="0"></canvas>
+            </div>
+            <div class="controls">
+                <span class="pf-slider">rise g
+                    <input type="range" id="pfGravRise" min="800" max="2600" step="50" value="1400">
+                    <span class="val" id="pfGravRiseVal">1400</span>
+                </span>
+                <span class="pf-slider">fall g
+                    <input type="range" id="pfGravFall" min="800" max="3000" step="50" value="2200">
+                    <span class="val" id="pfGravFallVal">2200</span>
+                </span>
+                <span class="pf-slider">apex band
+                    <input type="range" id="pfGravApex" min="0" max="300" step="10" value="130">
+                    <span class="val" id="pfGravApexVal">130</span>
+                </span>
+                <button id="pfGravityFeelReset">↻ Reset</button>
+            </div>
+            <div id="pfGravityFeelHud" class="info-display" style="font-family:monospace;">click, then jump…</div>
+            <details>
+                <summary>📝 Click to see: choosing gravity per phase of the jump</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// pick gravity based on what the jump is doing right now
+let g = (vy &lt; 0) ? GRAV_RISE : GRAV_FALL;            // snappier descent
+
+if (Math.abs(vy) &lt; APEX_BAND) g *= APEX_MULT;        // float at the top (~0.55)
+if (vy > 0 &amp;&amp; downHeld)        g *= FAST_FALL_MULT;    // hold ↓ to drop fast
+
+vy = Math.min(vy + g * dt, TERMINAL);</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">let g: number = (vy &lt; 0) ? GRAV_RISE : GRAV_FALL;
+
+if (Math.abs(vy) &lt; APEX_BAND) g *= APEX_MULT;
+if (vy > 0 &amp;&amp; downHeld)        g *= FAST_FALL_MULT;
+
+vy = Math.min(vy + g * dt, TERMINAL);</code></pre>
+                </div>
+            </details>
+        </div>
+
+        <!-- CORNER -->
+        <div id="corner" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>📐 Corner correction</h2>
+            <p>
+                You jump up through a gap, clip the corner of a ledge by two pixels, and bonk straight back
+                down — infuriating, and never what you meant. Corner correction checks: if a small sideways
+                nudge would have cleared the obstruction, apply it and let the jump continue. Aim the gap
+                roughly and jump; with correction on the player flashes green when it's saved.
+            </p>
+            <div class="diagram">
+                <canvas id="pfCornerCanvas" class="pf-canvas" width="640" height="384" tabindex="0"></canvas>
+            </div>
+            <div class="controls">
+                <label class="pf-slider"><input type="checkbox" id="pfCornerOn" checked> corner correction (±8 px)</label>
+                <button id="pfCornerReset">↻ Reset</button>
+            </div>
+            <div id="pfCornerHud" class="info-display" style="font-family:monospace;">click, then jump through the gap…</div>
+            <details>
+                <summary>📝 Click to see: forgive a head-bonk that a nudge would clear</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">const beforeY = box.y;
+const hit = moveAndCollide(box, 0, vy * dt, map);   // vertical move
+
+if (hit.up &amp;&amp; vy &lt; 0) {                  // bonked the ceiling while rising
+  let saved = false;
+  for (let mag = 1; mag &lt;= CORNER &amp;&amp; !saved; mag++) {
+    for (const dir of [facing, -facing]) {           // try a small sideways shift
+      const t = new AABB(box.x + dir*mag, beforeY, box.w, box.h);
+      if (!moveAndCollide(t, 0, vy*dt, map).up) {     // ...does it clear now?
+        box.x = t.x; box.y = t.y; saved = true; break;
+      }
+    }
+  }
+  if (!saved) vy = 0;                    // a real ceiling — stop the rise
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const beforeY = box.y;
+const hit = moveAndCollide(box, 0, vy * dt, map);
+
+if (hit.up &amp;&amp; vy &lt; 0) {
+  let saved = false;
+  for (let mag = 1; mag &lt;= CORNER &amp;&amp; !saved; mag++) {
+    for (const dir of [facing, -facing]) {
+      const t = new AABB(box.x + dir*mag, beforeY, box.w, box.h);
+      if (!moveAndCollide(t, 0, vy*dt, map).up) {
+        box.x = t.x; box.y = t.y; saved = true; break;
+      }
+    }
+  }
+  if (!saved) vy = 0;
+}</code></pre>
+                </div>
+            </details>
+        </div>
+
+        <!-- FSM -->
+        <div id="fsm" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🔁 The player state machine</h2>
+            <p>
+                Animation, sound, and effects all key off <em>what the player is doing</em>, so it's worth
+                naming those states explicitly. A platformer character is a tiny finite state machine driven
+                straight from physics — no hand-written transitions, just a read of velocity and grounded:
+            </p>
+            <div class="fsm">
+                <div class="st idle"><b>IDLE</b>grounded, ~still</div>
+                <div class="st run"><b>RUN</b>grounded, moving</div>
+                <div class="st jump"><b>JUMP</b>airborne, vy &lt; 0</div>
+                <div class="st fall"><b>FALL</b>airborne, vy ≥ 0</div>
+                <div class="st land"><b>LAND</b>just touched down</div>
+            </div>
+            <p>
+                In the Feel Lab below, the live state is printed over the player, and each state drives the
+                <strong>squash-and-stretch</strong> (stretch on takeoff, squash on landing) — the cheapest,
+                highest-impact piece of juice there is.
+            </p>
+            <details>
+                <summary>📝 Click to see: the whole FSM is five lines</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">const justLanded = onGround &amp;&amp; !wasGround;
+if (justLanded) landTimer = 0.12;       // a brief landing pose
+
+if (landTimer > 0)       { landTimer -= dt; state = 'land'; }
+else if (!onGround)      state = vy &lt; 0 ? 'jump' : 'fall';
+else                     state = Math.abs(vx) > 12 ? 'run' : 'idle';</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">type State = 'idle' | 'run' | 'jump' | 'fall' | 'land';
+
+const justLanded = onGround &amp;&amp; !wasGround;
+if (justLanded) landTimer = 0.12;
+
+if (landTimer > 0)  { landTimer -= dt; state = 'land'; }
+else if (!onGround) state = vy &lt; 0 ? 'jump' : 'fall';
+else                state = Math.abs(vx) > 12 ? 'run' : 'idle';</code></pre>
+                </div>
+            </details>
+        </div>
+
+        <!-- MINI-PROJECT -->
+        <div id="mini-project" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🧪 Mini-Project: "Feel Lab"</h2>
+            <p>
+                The same little course, every assist on a toggle. Hit <strong>Raw</strong> and run it — it
+                feels stiff and unfair. Hit <strong>Juiced</strong> and run it again — identical geometry,
+                but now it feels <em>good</em>. The live state label and squash-and-stretch come along for
+                free. <span class="pf-key">←</span> <span class="pf-key">→</span> run,
+                <span class="pf-key">↑</span>/<span class="pf-key">Space</span> jump, hold
+                <span class="pf-key">↓</span> to fast-fall.
+            </p>
+            <div class="diagram">
+                <canvas id="pfFeelLabCanvas" class="pf-canvas" width="640" height="384" tabindex="0"></canvas>
+            </div>
+            <div class="controls">
+                <button id="pfLabRaw">Raw</button>
+                <button id="pfLabJuiced">Juiced</button>
+                <label class="pf-slider"><input type="checkbox" id="pfLabCoyote" checked> coyote</label>
+                <label class="pf-slider"><input type="checkbox" id="pfLabBuffer" checked> buffer</label>
+                <label class="pf-slider"><input type="checkbox" id="pfLabVariable" checked> variable</label>
+                <label class="pf-slider"><input type="checkbox" id="pfLabApex" checked> apex/asym</label>
+                <label class="pf-slider"><input type="checkbox" id="pfLabCorner" checked> corner</label>
+                <button id="pfFeelLabReset">↻ Reset</button>
+            </div>
+            <div id="pfFeelLabHud" class="info-display" style="font-family:monospace;">click, then toggle Raw vs Juiced…</div>
+        </div>
+
+        <!-- RECAP / NEXT -->
+        <div class="recap">
+            <h2>✅ Recap — what you built</h2>
+            <ul>
+                <li><strong>Coyote time</strong> &amp; <strong>jump buffering</strong> — symmetric grace windows that honour intent.</li>
+                <li><strong>Variable jump height</strong> — release-to-cut for tap-vs-hold control.</li>
+                <li><strong>Apex hangtime + asymmetric gravity + fast-fall</strong> — a floaty top and a snappy descent.</li>
+                <li><strong>Corner correction</strong> — forgive a head-bonk a nudge would clear.</li>
+                <li><strong>A physics-driven state machine</strong> + squash-and-stretch.</li>
+            </ul>
+            <div class="key-point">
+                <strong>Next up — <span class="level-indicator level-advanced">ADVANCED</span> "Abilities &amp; Moving Geometry":</strong>
+                a bigger moveset (wall-slide, wall-jump, a Celeste-style dash) and the trickier collision
+                cases (one-way platforms, slopes, moving platforms &amp; conveyors). The Feel Lab controller
+                is the foundation it all bolts onto. <em>(Coming next commit.)</em>
+            </div>
+        </div>
+    </div>
+
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <script src="../shared/utils.js"></script>
+    <script src="../shared/code-tabs.js"></script>
+    <script src="engine/tilemap.js"></script>
+    <script src="engine/physics.js"></script>
+    <script src="engine/input.js"></script>
+    <script src="intermediate-demos.js"></script>
+</body>
+</html>

@@ -382,7 +382,7 @@ per-tier file structure mirroring the Fundamentals layout.
   `rl_` namespace for future per-tier bundles. Follows the "one tier per commit"
   cadence.
 
-- `platformer/` — **Beginner tier shipped; further tiers landing one per commit.** Build a
+- `platformer/` — **Beginner + Intermediate tiers shipped; further tiers landing one per commit.** Build a
   tight, juicy 2D platformer (Celeste / Hollow Knight style) — the repo's first
   **real-time character-control** track. Where the other genre tracks build a
   *world*, this one builds a *character* and teaches the "game feel" stack that has
@@ -413,9 +413,20 @@ per-tier file structure mirroring the Fundamentals layout.
   readout), a run-feel demo (the SAME input drives an INSTANT box vs an
   ACCEL+FRICTION box side by side, with velocity bars), and the capstone
   **"First Steps"** — a complete playable level composing run + jump + gravity +
-  tilemap collision, reach the gold flag / fall in the pit and respawn. Demo IDs
-  reserve the `pf_` namespace; demos are keyboard/canvas-driven so (like
-  roguelike/netcode) they omit `data-demo-id` to opt out of the Export button for now.
+  tilemap collision, reach the gold flag / fall in the pit and respawn.
+  **Intermediate tier ("Game Feel", 6 demos):** every demo drives the SAME
+  configurable `PlayerBody` controller with one feel feature flipped on — coyote
+  time (jump just after a ledge), jump buffering (jump just before landing),
+  variable jump height (release-to-cut, with short-hop/full-jump apex guides),
+  apex hangtime + asymmetric rise/fall gravity + hold-↓ fast-fall, and corner
+  correction (a head-bonk a small sideways nudge would clear is forgiven) — plus a
+  physics-driven player FSM (idle/run/jump/fall/land) with squash-and-stretch. The
+  capstone **"Feel Lab"** puts every assist on a toggle with Raw/Juiced presets so
+  the same course can be felt stiff-then-forgiving. `PlayerBody` is taught inline
+  here and is the flagged promotion candidate for `engine/player.js` once the
+  Advanced tier reuses it. Demo IDs reserve the `pf_` namespace; demos are
+  keyboard/canvas-driven so (like roguelike/netcode) they omit `data-demo-id` to
+  opt out of the Export button for now.
 
 ## Shared assets
 
