@@ -89,8 +89,11 @@ one-way platforms + 45° slope tiles — top-level + console-testable) and
 `MovingPlatform`/`pfRidePlatforms`. The seam between them is `PlayerBody`'s
 swappable **`resolve(box,dx,dy)` hook** (default = plain `moveAndCollide`; the
 Advanced demos inject `pfResolveWorld`) — the controller learns one-ways and
-slopes without a single edit. Still-inline candidate for a later promotion:
-`engine/camera.js` (Expert + Simulations).
+slopes without a single edit. The **Expert** tier's `Camera` (follow + deadzone +
+look-ahead + trauma shake), `ParticleField`, `pfDrawCharacter` and `drawParallax`
+are likewise taught inline in `expert-demos.js`; `Camera` is the flagged candidate
+to promote to `engine/camera.js` once the Simulations capstone becomes its 2nd
+consumer.
 
 **Why tiers are separate files:** content is split beginner → intermediate →
 expert → raymarching → stylization → distortion → advanced → simulations so each

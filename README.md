@@ -382,7 +382,7 @@ per-tier file structure mirroring the Fundamentals layout.
   `rl_` namespace for future per-tier bundles. Follows the "one tier per commit"
   cadence.
 
-- `platformer/` — **Beginner + Intermediate + Advanced tiers shipped; further tiers landing one per commit.** Build a
+- `platformer/` — **Beginner + Intermediate + Advanced + Expert tiers shipped; the Simulations capstone lands next.** Build a
   tight, juicy 2D platformer (Celeste / Hollow Knight style) — the repo's first
   **real-time character-control** track. Where the other genre tracks build a
   *world*, this one builds a *character* and teaches the "game feel" stack that has
@@ -434,9 +434,23 @@ per-tier file structure mirroring the Fundamentals layout.
   (land on top / rise through / drop through on ↓+jump), slopes (sample the ramp
   surface under the centre + downhill "stick"), moving platforms + a conveyor
   belt, and the capstone **the Gauntlet** — a vertical climb using every ability
-  and geometry type in order. Demo IDs reserve the `pf_` namespace; demos are
-  keyboard/canvas-driven so (like roguelike/netcode) they omit `data-demo-id` to
-  opt out of the Export button for now.
+  and geometry type in order. **Expert tier ("Camera, Parallax &amp; Juice", 6
+  demos):** the first tier where the level is bigger than the screen. A `Camera`
+  class (taught inline; flagged to promote to `engine/camera.js` when Simulations
+  reuses it) does frame-rate-correct follow + deadzone + look-ahead + world-bounds
+  clamp + trauma-based screen shake; the rest is the "juice" layer —
+  `drawParallax` (layers scrolled by camera × depth factor), `pfDrawCharacter`
+  (the controller's state machine drawn as procedural animated limbs),
+  `ParticleField` (run dust + impact-scaled landing puffs), and hitstop (a few
+  frozen frames on hard landings). Demos: the follow camera (rigid vs lerp,
+  deadzone box + minimap), screen shake (`shake = trauma²`, decays), parallax
+  (depth on/off), animation-from-FSM, particles, and the capstone **"Juice Lab"**
+  — one scrolling level with every effect on a toggle (All on/off) so the same
+  level can be felt lifeless-then-alive. The camera-space convention (clear →
+  parallax in screen space → `ctx.translate(-cam.originX,-cam.originY)` → world →
+  restore → HUD) is shared by every scrolling demo. Demo IDs reserve the `pf_`
+  namespace; demos are keyboard/canvas-driven so (like roguelike/netcode) they
+  omit `data-demo-id` to opt out of the Export button for now.
 
 ## Shared assets
 

@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expert — Platformer Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+    <style>
+        canvas.pf-canvas { cursor: pointer; outline: none; background: #0d1117; border-radius: 6px; }
+        canvas.pf-canvas:focus { box-shadow: 0 0 0 2px #7CF2C8; }
+        .pf-slider { display: inline-flex; align-items: center; gap: 8px; color: #c9d1d9; font-size: 0.92em; }
+        .pf-slider input[type="range"] { width: 120px; }
+        .pf-slider .val { color: #4fc3f7; font-family: monospace; min-width: 2.5em; display: inline-block; }
+        .pf-key { font-family: monospace; background: #0d1117; border: 1px solid #2d3354; border-radius: 4px; padding: 1px 6px; color: #7CF2C8; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎬 Expert — Camera, Parallax &amp; Juice</h1>
+        <p class="subtitle">The level just got bigger than the screen. Now it needs a camera that follows kindly — and a coat of "juice" that makes every jump, landing, and dash <em>land</em>.</p>
+
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="advanced.html" class="nav-button">← Advanced</a>
+            <a href="expert.html" class="nav-button active">Expert</a>
+        </div>
+
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#intro">Juice: the feedback layer</a></li>
+                <li><a href="#camera">The follow camera — lerp, deadzone, look-ahead</a></li>
+                <li><a href="#shake">Screen shake (trauma model)</a></li>
+                <li><a href="#parallax">Parallax scrolling</a></li>
+                <li><a href="#anim">Animation from the state machine</a></li>
+                <li><a href="#particles">Particles — dust &amp; landing puffs</a></li>
+                <li><a href="#mini-project">Mini-Project: "Juice Lab"</a></li>
+            </ul>
+        </div>
+
+        <!-- INTRO -->
+        <div id="intro" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>✨ Juice: the feedback layer</h2>
+            <p>
+                "Juice" is the layer of feedback that doesn't change the rules but makes the game feel
+                <em>responsive and alive</em>: a camera that frames the action, backgrounds with depth, a
+                screen that kicks on impact, dust off your heels, a body that squashes and stretches. None of
+                it touches the physics from the earlier tiers — it sits on top and amplifies what already
+                happened.
+            </p>
+            <div class="key-point">
+                <strong>💡 Why the camera comes first:</strong> every juice technique here is expressed in
+                terms of the camera — parallax scrolls relative to it, screen shake offsets it, particles and
+                the character are drawn through it. So we build a real <code>Camera</code> first (taught
+                inline; it graduates to <code>engine/camera.js</code> when the Simulations capstone reuses it),
+                then layer everything else on.
+            </div>
+            <div class="concept-box">
+                <h4>🎥 The camera-space convention used by every demo here</h4>
+                <p>Clear the canvas → draw parallax in <em>screen</em> space → <code>ctx.translate(-cam.originX,
+                -cam.originY)</code> → draw the world (tiles + entities) in <em>world</em> coordinates →
+                <code>restore()</code> → draw the HUD in screen space. One translate, and everything in the
+                world just works.</p>
+            </div>
+        </div>
+
+        <!-- CAMERA -->
+        <div id="camera" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🎥 The follow camera</h2>
+            <p>
+                Run around the level (it's wider than the view — see the minimap, top-right). With smoothing
+                at 0 the camera is welded to the player (rigid, nauseating); raise it and the camera eases.
+                The <strong>deadzone</strong> (dashed box) lets you move within it without the camera budging;
+                <strong>look-ahead</strong> biases the view toward the way you face so you see what's coming.
+                <span class="pf-key">←</span> <span class="pf-key">→</span> run, <span class="pf-key">↑</span> jump.
+            </p>
+            <div class="diagram"><canvas id="pfCameraCanvas" class="pf-canvas" width="640" height="384" tabindex="0"></canvas></div>
+            <div class="controls">
+                <span class="pf-slider">smoothing
+                    <input type="range" id="pfCamSmooth" min="0" max="400" step="10" value="110">
+                    <span class="val" id="pfCamSmoothVal">110</span> ms
+                </span>
+                <label class="pf-slider"><input type="checkbox" id="pfCamDeadzone" checked> deadzone</label>
+                <label class="pf-slider"><input type="checkbox" id="pfCamLook" checked> look-ahead</label>
+                <button id="pfCameraReset">↻ Reset</button>
+            </div>
+            <div id="pfCameraHud" class="info-display" style="font-family:monospace;">click, then run to scroll…</div>
+            <details>
+                <summary>📝 Click to see: follow with a deadzone, then ease toward it</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">follow(tx, ty, dt, o) {
+  const focus = tx + o.lookAhead * o.lookDir;   // bias toward where you're heading
+  let goalX;
+  if (o.deadzoneW) {                              // only move when the target leaves the box
+    const sx = focus - this.x, mid = this.viewW / 2, half = o.deadzoneW / 2;
+    if      (sx &lt; mid - half) goalX = focus - (mid - half);
+    else if (sx &gt; mid + half) goalX = focus - (mid + half);
+    else                       goalX = this.x;    // inside → hold still
+  } else goalX = focus - this.viewW / 2;          // else keep centred
+
+  // frame-rate-correct easing: 99% of the gap closed in smoothMs (0 = rigid)
+  const a = o.smoothMs > 0 ? 1 - Math.exp((Math.log(0.01) / (o.smoothMs/1000)) * dt) : 1;
+  this.x += (goalX - this.x) * a;
+  this.x = clamp(this.x, 0, this.worldW - this.viewW);   // never show past the edges
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">follow(tx: number, ty: number, dt: number, o: FollowOpts): void {
+  const focus = tx + o.lookAhead * o.lookDir;
+  let goalX: number;
+  if (o.deadzoneW) {
+    const sx = focus - this.x, mid = this.viewW / 2, half = o.deadzoneW / 2;
+    if      (sx &lt; mid - half) goalX = focus - (mid - half);
+    else if (sx &gt; mid + half) goalX = focus - (mid + half);
+    else                       goalX = this.x;
+  } else goalX = focus - this.viewW / 2;
+
+  const a = o.smoothMs > 0 ? 1 - Math.exp((Math.log(0.01) / (o.smoothMs/1000)) * dt) : 1;
+  this.x += (goalX - this.x) * a;
+  this.x = clamp(this.x, 0, this.worldW - this.viewW);
+}</code></pre>
+                </div>
+            </details>
+        </div>
+
+        <!-- SHAKE -->
+        <div id="shake" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>💥 Screen shake (the trauma model)</h2>
+            <p>
+                Add some <strong>trauma</strong> (a 0–1 value) on impact; the actual shake is
+                <code>trauma²</code>, so a little trauma barely wobbles while a lot really kicks — and trauma
+                decays linearly so it always settles. Hit the buttons (or land a hard fall) and watch the
+                trauma bar and the shake.
+            </p>
+            <div class="diagram"><canvas id="pfShakeCanvas" class="pf-canvas" width="640" height="320" tabindex="0"></canvas></div>
+            <div class="controls">
+                <button id="pfShakeSmall">+ small trauma</button>
+                <button id="pfShakeBig">+ big trauma</button>
+                <span class="pf-slider">max offset
+                    <input type="range" id="pfShakeMax" min="4" max="24" step="1" value="12">
+                    <span class="val" id="pfShakeMaxVal">12</span> px
+                </span>
+                <button id="pfShakeReset">↻ Reset</button>
+            </div>
+            <div id="pfShakeHud" class="info-display" style="font-family:monospace;">click, then add trauma…</div>
+            <details>
+                <summary>📝 Click to see: trauma in, trauma² out, decay over time</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">addTrauma(t) { this.trauma = clamp(this.trauma + t, 0, 1); }   // events ADD trauma
+
+updateShake(dt, maxOffset = 12, decay = 1.5) {
+  const s = this.trauma * this.trauma;          // ← the key: shake = trauma²
+  this.shakeTime += dt;
+  // high-frequency sines → a fast, smooth jitter (not a per-frame random flicker)
+  this.shakeX = maxOffset * s * (Math.sin(this.shakeTime*47) + 0.5*Math.sin(this.shakeTime*111));
+  this.shakeY = maxOffset * s * (Math.sin(this.shakeTime*57 + 1.7) + 0.5*Math.sin(this.shakeTime*93));
+  this.trauma = Math.max(0, this.trauma - decay * dt);   // always settles back to calm
+}
+// the renderer translates by (x + shakeX, y + shakeY)</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">addTrauma(t: number) { this.trauma = clamp(this.trauma + t, 0, 1); }
+
+updateShake(dt: number, maxOffset = 12, decay = 1.5): void {
+  const s = this.trauma * this.trauma;
+  this.shakeTime += dt;
+  this.shakeX = maxOffset * s * (Math.sin(this.shakeTime*47) + 0.5*Math.sin(this.shakeTime*111));
+  this.shakeY = maxOffset * s * (Math.sin(this.shakeTime*57 + 1.7) + 0.5*Math.sin(this.shakeTime*93));
+  this.trauma = Math.max(0, this.trauma - decay * dt);
+}</code></pre>
+                </div>
+            </details>
+        </div>
+
+        <!-- PARALLAX -->
+        <div id="parallax" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🏔️ Parallax scrolling</h2>
+            <p>
+                Depth on the cheap: draw background layers that scroll at <em>fractions</em> of the camera's
+                speed. Far layers barely move (small factor), near layers move almost with the world. Toggle
+                it off and the same art moves all together — flat and painted-on. Run to feel the difference.
+            </p>
+            <div class="diagram"><canvas id="pfParallaxCanvas" class="pf-canvas" width="640" height="384" tabindex="0"></canvas></div>
+            <div class="controls">
+                <label class="pf-slider"><input type="checkbox" id="pfParallaxOn" checked> parallax depth</label>
+                <button id="pfParallaxReset">↻ Reset</button>
+            </div>
+            <div id="pfParallaxHud" class="info-display" style="font-family:monospace;">click, then run…</div>
+            <details>
+                <summary>📝 Click to see: each layer offset by camera × its depth factor</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">const LAYERS = [
+  { factor: 0.15, ... },   // far ridge — barely moves
+  { factor: 0.38, ... },   // mid hills
+  { factor: 0.66, ... },   // near hills — moves almost with the world
+];
+
+for (const L of LAYERS) {
+  const offset = -(camX * L.factor);   // ← the whole trick
+  drawHillsTiled(offset, L);           // repeat the shapes across the view, wrapped
+}
+// foreground tiles use the full camera offset (factor 1, drawn under the translate)</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const LAYERS = [
+  { factor: 0.15 }, { factor: 0.38 }, { factor: 0.66 },
+];
+
+for (const L of LAYERS) {
+  const offset = -(camX * L.factor);
+  drawHillsTiled(offset, L);
+}</code></pre>
+                </div>
+            </details>
+        </div>
+
+        <!-- ANIM -->
+        <div id="anim" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🤸 Animation from the state machine</h2>
+            <p>
+                We never need to ask "which animation should play?" — the controller's state machine
+                (idle / run / jump / fall / land, from the Intermediate tier) already knows. Each state maps to
+                a pose, and a <code>phase</code> advances limbs over time (faster the faster you run). Move and
+                jump and watch the procedural figure react.
+            </p>
+            <div class="diagram"><canvas id="pfAnimCanvas" class="pf-canvas" width="640" height="320" tabindex="0"></canvas></div>
+            <div class="controls"><button id="pfAnimReset">↻ Reset</button></div>
+            <div id="pfAnimHud" class="info-display" style="font-family:monospace;">click, then move &amp; jump…</div>
+            <details>
+                <summary>📝 Click to see: state → pose, phase advanced by dt</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// the controller already computed body.state this frame — just READ it
+const animSpeed = body.state === 'run' ? 6 + Math.abs(body.vx) * 0.03 : 3;
+phase += animSpeed * dt;            // loops the limb cycle
+
+function drawCharacter(state, phase, facing) {
+  let legSwing = 0;
+  if (state === 'run')  legSwing = Math.sin(phase) * 8;   // alternating stride
+  else if (state === 'jump') legSwing = -5;               // tucked
+  else if (state === 'fall') legSwing = 5;                // spread
+  // ...draw head + torso + legs(legSwing) + arms(opposite swing)
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const animSpeed = body.state === 'run' ? 6 + Math.abs(body.vx) * 0.03 : 3;
+phase += animSpeed * dt;
+
+function drawCharacter(state: PlayerState, phase: number, facing: number) {
+  let legSwing = 0;
+  if (state === 'run')  legSwing = Math.sin(phase) * 8;
+  else if (state === 'jump') legSwing = -5;
+  else if (state === 'fall') legSwing = 5;
+}</code></pre>
+                </div>
+            </details>
+        </div>
+
+        <!-- PARTICLES -->
+        <div id="particles" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🌫️ Particles — dust &amp; landing puffs</h2>
+            <p>
+                A handful of fading rectangles sells weight and speed. Kick up dust behind your feet while
+                running; burst a puff on landing, scaled by how hard you hit. Run and jump around.
+            </p>
+            <div class="diagram"><canvas id="pfParticlesCanvas" class="pf-canvas" width="640" height="320" tabindex="0"></canvas></div>
+            <div class="controls">
+                <label class="pf-slider"><input type="checkbox" id="pfParticlesOn" checked> particles</label>
+                <button id="pfParticlesReset">↻ Reset</button>
+            </div>
+            <div id="pfParticlesHud" class="info-display" style="font-family:monospace;">click, then run &amp; land…</div>
+            <details>
+                <summary>📝 Click to see: a tiny particle system</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">update(dt) {
+  for (const p of this.ps) { p.t += dt; p.vy += p.g*dt; p.x += p.vx*dt; p.y += p.vy*dt; }
+  this.ps = this.ps.filter(p => p.t &lt; p.life);     // reap the dead
+}
+draw(ctx) {
+  for (const p of this.ps) { ctx.globalAlpha = 1 - p.t/p.life; ctx.fillRect(p.x, p.y, p.size, p.size); }
+  ctx.globalAlpha = 1;
+}
+
+// run dust: one grain every ~40ms behind the feet while moving on the ground
+// landing puff: a radial burst, count scaled by impact speed</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">update(dt: number): void {
+  for (const p of this.ps) { p.t += dt; p.vy += p.g*dt; p.x += p.vx*dt; p.y += p.vy*dt; }
+  this.ps = this.ps.filter(p => p.t &lt; p.life);
+}
+draw(ctx: CanvasRenderingContext2D): void {
+  for (const p of this.ps) { ctx.globalAlpha = 1 - p.t/p.life; ctx.fillRect(p.x, p.y, p.size, p.size); }
+  ctx.globalAlpha = 1;
+}</code></pre>
+                </div>
+            </details>
+            <div class="key-point">
+                <strong>Pooling comes later:</strong> this field caps its array and drops the oldest — fine
+                for a demo. The Simulations tier rebuilds it as a true <em>object pool</em> (reuse dead slots,
+                zero per-frame allocation) so a thousand particles never trigger the garbage collector.
+            </div>
+        </div>
+
+        <!-- MINI-PROJECT -->
+        <div id="mini-project" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🧪 Mini-Project: "Juice Lab"</h2>
+            <p>
+                One scrolling level, the whole feedback stack on toggles. Hit <strong>All off</strong> and run
+                to the flag — it works, but it's lifeless. Hit <strong>All on</strong> and run it again — the
+                camera frames you, the hills part into depth, hard landings kick the screen and puff dust, and
+                a frame of <em>hitstop</em> gives impacts weight. Same level, completely different game.
+                <span class="pf-key">←</span> <span class="pf-key">→</span> run,
+                <span class="pf-key">↑</span>/<span class="pf-key">Space</span> jump, hold <span class="pf-key">↓</span> fast-fall.
+            </p>
+            <div class="diagram"><canvas id="pfJuiceCanvas" class="pf-canvas" width="640" height="384" tabindex="0"></canvas></div>
+            <div class="controls">
+                <button id="pfJuiceAllOn">All on</button>
+                <button id="pfJuiceAllOff">All off</button>
+                <label class="pf-slider"><input type="checkbox" id="pfJuiceCam" checked> camera</label>
+                <label class="pf-slider"><input type="checkbox" id="pfJuiceParallax" checked> parallax</label>
+                <label class="pf-slider"><input type="checkbox" id="pfJuiceShake" checked> shake</label>
+                <label class="pf-slider"><input type="checkbox" id="pfJuiceParticles" checked> particles</label>
+                <label class="pf-slider"><input type="checkbox" id="pfJuiceHitstop" checked> hitstop</label>
+                <button id="pfJuiceReset">↻ Reset</button>
+            </div>
+            <div id="pfJuiceHud" class="info-display" style="font-family:monospace;">click, then run to the flag…</div>
+            <div class="key-point">
+                <strong>Hitstop</strong> is the sneaky one: on a hard landing, freeze the <em>whole
+                simulation</em> for ~3 frames (the screen shake keeps playing). That tiny pause is read by the
+                brain as impact — fighting games live on it.
+            </div>
+        </div>
+
+        <!-- RECAP / NEXT -->
+        <div class="recap">
+            <h2>✅ Recap — what you built</h2>
+            <ul>
+                <li><strong>A follow camera</strong> — frame-rate-correct lerp, a deadzone, look-ahead, world-bounds clamp.</li>
+                <li><strong>Trauma screen shake</strong> — add trauma, shake by trauma², decay to calm.</li>
+                <li><strong>Parallax</strong> — layers scrolled by camera × depth factor.</li>
+                <li><strong>Animation from the FSM</strong> — state picks the pose, phase drives the limbs.</li>
+                <li><strong>Particles</strong> — run dust &amp; impact-scaled landing puffs.</li>
+                <li><strong>Hitstop</strong> — a few frozen frames that give hits weight.</li>
+            </ul>
+            <div class="key-point">
+                <strong>Next up — <span class="level-indicator level-expert">SIMULATIONS</span> "Performance, Scale &amp; The Whole Game":</strong>
+                everything above runs beautifully on a small level — now make it scale. Viewport culling,
+                object pooling for those particles, broad-phase collision, chunked/streamed levels and render
+                caching — then the grand capstone, <em>Summit</em>, the complete platformer. <em>(Coming next commit.)</em>
+            </div>
+        </div>
+    </div>
+
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <script src="../shared/utils.js"></script>
+    <script src="../shared/code-tabs.js"></script>
+    <script src="engine/tilemap.js"></script>
+    <script src="engine/physics.js"></script>
+    <script src="engine/input.js"></script>
+    <script src="engine/player.js"></script>
+    <script src="expert-demos.js"></script>
+</body>
+</html>

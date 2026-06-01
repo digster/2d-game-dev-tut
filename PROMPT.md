@@ -1270,3 +1270,16 @@ one-way, slope, moving platforms/conveyor, and "the Gauntlet" capstone. Flip the
 landing Advanced card to Ready + nav buttons; drop the "(coming soon)" marker on
 the root index Advanced sublink. Console-test the new algorithms headlessly, keep
 docs in sync, verify console-clean before the commit message.
+
+# 2026-05-31 (pt.5) — Platformer: Expert tier ("Camera, Parallax & Juice")
+
+"Okay, work on the next iteration." — fifth platformer iteration, one tier per
+commit. Topics fixed by the landing-page Expert card. Ship platformer/expert.html
++ expert-demos.js, 6 demos: a Camera class (follow + deadzone + look-ahead +
+world clamp + trauma screen shake, taught inline, flagged for engine/camera.js),
+parallax scrolling, particles (dust + landing puffs), an animation FSM drawn as
+procedural limbs, and the "Juice Lab" capstone (a scrolling level with camera +
+parallax + shake + particles + hitstop on toggles). Flip the landing Expert card
+to Ready + nav buttons; drop the "(coming soon)" marker on the root index Expert
+sublink. Console-test the Camera headlessly, keep docs in sync, verify
+console-clean before the commit message.
