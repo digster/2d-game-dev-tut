@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced — Platformer Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+    <style>
+        canvas.pf-canvas { cursor: pointer; outline: none; background: #0d1117; border-radius: 6px; }
+        canvas.pf-canvas:focus { box-shadow: 0 0 0 2px #7CF2C8; }
+        .pf-slider { display: inline-flex; align-items: center; gap: 8px; color: #c9d1d9; font-size: 0.92em; }
+        .pf-slider input[type="range"] { width: 120px; }
+        .pf-slider .val { color: #4fc3f7; font-family: monospace; min-width: 2.5em; display: inline-block; }
+        .pf-key { font-family: monospace; background: #0d1117; border: 1px solid #2d3354; border-radius: 4px; padding: 1px 6px; color: #7CF2C8; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧗 Advanced — Abilities &amp; Moving Geometry</h1>
+        <p class="subtitle">A bigger moveset and the trickier collision cases. Walls you climb, platforms you drop through, ground that tilts, and geometry that moves under your feet.</p>
+
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="intermediate.html" class="nav-button">← Intermediate</a>
+            <a href="advanced.html" class="nav-button active">Advanced</a>
+        </div>
+
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#intro">A controller worth promoting</a></li>
+                <li><a href="#wall">Wall-slide &amp; wall-jump</a></li>
+                <li><a href="#dash">Dash — burst, cooldown, refresh</a></li>
+                <li><a href="#oneway">One-way platforms</a></li>
+                <li><a href="#slope">Slopes</a></li>
+                <li><a href="#moving">Moving platforms &amp; conveyors</a></li>
+                <li><a href="#mini-project">Mini-Project: the Gauntlet</a></li>
+            </ul>
+        </div>
+
+        <!-- INTRO -->
+        <div id="intro" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🏗️ A controller worth promoting</h2>
+            <p>
+                The Intermediate tier left us with a controller (<code>PlayerBody</code>) that already feels
+                great. This tier is its <strong>second consumer</strong>, which in this repo means it
+                graduates out of the tier file and into the shared engine — it now lives in
+                <code>engine/player.js</code>, loaded by both the Intermediate and Advanced pages. (Same rule
+                the roguelike track used to promote its <code>actors.js</code>.)
+            </p>
+            <p>
+                Two kinds of new thing land here. The <strong>abilities</strong> (wall-slide, wall-jump,
+                dash) belong to the character, so they go <em>into</em> <code>PlayerBody</code> behind the
+                same zeroable-knob pattern as the feel kit. The <strong>collision extensions</strong>
+                (one-way platforms, slopes, moving platforms) are about the <em>world</em>, so they're taught
+                inline here as a richer resolver that <code>PlayerBody</code> calls through a swappable
+                <code>resolve()</code> hook.
+            </p>
+            <div class="key-point">
+                <strong>💡 The extension seam:</strong> <code>PlayerBody</code> never calls
+                <code>moveAndCollide</code> for its main moves — it calls <code>this.resolve(box, dx, dy)</code>,
+                which defaults to plain solid-tile collision. Swap that one function for
+                <code>pfResolveWorld</code> and the same character suddenly understands one-way platforms and
+                slopes, with zero changes to the controller.
+            </div>
+        </div>
+
+        <!-- WALL -->
+        <div id="wall" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🧱 Wall-slide &amp; wall-jump</h2>
+            <p>
+                Press <em>toward</em> a wall in mid-air to cling and slide down at a capped speed; jump to
+                leap up and away from it. Chain left-right wall-jumps to climb the shaft and reach the ledge.
+                <span class="pf-key">←</span> <span class="pf-key">→</span> move,
+                <span class="pf-key">↑</span>/<span class="pf-key">Space</span> jump.
+            </p>
+            <div class="diagram"><canvas id="pfWallCanvas" class="pf-canvas" width="640" height="384" tabindex="0"></canvas></div>
+            <div class="controls">
+                <label class="pf-slider"><input type="checkbox" id="pfWallOn" checked> wall abilities</label>
+                <span class="pf-slider">slide speed
+                    <input type="range" id="pfWallSlide" min="40" max="200" step="10" value="90">
+                    <span class="val" id="pfWallSlideVal">90</span> px/s
+                </span>
+                <button id="pfWallReset">↻ Reset</button>
+            </div>
+            <div id="pfWallHud" class="info-display" style="font-family:monospace;">click, then climb the shaft…</div>
+            <details>
+                <summary>📝 Click to see: detect a wall, then slide or jump off it</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// wallDir(): is there a SOLID column just outside my left/right edge?
+const onWall = airborne ? wallDir() : 0;           // -1 left, +1 right, 0 none
+
+// sliding = pressing INTO the wall while descending → cap the fall speed
+if (onWall === inputX &amp;&amp; vy > 0) vy = Math.min(vy, WALL_SLIDE_SPEED);
+
+// wall jump = up + AWAY from the wall, then briefly ignore input so the
+// impulse actually carries you off (otherwise "hold toward wall" cancels it)
+if (jumpPressed &amp;&amp; onWall !== 0) {
+  vy = -WALL_JUMP_Y;
+  vx = -onWall * WALL_JUMP_X;
+  inputLock = WALL_JUMP_LOCK;     // ~0.16 s
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const onWall: number = airborne ? wallDir() : 0;
+
+if (onWall === inputX &amp;&amp; vy > 0) vy = Math.min(vy, WALL_SLIDE_SPEED);
+
+if (jumpPressed &amp;&amp; onWall !== 0) {
+  vy = -WALL_JUMP_Y;
+  vx = -onWall * WALL_JUMP_X;
+  inputLock = WALL_JUMP_LOCK;
+}</code></pre>
+                </div>
+            </details>
+        </div>
+
+        <!-- DASH -->
+        <div id="dash" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>💨 Dash</h2>
+            <p>
+                Tap <span class="pf-key">X</span> / <span class="pf-key">K</span> / <span class="pf-key">L</span>
+                to dash in the aimed direction (or the way you face). The dash is a fixed-duration burst that
+                ignores gravity, has a short cooldown, and <strong>refreshes when you touch ground or a
+                wall</strong> — so you get exactly one mid-air dash, the Celeste rule. The bar shows when it's
+                ready.
+            </p>
+            <div class="diagram"><canvas id="pfDashCanvas" class="pf-canvas" width="640" height="384" tabindex="0"></canvas></div>
+            <div class="controls">
+                <label class="pf-slider"><input type="checkbox" id="pfDashOn" checked> dash</label>
+                <span class="pf-slider">dash speed
+                    <input type="range" id="pfDashSpeed" min="350" max="800" step="10" value="560">
+                    <span class="val" id="pfDashSpeedVal">560</span> px/s
+                </span>
+                <button id="pfDashReset">↻ Reset</button>
+            </div>
+            <div id="pfDashHud" class="info-display" style="font-family:monospace;">click, then dash across the gaps…</div>
+            <details>
+                <summary>📝 Click to see: a dash is a short, gravity-free, refillable burst</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// trigger: a press, charge available, not already dashing
+if (dashPressed &amp;&amp; canDash &amp;&amp; cooldown &lt;= 0) {
+  const [ax, ay] = aimedDir() || [facing, 0];   // 8-way, normalised
+  dashVX = ax * DASH_SPEED; dashVY = ay * DASH_SPEED;
+  dashLeft = DASH_TIME; cooldown = DASH_COOLDOWN; canDash = false;
+}
+
+if (dashLeft > 0) {                 // during the dash:
+  vx = dashVX; vy = dashVY;         //   fixed velocity, NO gravity
+  dashLeft -= dt;
+}
+if (onGround || wallSliding) canDash = true;   // refill the charge</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">if (dashPressed &amp;&amp; canDash &amp;&amp; cooldown &lt;= 0) {
+  const [ax, ay] = aimedDir() ?? [facing, 0];
+  dashVX = ax * DASH_SPEED; dashVY = ay * DASH_SPEED;
+  dashLeft = DASH_TIME; cooldown = DASH_COOLDOWN; canDash = false;
+}
+
+if (dashLeft > 0) { vx = dashVX; vy = dashVY; dashLeft -= dt; }
+if (onGround || wallSliding) canDash = true;</code></pre>
+                </div>
+            </details>
+        </div>
+
+        <!-- ONE-WAY -->
+        <div id="oneway" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🪜 One-way platforms</h2>
+            <p>
+                A one-way platform is solid <em>only</em> to something landing on it from above. Jump up
+                through the wooden platforms from below; land on top of them coming down; hold
+                <span class="pf-key">↓</span> and press jump to drop through the one you're standing on.
+            </p>
+            <div class="diagram"><canvas id="pfOneWayCanvas" class="pf-canvas" width="640" height="384" tabindex="0"></canvas></div>
+            <div class="controls">
+                <label class="pf-slider"><input type="checkbox" id="pfOneWayOn" checked> one-way solidity</label>
+                <button id="pfOneWayReset">↻ Reset</button>
+            </div>
+            <div id="pfOneWayHud" class="info-display" style="font-family:monospace;">click, then jump up through &amp; land on top…</div>
+            <details>
+                <summary>📝 Click to see: solid only when descending onto the top edge</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// only when moving DOWN, not dropping through, and a one-way tile is at the feet:
+if (vy >= 0 &amp;&amp; !dropThrough &amp;&amp; tileAtFeet === ONE_WAY) {
+  const topEdge = feetRow * TILE;
+  // the key test: were my feet AT OR ABOVE the top edge last step?
+  if (prevBottom &lt;= topEdge + 1) {
+    box.y = topEdge - box.h;     // land on top
+    hit.down = true;
+  }
+  // else: I'm rising through it / already below it → not solid
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">if (vy >= 0 &amp;&amp; !dropThrough &amp;&amp; tileAtFeet === Tile.ONE_WAY) {
+  const topEdge = feetRow * TILE;
+  if (prevBottom &lt;= topEdge + 1) {
+    box.y = topEdge - box.h;
+    hit.down = true;
+  }
+}</code></pre>
+                </div>
+            </details>
+        </div>
+
+        <!-- SLOPE -->
+        <div id="slope" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>⛰️ Slopes</h2>
+            <p>
+                Flat tiles can't make a hill. Slope tiles are 45° triangles, and the trick is to stop
+                treating the foot collision as "is this cell solid?" and start asking "how high is the ramp
+                surface under my centre?". Walk <span class="pf-key">←</span> <span class="pf-key">→</span>
+                over the hill — your feet stay glued to the ramp going up <em>and</em> down.
+            </p>
+            <div class="diagram"><canvas id="pfSlopeCanvas" class="pf-canvas" width="640" height="384" tabindex="0"></canvas></div>
+            <div class="controls"><button id="pfSlopeReset">↻ Reset</button></div>
+            <div id="pfSlopeHud" class="info-display" style="font-family:monospace;">click, then walk over the hill…</div>
+            <details>
+                <summary>📝 Click to see: sample the ramp surface under the centre</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// localX = how far the player's centre is into the slope tile (0..TILE)
+const localX = clamp(centreX - col * TILE, 0, TILE);
+
+// SLOPE_NE rises to the right; SLOPE_NW rises to the left
+let surfaceY = null;
+if (tile === SLOPE_NE) surfaceY = row * TILE + (TILE - localX);
+if (tile === SLOPE_NW) surfaceY = row * TILE + localX;
+
+if (surfaceY !== null) {
+  const climbing = box.bottom >= surfaceY - 1;            // feet under the ramp
+  const sticking = wasGround &amp;&amp; (surfaceY - box.bottom) &lt;= TILE*0.6; // glue downhill
+  if (climbing || sticking) { box.y = surfaceY - box.h; hit.down = true; }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const localX = clamp(centreX - col * TILE, 0, TILE);
+
+let surfaceY: number | null = null;
+if (tile === Tile.SLOPE_NE) surfaceY = row * TILE + (TILE - localX);
+if (tile === Tile.SLOPE_NW) surfaceY = row * TILE + localX;
+
+if (surfaceY !== null) {
+  const climbing = box.bottom >= surfaceY - 1;
+  const sticking = wasGround &amp;&amp; (surfaceY - box.bottom) &lt;= TILE * 0.6;
+  if (climbing || sticking) { box.y = surfaceY - box.h; hit.down = true; }
+}</code></pre>
+                </div>
+            </details>
+            <div class="key-point">
+                <strong>The "sticking" term matters:</strong> walking <em>down</em> a ramp, the per-step
+                horizontal move would otherwise launch you off the edge into a little hop. Gluing the feet to
+                the surface when you're already grounded and within ~half a tile keeps the descent smooth.
+            </div>
+        </div>
+
+        <!-- MOVING -->
+        <div id="moving" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🛗 Moving platforms &amp; conveyors</h2>
+            <p>
+                When the ground moves, the rider must move with it. The fix is <em>relative motion</em>: each
+                step, move the platform first, then add the platform's delta to anyone standing on it before
+                resolving collisions. Ride the orange platform across, the green lift up, and the blue
+                conveyor belt (which drags you sideways) to the goal ledge.
+            </p>
+            <div class="diagram"><canvas id="pfMovingCanvas" class="pf-canvas" width="640" height="384" tabindex="0"></canvas></div>
+            <div class="controls"><button id="pfMovingReset">↻ Reset</button></div>
+            <div id="pfMovingHud" class="info-display" style="font-family:monospace;">click, then ride to the right ledge…</div>
+            <details>
+                <summary>📝 Click to see: carry the rider by the platform's delta</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">const riding = feetOnTop(player, platform) &amp;&amp; player.vy >= 0;
+
+const before = { x: platform.x, y: platform.y };
+movePlatform(platform, dt);                 // advance its path/lerp
+const ddx = platform.x - before.x, ddy = platform.y - before.y;
+
+if (riding) {
+  player.x += ddx; player.y += ddy;         // inherit the platform's motion
+  if (platform.conveyor) player.x += platform.conveyor * dt;  // belt drag
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const riding = feetOnTop(player, platform) &amp;&amp; player.vy >= 0;
+
+const before = { x: platform.x, y: platform.y };
+movePlatform(platform, dt);
+const ddx = platform.x - before.x, ddy = platform.y - before.y;
+
+if (riding) {
+  player.x += ddx; player.y += ddy;
+  if (platform.conveyor) player.x += platform.conveyor * dt;
+}</code></pre>
+                </div>
+            </details>
+        </div>
+
+        <!-- MINI-PROJECT -->
+        <div id="mini-project" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🎮 Mini-Project: the Gauntlet</h2>
+            <p>
+                One vertical climb that demands every new tool in order: a one-way ladder, a wall-jump shaft,
+                a dash over a gap, a moving lift, and a slope up to the flag. <span class="pf-key">←</span>
+                <span class="pf-key">→</span> move, <span class="pf-key">↑</span>/<span class="pf-key">Space</span>
+                jump (into walls to wall-jump), <span class="pf-key">X</span> dash,
+                <span class="pf-key">↓</span>+jump to drop through.
+            </p>
+            <div class="diagram"><canvas id="pfGauntletCanvas" class="pf-canvas" width="640" height="448" tabindex="0"></canvas></div>
+            <div class="controls"><button id="pfGauntletReset">↻ Reset</button></div>
+            <div id="pfGauntletHud" class="info-display" style="font-family:monospace;">click, then climb to the flag…</div>
+        </div>
+
+        <!-- RECAP / NEXT -->
+        <div class="recap">
+            <h2>✅ Recap — what you built</h2>
+            <ul>
+                <li><strong>Wall-slide &amp; wall-jump</strong> — cling, cap the fall, leap up-and-away with an input lock.</li>
+                <li><strong>Dash</strong> — a gravity-free burst with cooldown and one-per-ground/wall refresh.</li>
+                <li><strong>One-way platforms</strong> — solid only when descending onto the top; drop through on ↓+jump.</li>
+                <li><strong>Slopes</strong> — sample the ramp surface under the centre; "stick" downhill.</li>
+                <li><strong>Moving platforms &amp; conveyors</strong> — inherit the surface's motion via relative deltas.</li>
+                <li><strong>Promoted <code>PlayerBody</code> → <code>engine/player.js</code></strong> with a swappable <code>resolve()</code> seam.</li>
+            </ul>
+            <div class="key-point">
+                <strong>Next up — <span class="level-indicator level-expert">EXPERT</span> "Camera, Parallax &amp; Juice":</strong>
+                the level is about to get bigger than the screen, so we need a camera that follows with a
+                deadzone and look-ahead, parallax backgrounds, screen shake, and the particle/squash juice
+                that makes hits land. <em>(Coming next commit.)</em>
+            </div>
+        </div>
+    </div>
+
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <script src="../shared/utils.js"></script>
+    <script src="../shared/code-tabs.js"></script>
+    <script src="engine/tilemap.js"></script>
+    <script src="engine/physics.js"></script>
+    <script src="engine/input.js"></script>
+    <script src="engine/player.js"></script>
+    <script src="advanced-demos.js"></script>
+</body>
+</html>

@@ -1256,3 +1256,17 @@ mini-project. Flip the landing Intermediate card to Ready + nav buttons; drop th
 "(coming soon)" marker on the root index Intermediate sublink. Console-test each
 feel mechanic headlessly, keep docs in sync, verify console-clean before the
 commit message.
+
+# 2026-05-31 (pt.4) — Platformer: Advanced tier ("Abilities & Moving Geometry")
+
+"Okay, work on the next iteration." ×3 → "Continue." — fourth platformer
+iteration, one tier per commit. Topics fixed by the landing-page Advanced card.
+Promote PlayerBody → engine/player.js (the actors.js move, Advanced = 2nd
+consumer) and extend it with wall-slide/wall-jump + dash behind zeroable knobs + a
+swappable resolve() hook. Teach the collision extensions inline in
+advanced-demos.js: pfResolveWorld (SOLID + one-way + 45° slopes, top-level +
+console-testable) and MovingPlatform/pfRidePlatforms. Six demos: wall, dash,
+one-way, slope, moving platforms/conveyor, and "the Gauntlet" capstone. Flip the
+landing Advanced card to Ready + nav buttons; drop the "(coming soon)" marker on
+the root index Advanced sublink. Console-test the new algorithms headlessly, keep
+docs in sync, verify console-clean before the commit message.

@@ -382,7 +382,7 @@ per-tier file structure mirroring the Fundamentals layout.
   `rl_` namespace for future per-tier bundles. Follows the "one tier per commit"
   cadence.
 
-- `platformer/` — **Beginner + Intermediate tiers shipped; further tiers landing one per commit.** Build a
+- `platformer/` — **Beginner + Intermediate + Advanced tiers shipped; further tiers landing one per commit.** Build a
   tight, juicy 2D platformer (Celeste / Hollow Knight style) — the repo's first
   **real-time character-control** track. Where the other genre tracks build a
   *world*, this one builds a *character* and teaches the "game feel" stack that has
@@ -422,9 +422,19 @@ per-tier file structure mirroring the Fundamentals layout.
   correction (a head-bonk a small sideways nudge would clear is forgiven) — plus a
   physics-driven player FSM (idle/run/jump/fall/land) with squash-and-stretch. The
   capstone **"Feel Lab"** puts every assist on a toggle with Raw/Juiced presets so
-  the same course can be felt stiff-then-forgiving. `PlayerBody` is taught inline
-  here and is the flagged promotion candidate for `engine/player.js` once the
-  Advanced tier reuses it. Demo IDs reserve the `pf_` namespace; demos are
+  the same course can be felt stiff-then-forgiving. **Advanced tier ("Abilities &amp;
+  Moving Geometry", 6 demos):** the Advanced tier is `PlayerBody`'s 2nd consumer,
+  so the controller graduates to **`engine/player.js`** (a *move*, the actors.js
+  rule) — extended there with the abilities (wall-slide/wall-jump, dash) behind the
+  same zeroable-knob pattern and a swappable `resolve()` collision hook. The
+  collision *extensions* are taught inline as a top-level `pfResolveWorld` (SOLID +
+  one-way platforms + 45° slope tiles) plus `MovingPlatform`/`pfRidePlatforms`
+  (relative-motion carrying). Demos: wall-slide + wall-jump (climb a shaft), dash
+  (gravity-free burst, cooldown, one-per-ground/wall refresh), one-way platforms
+  (land on top / rise through / drop through on ↓+jump), slopes (sample the ramp
+  surface under the centre + downhill "stick"), moving platforms + a conveyor
+  belt, and the capstone **the Gauntlet** — a vertical climb using every ability
+  and geometry type in order. Demo IDs reserve the `pf_` namespace; demos are
   keyboard/canvas-driven so (like roguelike/netcode) they omit `data-demo-id` to
   opt out of the Export button for now.
 

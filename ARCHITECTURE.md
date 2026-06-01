@@ -76,9 +76,21 @@ accumulator), all on `window`, pre-checked vs `shared/utils.js`. The platformer
 differs from the roguelike in being **real-time, not turn-based** — a continuous
 fixed-timestep loop (`pfLoop`) with held-key + edge-detected input, vs the
 roguelike's one-action-per-keypress `rlInstallCanvasKeys`. Its taught,
-tier-specific algorithms (swept-slope collision, one-way drop-through, the camera,
-the game-feel kit) start inline in their tier and promote to `engine/` only on the
-2nd consumer (flagged candidates: `engine/camera.js`, `engine/player.js`).
+tier-specific algorithms start inline in their tier and promote to `engine/` only
+on the 2nd consumer. This already happened once: the **Intermediate** tier's
+`PlayerBody` controller + feel kit was *moved* to **`engine/player.js`** when the
+**Advanced** tier became its 2nd consumer (intermediate.html now loads the engine
+copy; its demos file no longer declares the class — a `class PlayerBody` on both
+the inline and engine copy on one page would be a redeclaration error). The
+abilities (wall-slide/wall-jump, dash) live *in* `PlayerBody` behind the same
+zeroable-knob pattern as the feel kit, while the **collision extensions** stay
+inline in `advanced-demos.js` as the tier's lesson: `pfResolveWorld` (SOLID +
+one-way platforms + 45° slope tiles — top-level + console-testable) and
+`MovingPlatform`/`pfRidePlatforms`. The seam between them is `PlayerBody`'s
+swappable **`resolve(box,dx,dy)` hook** (default = plain `moveAndCollide`; the
+Advanced demos inject `pfResolveWorld`) — the controller learns one-ways and
+slopes without a single edit. Still-inline candidate for a later promotion:
+`engine/camera.js` (Expert + Simulations).
 
 **Why tiers are separate files:** content is split beginner → intermediate →
 expert → raymarching → stylization → distortion → advanced → simulations so each
