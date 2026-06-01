@@ -1283,3 +1283,17 @@ parallax + shake + particles + hitstop on toggles). Flip the landing Expert card
 to Ready + nav buttons; drop the "(coming soon)" marker on the root index Expert
 sublink. Console-test the Camera headlessly, keep docs in sync, verify
 console-clean before the commit message.
+
+# 2026-05-31 (pt.6) — Platformer: Simulations tier — TRACK COMPLETE
+
+"Okay, work on the next iteration." — sixth and final platformer iteration. Topics
+fixed by the landing-page Simulations card. Promote Camera → engine/camera.js (2nd
+consumer = the capstone; move). Ship platformer/simulations.html +
+simulations-demos.js, 5 demos: viewport culling, object pooling (ParticlePool),
+broad-phase collision (SpatialGrid), chunked render caching (ChunkCache), and the
+GRAND CAPSTONE "Summit" — the complete platformer composing every prior system +
+the perf techniques + a goal & timer. Flip the landing Simulations card to Ready +
+nav; drop the last "(coming soon)" marker; mark the track COMPLETE in indexes +
+README + ARCHITECTURE. Console-test the new perf systems headlessly, verify
+console-clean on both expert (post-camera-move) and simulations pages before the
+commit message.

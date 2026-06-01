@@ -91,9 +91,16 @@ swappable **`resolve(box,dx,dy)` hook** (default = plain `moveAndCollide`; the
 Advanced demos inject `pfResolveWorld`) — the controller learns one-ways and
 slopes without a single edit. The **Expert** tier's `Camera` (follow + deadzone +
 look-ahead + trauma shake), `ParticleField`, `pfDrawCharacter` and `drawParallax`
-are likewise taught inline in `expert-demos.js`; `Camera` is the flagged candidate
-to promote to `engine/camera.js` once the Simulations capstone becomes its 2nd
-consumer.
+are likewise taught inline in `expert-demos.js`. `Camera` then **graduated to
+`engine/camera.js`** when the Simulations capstone became its 2nd consumer (a
+move: expert.html now loads it, expert-demos.js no longer declares the class) — so
+`platformer/engine/` holds the full cross-tier core (tilemap, physics, input,
+player, camera). The Simulations tier is self-contained the lib-copy way: it
+**re-declares** the compact helpers its "Summit" capstone composes (`pfResolveWorld`,
+`MovingPlatform`/`pfRidePlatforms`, `drawParallax`, `pfDrawCharacter`) verbatim
+inline rather than loading the Advanced/Expert demos files, and teaches its four
+performance systems (culling, `ParticlePool`, `SpatialGrid`, `ChunkCache`) as new
+inline lessons. **The platformer track is complete — 5 tiers, 28 demos, 5 engine modules.**
 
 **Why tiers are separate files:** content is split beginner → intermediate →
 expert → raymarching → stylization → distortion → advanced → simulations so each

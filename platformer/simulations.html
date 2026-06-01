@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulations — Platformer Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+    <style>
+        canvas.pf-canvas { cursor: pointer; outline: none; background: #0d1117; border-radius: 6px; }
+        canvas.pf-canvas:focus { box-shadow: 0 0 0 2px #7CF2C8; }
+        .pf-slider { display: inline-flex; align-items: center; gap: 8px; color: #c9d1d9; font-size: 0.92em; }
+        .pf-slider input[type="range"] { width: 130px; }
+        .pf-slider .val { color: #4fc3f7; font-family: monospace; min-width: 2.5em; display: inline-block; }
+        .pf-key { font-family: monospace; background: #0d1117; border: 1px solid #2d3354; border-radius: 4px; padding: 1px 6px; color: #7CF2C8; }
+        .complete-banner { background: linear-gradient(135deg, #1e3a2f 0%, #1a1f3a 100%); border-left: 4px solid #66bb6a; padding: 24px; border-radius: 8px; margin: 20px 0; }
+        .complete-banner h3 { color: #66bb6a; margin-top: 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📈 Simulations — Performance, Scale &amp; The Whole Game</h1>
+        <p class="subtitle">Everything works on a small level. Now make it scale — culling, pooling, broad-phase collision, render caching — then compose the entire track into one complete game: <em>Summit</em>.</p>
+
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="expert.html" class="nav-button">← Expert</a>
+            <a href="simulations.html" class="nav-button active">Simulations</a>
+        </div>
+
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#intro">Do less work, not faster work</a></li>
+                <li><a href="#culling">Viewport culling</a></li>
+                <li><a href="#pooling">Object pooling</a></li>
+                <li><a href="#broadphase">Broad-phase collision (spatial grid)</a></li>
+                <li><a href="#chunk">Chunked render caching</a></li>
+                <li><a href="#mini-project">Grand Capstone: "Summit"</a></li>
+            </ul>
+        </div>
+
+        <!-- INTRO -->
+        <div id="intro" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>⚙️ Do less work, not faster work</h2>
+            <p>
+                Every technique in this tier follows one rule: <strong>the cheapest work is the work you
+                never do</strong>. Don't draw tiles off-screen (culling). Don't allocate objects you could
+                reuse (pooling). Don't test collision pairs that are nowhere near each other (broad phase).
+                Don't redraw pixels that didn't change (render caching). None of it alters how the game looks
+                or plays — it changes how much the CPU touches each frame, which is what lets a big, juicy
+                level hold 60 fps.
+            </p>
+            <div class="key-point">
+                <strong>💡 The last promotion:</strong> the <code>Camera</code> from the Expert tier graduates
+                to <code>engine/camera.js</code> here — this capstone is its second consumer, so by the repo's
+                rule it becomes shared infrastructure. <code>engine/</code> now holds exactly the cross-tier
+                core: tilemap, physics, input, player, camera.
+            </div>
+        </div>
+
+        <!-- CULLING -->
+        <div id="culling" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>✂️ Viewport culling</h2>
+            <p>
+                A 200-column map auto-pans past the view. With culling <strong>off</strong> the renderer
+                touches every tile in the whole map, every frame; <strong>on</strong>, it iterates only the
+                tiles inside the camera window. Watch the considered-tile count and the per-frame draw time.
+                (Our <code>drawTileMap</code> has had this built in since the scaffold — here it's the lesson.)
+            </p>
+            <div class="diagram"><canvas id="pfCullingCanvas" class="pf-canvas" width="640" height="360"></canvas></div>
+            <div class="controls">
+                <label class="pf-slider"><input type="checkbox" id="pfCullingOn" checked> viewport culling</label>
+            </div>
+            <div id="pfCullingHud" class="info-display" style="font-family:monospace;">panning…</div>
+            <details>
+                <summary>📝 Click to see: clamp the tile loop to the camera window</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// instead of  for (r = 0..rows) for (c = 0..cols)  ...
+const c0 = Math.max(0, Math.floor(originX / ts));
+const r0 = Math.max(0, Math.floor(originY / ts));
+const c1 = Math.min(cols - 1, Math.floor((originX + canvas.width)  / ts));
+const r1 = Math.min(rows - 1, Math.floor((originY + canvas.height) / ts));
+for (let r = r0; r <= r1; r++)            // only the tiles the camera can see
+  for (let c = c0; c <= c1; c++) drawTile(c, r);
+// 200×18 map: ~33×18 = 594 tiles drawn instead of 3,600 — and it's O(view), not O(world)</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const c0 = Math.max(0, Math.floor(originX / ts));
+const r0 = Math.max(0, Math.floor(originY / ts));
+const c1 = Math.min(cols - 1, Math.floor((originX + canvas.width)  / ts));
+const r1 = Math.min(rows - 1, Math.floor((originY + canvas.height) / ts));
+for (let r = r0; r <= r1; r++)
+  for (let c = c0; c <= c1; c++) drawTile(c, r);</code></pre>
+                </div>
+            </details>
+        </div>
+
+        <!-- POOLING -->
+        <div id="pooling" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>♻️ Object pooling</h2>
+            <p>
+                A fountain spews particles forever. <strong>Pooled</strong> reuses a fixed array of objects —
+                after the initial allocation, nothing is ever created, so the garbage collector stays asleep.
+                <strong>Naive</strong> news up an object per spawn and filters out the dead each frame, feeding
+                the GC and risking a hitch. Same fountain; watch the "objects allocated" counter.
+            </p>
+            <div class="diagram"><canvas id="pfPoolingCanvas" class="pf-canvas" width="640" height="320"></canvas></div>
+            <div class="controls">
+                <label class="pf-slider"><input type="checkbox" id="pfPoolingPooled" checked> pooled (vs naive)</label>
+                <button id="pfPoolingReset">↻ Reset</button>
+            </div>
+            <div id="pfPoolingHud" class="info-display" style="font-family:monospace;">emitting…</div>
+            <details>
+                <summary>📝 Click to see: a swap-remove object pool</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// preallocate once; `n` objects are live at the FRONT of the array
+constructor(cap) { this.arr = Array.from({length: cap}, makeBlank); this.n = 0; }
+
+spawn(p) { if (this.n >= cap) return;          // full → drop, never allocate
+  const o = this.arr[this.n++];                // reuse a dead slot's memory
+  o.x = p.x; o.y = p.y; /* …copy fields… */ o.t = 0; }
+
+update(dt) {
+  for (let i = 0; i < this.n; i++) {
+    const o = this.arr[i]; o.t += dt; /* …integrate… */
+    if (o.t >= o.life) { this.arr[i] = this.arr[--this.n]; this.arr[this.n] = o; i--; } // swap-remove
+  }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">constructor(cap: number) { this.arr = Array.from({length: cap}, makeBlank); this.n = 0; }
+
+spawn(p: Particle) { if (this.n >= cap) return;
+  const o = this.arr[this.n++];
+  o.x = p.x; o.y = p.y; o.t = 0; }
+
+update(dt: number) {
+  for (let i = 0; i < this.n; i++) {
+    const o = this.arr[i]; o.t += dt;
+    if (o.t >= o.life) { this.arr[i] = this.arr[--this.n]; this.arr[this.n] = o; i--; }
+  }
+}</code></pre>
+                </div>
+            </details>
+        </div>
+
+        <!-- BROADPHASE -->
+        <div id="broadphase" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>🧮 Broad-phase collision (spatial grid)</h2>
+            <p>
+                Checking every entity against every other is <code>n(n−1)/2</code> pair tests — 120 balls is
+                7,140 checks <em>per frame</em>. A spatial grid buckets entities by cell, so each only checks
+                its own and neighbouring cells. Slide the count up and compare the pair-check numbers; the grid
+                stays roughly linear. (Cross-link: <a href="../expert.html#spatial">Fundamentals → Spatial
+                Partitioning</a>.)
+            </p>
+            <div class="diagram"><canvas id="pfBroadphaseCanvas" class="pf-canvas" width="640" height="360"></canvas></div>
+            <div class="controls">
+                <span class="pf-slider">balls
+                    <input type="range" id="pfBroadphaseCount" min="10" max="300" step="10" value="120">
+                    <span class="val" id="pfBroadphaseCountVal">120</span>
+                </span>
+                <label class="pf-slider"><input type="checkbox" id="pfBroadphaseGrid" checked> spatial grid (vs naive)</label>
+            </div>
+            <div id="pfBroadphaseHud" class="info-display" style="font-family:monospace;">bouncing…</div>
+            <details>
+                <summary>📝 Click to see: bucket by cell, check only neighbours</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// 1) bucket every entity into a cell ≈ its own size
+for (const e of entities)
+  bucket(`${Math.floor(e.x/cell)},${Math.floor(e.y/cell)}`).push(e);
+
+// 2) each entity only tests its own + 8 neighbouring cells
+for (const e of entities) {
+  const cx = Math.floor(e.x/cell), cy = Math.floor(e.y/cell);
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++)
+    for (const o of bucket(`${cx+dx},${cy+dy}`) || [])
+      if (o.id > e.id) collide(e, o);   // id ordering tests each pair once
+}
+// far-apart pairs are never even considered → ~O(n) instead of O(n²)</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">for (const e of entities)
+  bucket(`${Math.floor(e.x/cell)},${Math.floor(e.y/cell)}`).push(e);
+
+for (const e of entities) {
+  const cx = Math.floor(e.x/cell), cy = Math.floor(e.y/cell);
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++)
+    for (const o of bucket(`${cx+dx},${cy+dy}`) ?? [])
+      if (o.id > e.id) collide(e, o);
+}</code></pre>
+                </div>
+            </details>
+        </div>
+
+        <!-- CHUNK -->
+        <div id="chunk" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>🧱 Chunked render caching</h2>
+            <p>
+                A static tile layer never changes, so why redraw it every frame? Render each <strong>chunk</strong>
+                (here 8×8 tiles) to its own offscreen canvas once, then just blit those images. Only a chunk
+                whose tiles changed gets re-rendered. <strong>Click a tile to toggle it</strong> and watch the
+                "re-renders this frame" counter tick exactly once — for the one chunk you touched.
+            </p>
+            <div class="diagram"><canvas id="pfChunkCanvas" class="pf-canvas" width="640" height="384"></canvas></div>
+            <div class="controls">
+                <label class="pf-slider"><input type="checkbox" id="pfChunkCached" checked> chunk cache (vs naive)</label>
+                <label class="pf-slider"><input type="checkbox" id="pfChunkGrid" checked> show chunk grid</label>
+            </div>
+            <div id="pfChunkHud" class="info-display" style="font-family:monospace;">click a tile to toggle it…</div>
+            <details>
+                <summary>📝 Click to see: render dirty chunks, blit the rest</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">draw(ctx, originX, originY, viewW, viewH) {
+  for (const [cx, cy] of visibleChunks(originX, originY, viewW, viewH)) {
+    const cv = this.canvasFor(cx, cy);
+    if (this.dirty.has(key(cx, cy))) {         // render ONCE, or after an edit
+      drawTileMap(cv.getContext('2d'), this.map, { originX: cx*px, originY: cy*px });
+      this.dirty.delete(key(cx, cy));
+    }
+    ctx.drawImage(cv, cx*px - originX, cy*py - originY);   // otherwise just blit
+  }
+}
+markDirtyTile(col, row) { this.dirty.add(key(col/ct | 0, row/ct | 0)); }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">draw(ctx: C2D, originX: number, originY: number, viewW: number, viewH: number) {
+  for (const [cx, cy] of visibleChunks(originX, originY, viewW, viewH)) {
+    const cv = this.canvasFor(cx, cy);
+    if (this.dirty.has(key(cx, cy))) {
+      drawTileMap(cv.getContext('2d')!, this.map, { originX: cx*px, originY: cy*px });
+      this.dirty.delete(key(cx, cy));
+    }
+    ctx.drawImage(cv, cx*px - originX, cy*py - originY);
+  }
+}</code></pre>
+                </div>
+            </details>
+        </div>
+
+        <!-- MINI-PROJECT / CAPSTONE -->
+        <div id="mini-project" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>🏔️ Grand Capstone: "Summit"</h2>
+            <p>
+                The whole track, in one level. Tilemap collision with one-way platforms and a slope, a moving
+                platform, the full game-feel kit, wall-jumps and a dash, a follow camera with deadzone and
+                look-ahead, parallax depth, pooled dust and landing puffs, screen shake and hitstop on hard
+                landings, FSM-driven animation — and viewport culling doing the drawing. Climb to the flag and
+                beat your time. <span class="pf-key">←</span> <span class="pf-key">→</span> run,
+                <span class="pf-key">↑</span>/<span class="pf-key">Space</span> jump (into walls to wall-jump),
+                <span class="pf-key">X</span> dash, <span class="pf-key">↓</span>+jump to drop through.
+            </p>
+            <div class="diagram"><canvas id="pfSummitCanvas" class="pf-canvas" width="640" height="384" tabindex="0"></canvas></div>
+            <div class="controls"><button id="pfSummitReset">↻ Reset</button></div>
+            <div id="pfSummitHud" class="info-display" style="font-family:monospace;">click, then climb to the flag…</div>
+        </div>
+
+        <!-- COMPLETION -->
+        <div class="recap">
+            <h2>✅ Recap — what you built</h2>
+            <ul>
+                <li><strong>Viewport culling</strong> — iterate only the tiles in the camera window (O(view), not O(world)).</li>
+                <li><strong>Object pooling</strong> — reuse a fixed array; zero per-frame allocation, no GC hitches.</li>
+                <li><strong>Broad-phase collision</strong> — a spatial grid turns O(n²) pair checks into ~O(n).</li>
+                <li><strong>Chunked render caching</strong> — blit cached chunk images; re-render only dirty chunks.</li>
+                <li><strong>"Summit"</strong> — every system from all five tiers composed into one complete game.</li>
+            </ul>
+            <div class="complete-banner">
+                <h3>🎉 Platformer track complete — all 5 tiers</h3>
+                <p style="color:#c9d1d9;">
+                    From a falling box on a tile floor (<a href="beginner.html">Beginner</a>) to a complete,
+                    juicy, performant platformer (<em>Summit</em>): the fixed-timestep loop &amp; AABB
+                    collision, the full game-feel kit, a real moveset with slopes and moving geometry, a
+                    camera and a coat of juice, and the engineering to make it scale. The shared engine
+                    (<code>tilemap</code>, <code>physics</code>, <code>input</code>, <code>player</code>,
+                    <code>camera</code>) is the takeaway you can lift straight into your own game.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <script src="../shared/utils.js"></script>
+    <script src="../shared/code-tabs.js"></script>
+    <script src="engine/tilemap.js"></script>
+    <script src="engine/physics.js"></script>
+    <script src="engine/input.js"></script>
+    <script src="engine/player.js"></script>
+    <script src="engine/camera.js"></script>
+    <script src="simulations-demos.js"></script>
+</body>
+</html>

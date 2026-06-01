@@ -382,7 +382,7 @@ per-tier file structure mirroring the Fundamentals layout.
   `rl_` namespace for future per-tier bundles. Follows the "one tier per commit"
   cadence.
 
-- `platformer/` — **Beginner + Intermediate + Advanced + Expert tiers shipped; the Simulations capstone lands next.** Build a
+- `platformer/` — **fully shipped — all 5 tiers, 28 demos.** Build a
   tight, juicy 2D platformer (Celeste / Hollow Knight style) — the repo's first
   **real-time character-control** track. Where the other genre tracks build a
   *world*, this one builds a *character* and teaches the "game feel" stack that has
@@ -448,9 +448,24 @@ per-tier file structure mirroring the Fundamentals layout.
   — one scrolling level with every effect on a toggle (All on/off) so the same
   level can be felt lifeless-then-alive. The camera-space convention (clear →
   parallax in screen space → `ctx.translate(-cam.originX,-cam.originY)` → world →
-  restore → HUD) is shared by every scrolling demo. Demo IDs reserve the `pf_`
-  namespace; demos are keyboard/canvas-driven so (like roguelike/netcode) they
-  omit `data-demo-id` to opt out of the Export button for now.
+  restore → HUD) is shared by every scrolling demo. **Simulations tier
+  ("Performance, Scale &amp; The Whole Game", 5 demos):** the optimisation tier
+  and the grand finale. `Camera` is promoted to **`engine/camera.js`** (this
+  capstone is its 2nd consumer), so `engine/` now holds the full cross-tier core
+  (tilemap, physics, input, player, camera). Four perf systems taught inline:
+  viewport culling (drawTileMap's built-in cull, made the lesson — O(view) not
+  O(world)), `ParticlePool` (a swap-remove object pool — zero per-frame
+  allocation), `SpatialGrid` broad-phase (O(n²) pair checks → ~O(n); verified 386
+  vs 7,140 at 120 balls), and `ChunkCache` (render each chunk to an offscreen
+  canvas once, blit thereafter, re-render only dirty chunks). The grand capstone
+  **"Summit"** is the complete playable platformer: a wide level composing tilemap
+  collision + one-way platforms + a slope + a moving platform + the full feel kit
+  + wall-jump + dash + follow camera + parallax + pooled particles + screen shake
+  + hitstop + FSM animation, drawn with viewport culling, with a goal flag and a
+  best-time timer. **Track total: 5 tiers, 28 demos, 5 engine modules** (tilemap,
+  physics, input, player, camera) — from a falling box to a complete game. Demo IDs reserve the `pf_` namespace; demos are
+  keyboard/canvas-driven so (like roguelike/netcode) they omit `data-demo-id` to
+  opt out of the Export button for now.
 
 ## Shared assets
 
