@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced — Physics Puzzle Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+    <style>
+        canvas.pz-canvas { cursor: crosshair; outline: none; background: #0d1117; border-radius: 6px; touch-action: none; }
+        .pz-slider { display: inline-flex; align-items: center; gap: 8px; color: #c9d1d9; font-size: 0.92em; }
+        .pz-slider input[type="range"] { width: 130px; }
+        .pz-slider .val { color: #4fc3f7; font-family: monospace; min-width: 2.5em; display: inline-block; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚙️ Advanced — Rigid Bodies &amp; Joints</h1>
+        <p class="subtitle">The big one: rotation. Convex shapes that spin, stack, lean and topple — SAT collision with contact manifolds, impulse resolution with friction, and breakable joints. The physics of a World-of-Goo contraption.</p>
+
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="intermediate.html" class="nav-button">← Intermediate</a>
+            <a href="advanced.html" class="nav-button active">Advanced</a>
+        </div>
+
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#intro">From a point to a body — what rotation adds</a></li>
+                <li><a href="#rotation">The second integrator — angle &amp; torque</a></li>
+                <li><a href="#sat">SAT — the axis of least overlap is the normal</a></li>
+                <li><a href="#impulse">Impulse with rotation — r × J makes it spin</a></li>
+                <li><a href="#stack">Friction &amp; correction — boxes that rest &amp; stack</a></li>
+                <li><a href="#joint">Joints — pin two bodies, and break the pin</a></li>
+                <li><a href="#mini-project">Mini-Project: "Contraption"</a></li>
+            </ul>
+        </div>
+
+        <!-- INTRO -->
+        <div id="intro" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🧩 From a point to a body</h2>
+            <p>
+                Everything so far has been a <em>point</em> — a circle or a rope bead with a position and a
+                velocity. A real object also has <strong>orientation</strong>: it can spin. The moment you let
+                a box rotate, three new things appear, and this tier is those three things:
+            </p>
+            <ul>
+                <li><strong>A second integrator</strong> — alongside <code>pos += vel·dt</code> you now run
+                    <code>angle += angularVel·dt</code>, and <em>torque</em> changes the angular velocity.</li>
+                <li><strong>Polygon collision</strong> — two circles overlap if their centres are close, but
+                    two boxes need the <strong>Separating Axis Theorem</strong> (SAT) to find the normal and
+                    the contact points.</li>
+                <li><strong>Impulse at a point</strong> — a hit off the centre of mass both pushes
+                    <em>and</em> spins the body. That's <code>r × J</code>, and it's what makes stacking,
+                    toppling and friction feel real.</li>
+            </ul>
+            <div class="key-point">
+                <strong>💡 This is the same impulse you met in the Beginner tier — generalised.</strong>
+                Circle-vs-circle was the special case where every hit is dead-centre (no spin). Here a hit can
+                land anywhere on a convex shape, so we add the rotational term. The Beginner code isn't thrown
+                away; it's the simplest point on this curve.
+            </div>
+            <div class="concept-box">
+                <h4>🧰 The rigid-body engine (all inline in <code>advanced-demos.js</code>)</h4>
+                <ul>
+                    <li><code>PZRigidBody</code> — a convex polygon with mass, moment of inertia, angle, angular velocity.</li>
+                    <li><code>pzPolyVsPoly</code> — SAT + reference/incident-face clipping → a contact manifold.</li>
+                    <li><code>pzSolveManifold</code> — sequential impulses: normal (+restitution) and Coulomb friction, with <code>r × J</code>.</li>
+                    <li><code>PZJoint</code> — a pivot constraint between two bodies (or a body and a fixed point), with a break threshold.</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- ROTATION -->
+        <div id="rotation" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🌀 The second integrator — angle &amp; torque</h2>
+            <p>
+                Zero gravity, one box. Drag from a point on it and release: the impulse is applied <em>at that
+                point</em>. Pull from the <strong>centre</strong> and it only slides; pull from a
+                <strong>corner</strong> and the same impulse also spins it. That difference — the offset from
+                the centre of mass — is the torque, and it feeds a whole second integrator for the angle.
+            </p>
+            <div class="diagram"><canvas id="pzRotateCanvas" class="pz-canvas" width="640" height="320"></canvas></div>
+            <div class="controls"><button id="pzRotateReset">↻ Reset</button></div>
+            <div id="pzRotateHud" class="info-display" style="font-family:monospace;">drag from a corner to spin it…</div>
+
+            <details>
+                <summary>📝 Click to see: position AND angle, and an impulse at a point</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// integrate BOTH: linear and angular
+pos.x += vel.x * dt;  pos.y += vel.y * dt;
+angle += angularVel * dt;
+
+// an impulse (imx,imy) at world offset (rx,ry) from the centre of mass:
+applyImpulse(imx, imy, rx, ry) {
+  vel.x += imx * invMass;
+  vel.y += imy * invMass;
+  angularVel += invInertia * (rx * imy - ry * imx);   // r × J = torque
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">applyImpulse(imx: number, imy: number, rx: number, ry: number): void {
+  if (this.isStatic) return;
+  this.vel.x += imx * this.invMass;
+  this.vel.y += imy * this.invMass;
+  this.angularVel += this.invInertia * (rx * imy - ry * imx); // 2D cross
+}</code></pre>
+                </div>
+            </details>
+            <div class="key-point">
+                <strong>Moment of inertia</strong> is mass's rotational cousin — how hard the shape is to spin
+                about its centre. A long thin plank resists spin more than a compact box of the same mass.
+                We compute it once from the polygon's vertices and store <code>invInertia = 1/I</code>, exactly
+                like <code>invMass</code>.
+            </div>
+        </div>
+
+        <!-- SAT -->
+        <div id="sat" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>📐 SAT — the axis of least overlap</h2>
+            <p>
+                Two convex shapes are <em>apart</em> if you can slip a line between them — and that line is
+                perpendicular to one of their edges. So we test every edge-normal of both shapes: if any axis
+                shows a gap, they're separated. If none do, they overlap, and the axis with the
+                <strong>least</strong> overlap is the collision normal (the shortest push to separate them).
+                Drag the cyan box into the pentagon to see the normal and contact points SAT finds.
+            </p>
+            <div class="diagram"><canvas id="pzSatCanvas" class="pz-canvas" width="640" height="320"></canvas></div>
+            <div class="controls"><button id="pzSatReset">↻ Reset box</button></div>
+            <div id="pzSatHud" class="info-display" style="font-family:monospace;">drag the box into the pentagon…</div>
+
+            <details>
+                <summary>📝 Click to see: the least-penetration probe</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// For each face of A, find B's deepest point along that face's outward normal.
+// The face where B pokes in the LEAST is the best separating candidate.
+function pzLeastPenetration(A, B) {
+  let best = -Infinity, index = 0;
+  A.faces.forEach((face, i) => {
+    const n = face.normal, v = face.vertex;
+    let support = minimize(B.verts, bv =&gt; dot(n, bv));   // B's deepest vertex
+    const pen = dot(n, sub(support, v));
+    if (pen &gt; best) { best = pen; index = i; }            // least negative wins
+  });
+  return { best, index };       // best &gt;= 0  ⇒  a gap exists, no collision
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// A full manifold then CLIPS the incident face against the reference face's
+// side planes to get up to TWO contact points — what you need for a box to rest
+// flat instead of teetering on one corner.
+function pzPolyVsPoly(A: PZRigidBody, B: PZRigidBody): Manifold | null {
+  const pa = pzLeastPenetration(A, B); if (pa.best &gt;= 0) return null;
+  const pb = pzLeastPenetration(B, A); if (pb.best &gt;= 0) return null;
+  // ...pick reference face, clip incident face, keep penetrating points...
+}</code></pre>
+                </div>
+            </details>
+        </div>
+
+        <!-- IMPULSE -->
+        <div id="impulse" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>💥 Impulse with rotation — r × J</h2>
+            <p>
+                Now we respond to those collisions. Click to drop boxes onto the floor: when a box lands on a
+                corner, the contact is <em>off</em> its centre of mass, so the impulse both stops it
+                <em>and</em> spins it — it tips, rolls, and settles, exactly like a real block. Crank
+                restitution up for a bouncy rubber feel, down for dead thuds.
+            </p>
+            <div class="diagram"><canvas id="pzImpulseCanvas" class="pz-canvas" width="640" height="340"></canvas></div>
+            <div class="controls">
+                <span class="pz-slider">restitution
+                    <input type="range" id="pzImpulseE" min="0" max="0.9" step="0.05" value="0.15">
+                    <span class="val" id="pzImpulseEVal">0.15</span>
+                </span>
+                <button id="pzImpulseReset">↻ Clear</button>
+            </div>
+            <div id="pzImpulseHud" class="info-display" style="font-family:monospace;">click to drop a box…</div>
+            <div class="key-point">
+                <strong>The relative velocity is measured at the contact point</strong>, not at the centre —
+                it includes the spin (<code>v + ω × r</code>). That single change is what separates a rotating
+                rigid-body solver from the Beginner tier's point solver.
+            </div>
+        </div>
+
+        <!-- STACK -->
+        <div id="stack" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🧱 Friction &amp; correction — boxes that rest &amp; stack</h2>
+            <p>
+                Two finishing touches turn "bouncing boxes" into "a stable tower". <strong>Friction</strong> —
+                a sideways impulse, clamped by <code>μ</code> times the normal impulse (the Coulomb cone) —
+                stops boxes from sliding off each other. <strong>Positional correction</strong> — a gentle
+                push that undoes the tiny overlap the solver leaves behind — stops the stack slowly sinking
+                into itself. Drag from the left to fling a ball at the tower; drop friction to watch it slither
+                apart.
+            </p>
+            <div class="diagram"><canvas id="pzStackCanvas" class="pz-canvas" width="640" height="360"></canvas></div>
+            <div class="controls">
+                <span class="pz-slider">friction
+                    <input type="range" id="pzStackFriction" min="0" max="1" step="0.05" value="0.5">
+                    <span class="val" id="pzStackFrictionVal">0.50</span>
+                </span>
+                <button id="pzStackReset">↻ Rebuild stack</button>
+            </div>
+            <div id="pzStackHud" class="info-display" style="font-family:monospace;">drag from the left to fling a ball…</div>
+
+            <details>
+                <summary>📝 Click to see: the friction clamp (Coulomb's cone)</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// after the NORMAL impulse jn, apply friction along the tangent:
+let jt = -dot(relVelAtContact, tangent) / invMassTangent;
+jt = clamp(jt, -mu * jn, mu * jn);     // friction can't exceed μ·(normal force)
+applyFrictionImpulse(tangent * jt);
+
+// positional correction (Baumgarte) folds INTO the normal impulse as a bias:
+const bias = (BETA / dt) * Math.max(penetration - SLOP, 0);
+let jn = (-(1 + e) * velAlongNormal + bias) / invMassNormal;
+jn = Math.max(jn, 0);                  // contacts can only PUSH, never pull</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// μ (combined) = sqrt(a.friction * b.friction); e = min(a.e, b.e).
+// SLOP lets a sliver of overlap remain so resting boxes don't jitter;
+// BETA controls how fast the remaining penetration is pushed out.
+const mu = Math.sqrt(a.friction * b.friction);
+let jt = -dot(rv, tangent) / invT;
+jt = clamp(jt, -mu * jn, mu * jn);</code></pre>
+                </div>
+            </details>
+        </div>
+
+        <!-- JOINT -->
+        <div id="joint" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🔗 Joints — pin two bodies, and break the pin</h2>
+            <p>
+                A <strong>joint</strong> holds a point on one body to a point on another (or to a fixed anchor)
+                — a hinge. Chain a few planks with pivot joints and you get a rigid rope or a bridge. Give each
+                joint a <strong>break threshold</strong> and you get destructible contraptions: yank the chain
+                hard, or lower the break force, and a joint snaps. Drag the chain to swing it.
+            </p>
+            <div class="diagram"><canvas id="pzJointCanvas" class="pz-canvas" width="640" height="340"></canvas></div>
+            <div class="controls">
+                <span class="pz-slider">break force
+                    <input type="range" id="pzJointBreak" min="400" max="9000" step="100" value="9000">
+                    <span class="val" id="pzJointBreakVal">∞</span>
+                </span>
+                <button id="pzJointReset">↻ Rebuild chain</button>
+            </div>
+            <div id="pzJointHud" class="info-display" style="font-family:monospace;">drag the chain to swing it…</div>
+
+            <details>
+                <summary>📝 Click to see: a pivot joint is one velocity constraint</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Keep anchorA (on body a) coincident with anchorB (on body b). Solve for the
+// impulse P that drives their relative velocity (plus a position-error bias) to
+// zero, through the 2×2 effective-mass matrix K:
+const C  = sub(pb, pa);                       // position error (want 0)
+const rv = relVelAtAnchor(b, rb) - relVelAtAnchor(a, ra);
+const P  = solve2x2(K, neg(add(rv, scale(beta/dt, C))));
+a.applyImpulse(neg(P), ra);
+b.applyImpulse(P, rb);
+if (length(P) &gt; breakImpulse) this.broken = true;   // snap!</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// K is the standard point-constraint mass matrix (invMass + r⊥·invI·r⊥ terms):
+const k11 = ma + mb + ia*ra.y*ra.y + ib*rb.y*rb.y;
+const k12 = -ia*ra.x*ra.y - ib*rb.x*rb.y;
+const k22 = ma + mb + ia*ra.x*ra.x + ib*rb.x*rb.x;
+// invert the 2×2, multiply by the right-hand side, apply equal-and-opposite.</code></pre>
+                </div>
+            </details>
+        </div>
+
+        <!-- MINI-PROJECT -->
+        <div id="mini-project" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🎮 Mini-Project: "Contraption"</h2>
+            <p>
+                A see-saw catapult, built from everything in this tier. The plank pivots on a fulcrum (a pivot
+                joint to a fixed point); a ball rests on the right end. <strong>Drag the heavy red weight and
+                drop it onto the left end</strong> — the plank whips around the pivot and flings the ball up
+                into the gold goal. Rigid bodies, a joint, friction, and collision, all at once.
+            </p>
+            <div class="diagram"><canvas id="pzContraptionCanvas" class="pz-canvas" width="640" height="360"></canvas></div>
+            <div class="controls"><button id="pzContraptionReset">↻ Reset</button></div>
+            <div id="pzContraptionHud" class="info-display" style="font-family:monospace;">drop the weight on the see-saw…</div>
+        </div>
+
+        <!-- RECAP -->
+        <div class="recap">
+            <h2>✅ Recap — what you built</h2>
+            <ul>
+                <li><strong>The second integrator</strong> — <code>angle += angularVel·dt</code>; torque (an off-centre impulse) drives it.</li>
+                <li><strong>SAT collision</strong> — the axis of least overlap is the normal; clip faces for up to two contact points.</li>
+                <li><strong>Impulse with rotation</strong> — relative velocity measured at the contact (<code>v + ω × r</code>); <code>r × J</code> spins the body.</li>
+                <li><strong>Friction &amp; correction</strong> — a Coulomb-clamped tangent impulse + a penetration bias = stable resting stacks.</li>
+                <li><strong>Joints</strong> — a pivot constraint between two bodies, with a force threshold that breaks it.</li>
+                <li><strong>"Contraption"</strong> — a see-saw catapult composing all of the above.</li>
+            </ul>
+            <div class="key-point">
+                <strong>Next up — <span class="level-indicator level-expert">EXPERT</span> "Destruction &amp; Debris":</strong>
+                we already compute the impact impulse at every contact — so we know exactly how hard things
+                hit. The next tier reads that to <em>break</em> bodies: impact thresholds, pre-fractured
+                (Voronoi) shards, pooled debris, structural collapse, and the juice that sells it.
+                <em>(Coming next commit.)</em>
+            </div>
+        </div>
+    </div>
+
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <!-- Dependencies, then the engine core, then this tier's demos. The rigid-body
+         engine itself is taught inline in advanced-demos.js (promotes to engine/
+         when the Expert tier reuses it), so only the shared core loads here. -->
+    <script src="../shared/utils.js"></script>
+    <script src="../shared/code-tabs.js"></script>
+    <script src="engine/world.js"></script>
+    <script src="engine/loop.js"></script>
+    <script src="engine/render.js"></script>
+    <script src="advanced-demos.js"></script>
+</body>
+</html>

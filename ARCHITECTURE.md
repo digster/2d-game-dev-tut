@@ -114,26 +114,33 @@ platformer's "one shared primitive, lessons on top": collision is **not** in the
 engine — the Beginner tier teaches it inline in `beginner-demos.js` as three
 top-level (console-testable) routines `pzResolveStatic` (circle-vs-arena),
 `pzResolveBlock` (circle-vs-AABB) and `pzCollideCircles` (impulse along the normal,
-inverse-mass weighted). Those get **promoted** to a future `engine/collide.js` only
-when the **Advanced** tier (the genuine 2nd `PZBody` consumer) reuses them (a *move*).
-The **Intermediate** tier deliberately does NOT consume them: it teaches the *other*
-family of 2D physics — **position-based Verlet** — inline in `intermediate-demos.js`
+inverse-mass weighted). **A key subtlety drove the actual tier outcomes: each tier
+brings its OWN collision family, so the early "promotes in the next tier" guesses were
+wrong twice.** The **Intermediate** tier teaches **position-based Verlet** inline
 (`PZVerletPoint`/`PZConstraint`/`pzStepRope`, the cut via `pzCutBlade`/`pzClickCut` +
-`lineIntersection`, and Verlet payload-vs-wall as plain `pos`-depenetration, since a
-Verlet point has no velocity to reflect). Those Verlet classes stay inline until the
-Simulations tier (soft bodies / ragdolls) becomes their 2nd consumer, then promote to
-`engine/constraints.js` (alongside the Advanced `PZJoint`). This is the cleanest read
-of the "promote on the 2nd consumer" rule — a contrived `PZBody` payload in
-Intermediate would have forced an early promotion; keeping Intermediate pure Verlet
-keeps each promotion honest. Two track-specific footguns are load-bearing here: (1)
+`lineIntersection`, payload-vs-wall as plain `pos`-depenetration — a Verlet point has no
+velocity to reflect), so it does NOT consume the Beginner circle routines. The
+**Advanced** tier teaches **convex-polygon rigid bodies** inline (`PZRigidBody`,
+`pzPolyVsPoly` = SAT + reference/incident-face clipping, `pzSolveManifold` = sequential
+impulses with `r × J` + Coulomb friction + Baumgarte bias, `PZJoint` = a 2×2
+effective-mass pivot constraint with a break threshold) — a *different, more general*
+collision family that **supersedes** the Beginner circle solver rather than reusing it.
+Net: through Advanced the circle routines (`pzResolveStatic`/`pzCollideCircles`) and the
+Verlet classes both **stay inline** with only a single real consumer each, so `engine/`
+remains the **3 scaffolded modules** — no promotion has fired yet. The genuine 2nd
+consumers come later: the circle family in the grand-capstone slingshot, the Verlet
+classes in Simulations soft-bodies/ragdolls (→ `engine/constraints.js`), and the rigid
+family in Expert destruction (→ `engine/collide.js` + a rigid module). This is the
+honest application of "promote on the 2nd consumer" — never promote on a guess. Two
+track-specific footguns are load-bearing here: (1)
 `Vector2D` **mutates in place** (`add`/`multiply`/`divide`/`normalize`/`limit` change
 `this`; only `subtract`/`copy` return new), so all engine maths `.copy()`s a shared
 vector before mutating — corrupting the shared `gravity` vector is the classic bug
 this avoids; (2) launch speed is clamped so a fast shot still steps less than its
 radius, honouring the per-step resolver's sub-tile contract (high-speed tunneling is a
 deferred Simulations topic). Demos are pointer-driven, so (like platformer/roguelike)
-they omit `data-demo-id`. **Status: scaffold + Beginner + Intermediate shipped (12
-demos, 3 engine modules); 3 tiers to come.**
+they omit `data-demo-id`. **Status: scaffold + Beginner + Intermediate + Advanced
+shipped (18 demos, 3 engine modules); 2 tiers to come.**
 
 **Why tiers are separate files:** content is split beginner → intermediate →
 expert → raymarching → stylization → distortion → advanced → simulations so each

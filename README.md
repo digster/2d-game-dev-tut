@@ -467,7 +467,7 @@ per-tier file structure mirroring the Fundamentals layout.
   keyboard/canvas-driven so (like roguelike/netcode) they omit `data-demo-id` to
   opt out of the Export button for now.
 
-- `physics-puzzle/` — **in progress — scaffold + Beginner + Intermediate shipped (12 demos).**
+- `physics-puzzle/` — **in progress — scaffold + Beginner + Intermediate + Advanced shipped (18 demos).**
   Build the physics behind the genre's classics — Angry Birds (slingshot), Cut the
   Rope (ropes you sever), World of Goo (contraptions) — from one falling circle up
   to a chain-reaction puzzle game. This is the **applied home** for the repo's
@@ -497,9 +497,9 @@ per-tier file structure mirroring the Fundamentals layout.
   impulse), and the capstone **"Knock-Down"** (slingshot a 3-shot budget to knock a
   row of pins off a ledge — every mechanic on one world). The tier's three collision
   routines (`pzResolveStatic` circle-vs-arena, `pzResolveBlock` circle-vs-AABB,
-  `pzCollideCircles`) are taught **inline** in `beginner-demos.js`, to be promoted to
-  `engine/collide.js` when the **Advanced** tier (the genuine 2nd `PZBody` consumer)
-  reuses them. **Intermediate tier ("Ropes & Chains", 6 demos)** switches to the
+  `pzCollideCircles`) are taught **inline** in `beginner-demos.js`; they stay inline
+  (the Advanced tier *supersedes* rather than reuses them — see below — so their real
+  2nd consumer is the grand-capstone slingshot). **Intermediate tier ("Ropes & Chains", 6 demos)** switches to the
   *other* physics family — position-based **Verlet** — taught entirely inline in
   `intermediate-demos.js`: Verlet vs Euler (store the previous position; velocity is
   the implicit `pos − prev`), the distance constraint (`PZConstraint.solve` = one
@@ -510,8 +510,25 @@ per-tier file structure mirroring the Fundamentals layout.
   fling a candy over a shelf into the goal; payload-vs-wall is Verlet depenetration,
   no velocity to reflect). `PZVerletPoint`/`PZConstraint` stay inline here, to be
   promoted to `engine/constraints.js` when the Simulations tier (soft bodies /
-  ragdolls) reuses them. Demos are pointer/canvas-driven so (like platformer/
-  roguelike) they omit `data-demo-id` to opt out of the Export button for now.
+  ragdolls) reuses them. **Advanced tier ("Rigid Bodies & Joints", 6 demos)** adds the
+  hard part — *rotation* — with a full convex-polygon impulse solver inline in
+  `advanced-demos.js` (the standard Box2D-lite approach): `PZRigidBody` (mass + moment
+  of inertia + angle + angular velocity), `pzPolyVsPoly` (SAT + reference/incident-face
+  clipping → up to two contact points), `pzSolveManifold` (sequential impulses: normal
+  with restitution + a Baumgarte penetration bias, and a Coulomb-clamped friction
+  impulse, all with the `r × J` rotational term), and `PZJoint` (a velocity-level pivot
+  constraint via the 2×2 effective-mass matrix, with a break threshold). Demos: an
+  off-centre impulse that spins a box (the second integrator), SAT detection
+  visualised, impulse response with rotation, **stable resting stacks** (friction +
+  positional correction — verified: a box rests at 0.5px slop, a 3-box stack holds at
+  0.2° tilt), breakable joint chains, and the capstone **"Contraption"** — a see-saw
+  catapult (plank on a pivot joint, held level by a rest-pillar) that flings a ball into
+  a basket goal (verified winnable by direct simulation). This rigid family *supersedes*
+  the Beginner circle solver and is itself inline, to be promoted to `engine/` (a
+  `collide.js` + a rigid module) when the Expert tier (destruction = rigid debris)
+  becomes its 2nd consumer. So `engine/` stays at **3 modules** through Advanced. Demos
+  are pointer/canvas-driven so (like platformer/roguelike) they omit `data-demo-id` to
+  opt out of the Export button for now.
 
 ## Shared assets
 

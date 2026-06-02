@@ -1333,3 +1333,22 @@ Intermediate card to Ready + nav; link it from beginner.html (drop "coming next 
 promote the root-index TOC sublink from "(coming soon)" to a real link. Verify
 console-clean, unit-test the Verlet math headlessly, and script an end-to-end rope-cut on
 the cut demo before the commit message.
+
+# 2026-06-01 (pt.3) — Physics Puzzle: Advanced tier "Rigid Bodies & Joints"
+
+"Okay, work on the next iteration." — the Advanced tier (World of Goo). Build a full
+convex-polygon rigid-body engine INLINE in `advanced-demos.js` (Box2D-lite style):
+`PZRigidBody` (rotation + moment of inertia), `pzPolyVsPoly` (SAT + face clipping →
+contact manifold), `pzSolveManifold` (sequential impulses with `r × J` + Coulomb friction
++ Baumgarte bias), `PZJoint` (2×2 pivot constraint + break threshold), `pzStepWorld`.
+Ship `physics-puzzle/advanced.html` + the 6 demos: rotation/torque, SAT detection,
+impulse-with-rotation, resting stacks (friction + correction), breakable joint chains,
+capstone "Contraption" (see-saw catapult → ball into goal). Decision during build: each
+tier brings its own collision family, so the rigid family SUPERSEDES (doesn't reuse) the
+Beginner circle solver; no promotion fires through Advanced (engine stays 3 modules) —
+fix the README/ARCHITECTURE promotion notes. Hammer-test the solver headlessly
+(rest/stack/joint/inertia), fix the capstone (was broken — plank tipped over; add a
+rest-pillar + a basket goal zone, prove winnable by simulation). Flip the landing Advanced
+card to Ready + nav, link from intermediate.html, promote the root-index TOC sublink.
+Verify console-clean before the commit message. (Note: preview rAF is paused/bursty, so
+the grab-drag can't be scripted — verify via synchronous physics sim.)
