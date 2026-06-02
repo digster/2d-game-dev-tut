@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expert — Physics Puzzle Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+    <style>
+        canvas.pz-canvas { cursor: crosshair; outline: none; background: #0d1117; border-radius: 6px; touch-action: none; }
+        .pz-slider { display: inline-flex; align-items: center; gap: 8px; color: #c9d1d9; font-size: 0.92em; }
+        .pz-slider input[type="range"] { width: 130px; }
+        .pz-slider .val { color: #4fc3f7; font-family: monospace; min-width: 2.5em; display: inline-block; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>💥 Expert — Destruction &amp; Debris</h1>
+        <p class="subtitle">Break things on purpose. Impact thresholds read the impulse we already compute, Voronoi pre-fracture turns a shape into latent shards, a pool keeps debris cheap, a load graph tells you which support to knock out — and dust, shake and hitstop make it all <em>feel</em> violent.</p>
+
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="advanced.html" class="nav-button">← Advanced</a>
+            <a href="expert.html" class="nav-button active">Expert</a>
+        </div>
+
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#intro">Destruction is built on numbers you already have</a></li>
+                <li><a href="#impact">Impact thresholds — how hard was that hit?</a></li>
+                <li><a href="#fracture">Voronoi pre-fracture — latent shards</a></li>
+                <li><a href="#debris">Debris &amp; pooling — keep it bounded</a></li>
+                <li><a href="#stress">Structural stress — knock out the keystone</a></li>
+                <li><a href="#juice">Juice — dust, screen shake, hitstop</a></li>
+                <li><a href="#mini-project">Mini-Project: "Demolition"</a></li>
+            </ul>
+        </div>
+
+        <!-- INTRO -->
+        <div id="intro" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🧨 Destruction is built on numbers you already have</h2>
+            <p>
+                Breaking things sounds like a whole new system, but it falls almost entirely out of the rigid
+                solver from the last tier. The solver already computes, at every contact, exactly <em>how hard
+                two bodies hit</em> — the impulse. We add one line to <strong>report</strong> that
+                (<code>body.impact</code>, the total normal impulse a body received this step) and suddenly we
+                can answer "did that hit break it?" and "which block is bearing the most load?".
+            </p>
+            <ul>
+                <li><strong>Impact thresholds</strong> — break a body when <code>impact</code> crosses a limit.</li>
+                <li><strong>Voronoi pre-fracture</strong> — a shape's shards are just the polygon clipped by the
+                    bisectors between random seed points; precompute them, reveal on impact.</li>
+                <li><strong>Pooling</strong> — fragments spawn fast, so cap and recycle them.</li>
+                <li><strong>Structural stress</strong> — <code>impact</code> on a resting block <em>is</em> its
+                    support load; colour by it and the keystone reveals itself.</li>
+                <li><strong>Juice</strong> — dust, a trauma-based screen shake, and a beat of hitstop.</li>
+            </ul>
+            <div class="key-point">
+                <strong>💡 The engine moved house.</strong> The rigid-body engine you built inline in the
+                Advanced tier was <em>promoted</em> to <code>engine/rigid.js</code> now that this tier is its
+                second consumer — both pages load it; the Advanced demos file no longer declares it. That's the
+                repo's "teach inline, promote on the 2nd consumer" rule in action.
+            </div>
+        </div>
+
+        <!-- IMPACT -->
+        <div id="impact" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>📊 Impact thresholds — how hard was that hit?</h2>
+            <p>
+                Fling the heavy ball at the wall. Each block sums the impulse it receives into
+                <code>impact</code>; any block whose <code>impact</code> beats the threshold this frame
+                <strong>shatters</strong> (and puffs dust). Low threshold → a house of cards; high threshold →
+                a fortress. Same wall, same ball — the only variable is how much punishment a block tolerates.
+            </p>
+            <div class="diagram"><canvas id="pzImpactCanvas" class="pz-canvas" width="640" height="340"></canvas></div>
+            <div class="controls">
+                <span class="pz-slider">break threshold
+                    <input type="range" id="pzImpactThreshold" min="20" max="400" step="10" value="120">
+                    <span class="val" id="pzImpactThresholdVal">120</span>
+                </span>
+                <button id="pzImpactReset">↻ Rebuild wall</button>
+            </div>
+            <div id="pzImpactHud" class="info-display" style="font-family:monospace;">drag to fling a ball at the wall…</div>
+
+            <details>
+                <summary>📝 Click to see: break = read the impulse the solver already summed</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// engine/rigid.js resets body.impact = 0 each step, then pzSolveManifold
+// accumulates every normal impulse it applies:  a.impact += jn;  b.impact += jn;
+// So after a step, impact ≈ how hard the body was hit.
+
+pzStepWorld(bodies, [], 0, GRAVITY, dt);
+for (const b of bodies) {
+  if (b.tag === 'block' &amp;&amp; b.impact &gt; threshold) {
+    spawnDust(b.pos);          // a puff where it broke
+    remove(b);                 // (or replace it with fragments — next demo)
+  }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// in pzSolveManifold, per contact, after clamping the normal impulse jn ≥ 0:
+a.impact += jn;
+b.impact += jn;
+// the threshold test is then trivial — and "how hard" is exactly the impulse
+// that the collision response needed anyway. No extra physics.</code></pre>
+                </div>
+            </details>
+        </div>
+
+        <!-- FRACTURE -->
+        <div id="fracture" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🪟 Voronoi pre-fracture — latent shards</h2>
+            <p>
+                A shattering pane looks expensive, but the shards are just <em>precomputed geometry</em>. Scatter
+                random seed points across the shape; each one's shard is the shape <strong>clipped by the
+                perpendicular bisector</strong> between it and every other seed — that's a Voronoi diagram. The
+                faint lines are the latent cracks, computed before any impact. Click the pane to reveal them as
+                real falling fragments.
+            </p>
+            <div class="diagram"><canvas id="pzFractureCanvas" class="pz-canvas" width="640" height="320"></canvas></div>
+            <div class="controls">
+                <span class="pz-slider">shards
+                    <input type="range" id="pzFractureN" min="3" max="24" step="1" value="10">
+                    <span class="val" id="pzFractureNVal">10</span>
+                </span>
+                <button id="pzFractureReset">↻ Rebuild pane</button>
+            </div>
+            <div id="pzFractureHud" class="info-display" style="font-family:monospace;">click the pane to shatter it…</div>
+
+            <details>
+                <summary>📝 Click to see: a shard is the shape clipped by bisectors</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// For each seed i, the cell is the polygon clipped by the half-plane closer to
+// seed i than to every other seed j (the bisector between i and j):
+let cell = polygonVerts.slice();
+for (const j of otherSeeds) {
+  const mx = (s_i.x + s_j.x) / 2, my = (s_i.y + s_j.y) / 2;   // midpoint
+  const nx = s_j.x - s_i.x,       ny = s_j.y - s_i.y;          // points AWAY from i
+  cell = clipPolyHalfPlane(cell, nx, ny, nx*mx + ny*my);       // keep i's side
+}
+// cell is now a convex shard → make it a rigid body at its centroid.</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function clipPolyHalfPlane(poly: P[], nx: number, ny: number, o: number): P[] {
+  const out: P[] = [];
+  for (let i = 0; i &lt; poly.length; i++) {
+    const a = poly[i], b = poly[(i + 1) % poly.length];
+    const da = nx*a.x + ny*a.y - o, db = nx*b.x + ny*b.y - o;
+    if (da &lt;= 0) out.push(a);                                  // keep inside vertices
+    if (da*db &lt; 0) out.push(lerpEdge(a, b, da / (da - db)));    // + crossing point
+  }
+  return out;
+}</code></pre>
+                </div>
+            </details>
+        </div>
+
+        <!-- DEBRIS -->
+        <div id="debris" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>♻️ Debris &amp; pooling — keep it bounded</h2>
+            <p>
+                Every shatter dumps a handful of new bodies into the world; spam it and the body count (and the
+                garbage collector) runs away. So debris lives on a <strong>budget</strong>: a fixed cap, with the
+                oldest pieces retired as new ones arrive. Click to drop-and-shatter blocks and watch the active
+                count hold steady at the cap no matter how fast you click.
+            </p>
+            <div class="diagram"><canvas id="pzDebrisCanvas" class="pz-canvas" width="640" height="340"></canvas></div>
+            <div class="controls">
+                <span class="pz-slider">debris cap
+                    <input type="range" id="pzDebrisCap" min="20" max="160" step="10" value="70">
+                    <span class="val" id="pzDebrisCapVal">70</span>
+                </span>
+                <button id="pzDebrisReset">↻ Clear</button>
+            </div>
+            <div id="pzDebrisHud" class="info-display" style="font-family:monospace;">click to shatter a block…</div>
+            <div class="key-point">
+                <strong>Why a budget beats "just spawn them all":</strong> physics cost is roughly O(n²) in body
+                count without a broad-phase (the Simulations tier's next topic), and unbounded allocation
+                stutters as the GC kicks in. A pool turns "how many can we afford?" into a single tunable number.
+            </div>
+        </div>
+
+        <!-- STRESS -->
+        <div id="stress" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🏛️ Structural stress — knock out the keystone</h2>
+            <p>
+                Which block is holding everything up? You already know: a resting block's <code>impact</code> is
+                the impulse the solver applies to support the load above it — so the bottom of a column reads
+                higher than the top. We colour blocks green → red by that load. Click a <strong>red,
+                load-bearing</strong> block to remove it, and watch the structure above lose its support and
+                collapse.
+            </p>
+            <div class="diagram"><canvas id="pzStressCanvas" class="pz-canvas" width="640" height="340"></canvas></div>
+            <div class="controls"><button id="pzStressReset">↻ Rebuild</button></div>
+            <div id="pzStressHud" class="info-display" style="font-family:monospace;">click a load-bearing block…</div>
+
+            <details>
+                <summary>📝 Click to see: load is the contact impulse (no new maths)</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// after a step, body.impact already holds the total support impulse. Normalise
+// to the busiest block and map to a colour:
+let maxImp = 1;
+for (const b of blocks) maxImp = Math.max(maxImp, b.impact);
+for (const b of blocks) b.color = loadColor(b.impact / maxImp);   // green → red
+
+// "keystone": the click removes whichever block contains the pointer —
+// remove a red one and everything it was holding loses support.</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// A real stress solver would propagate load through the contact graph; here the
+// impulse the constraint solver ALREADY computes is a faithful proxy — the force
+// needed to keep a block from accelerating under everything stacked on it.
+const t = clamp(b.impact / maxImp, 0, 1);
+b.color = loadColor(t);</code></pre>
+                </div>
+            </details>
+        </div>
+
+        <!-- JUICE -->
+        <div id="juice" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>✨ Juice — dust, screen shake, hitstop</h2>
+            <p>
+                The physics of a big hit is correct without any of this — but it doesn't <em>feel</em> like
+                much. Three cheap tricks fix that: a burst of <strong>dust</strong> at the contact, a
+                <strong>trauma-based screen shake</strong> (offset ∝ trauma², so it ramps and fades smoothly),
+                and a few frames of <strong>hitstop</strong> (freeze the whole sim — the beat that makes an
+                impact land). Toggle each and fling a ball to feel the difference.
+            </p>
+            <div class="diagram"><canvas id="pzJuiceCanvas" class="pz-canvas" width="640" height="340"></canvas></div>
+            <div class="controls">
+                <label class="pz-slider"><input type="checkbox" id="pzJuiceDust" checked> dust</label>
+                <label class="pz-slider"><input type="checkbox" id="pzJuiceShake" checked> screen shake</label>
+                <label class="pz-slider"><input type="checkbox" id="pzJuiceStop" checked> hitstop</label>
+                <button id="pzJuiceReset">↻ Reset</button>
+            </div>
+            <div id="pzJuiceHud" class="info-display" style="font-family:monospace;">drag to fling a ball at the stack…</div>
+
+            <details>
+                <summary>📝 Click to see: trauma shake + hitstop</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// on a big impact: bump trauma, maybe freeze a few frames
+if (b.impact &gt; BIG)        trauma = Math.min(1, trauma + b.impact / 1400);
+if (b.impact &gt; BIG * 2.2)  hitstop = Math.max(hitstop, 3);
+
+function update(dt) {
+  if (hitstop &gt; 0) { hitstop--; return; }      // FROZEN — the punchy beat
+  stepWorld(...);
+  trauma = Math.max(0, trauma - dt * 1.6);      // decay
+}
+function render() {
+  const s = trauma * trauma * 16;               // squared → smooth ramp/fade
+  ctx.translate(rand(-s, s), rand(-s, s));      // shake the camera
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// trauma (0..1) is the standard screen-shake model (Squirrel Eiserloh): shake
+// amplitude = trauma², so small hits barely wobble and big hits slam, and the
+// fade is automatic as trauma decays linearly each frame.
+let trauma = 0, hitstop = 0;</code></pre>
+                </div>
+            </details>
+        </div>
+
+        <!-- MINI-PROJECT -->
+        <div id="mini-project" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🎮 Mini-Project: "Demolition"</h2>
+            <p>
+                Everything at once. A tower of blocks — the <span style="color:#b8743b;">orange</span> ones are
+                brittle and <strong>shatter into debris</strong> on a hard enough hit; the gold ones just topple.
+                You get <strong>three wrecking balls</strong> on a slingshot. <strong>Bring the whole tower down
+                below the red line.</strong> Impact thresholds, Voronoi fracture, debris, and juice, all working
+                together.
+            </p>
+            <div class="diagram"><canvas id="pzDemolishCanvas" class="pz-canvas" width="640" height="360"></canvas></div>
+            <div class="controls"><button id="pzDemolishReset">↻ Reset</button></div>
+            <div id="pzDemolishHud" class="info-display" style="font-family:monospace;">drag from the peg to launch a wrecking ball…</div>
+        </div>
+
+        <!-- RECAP -->
+        <div class="recap">
+            <h2>✅ Recap — what you built</h2>
+            <ul>
+                <li><strong>Impact thresholds</strong> — break a body when <code>body.impact</code> (the impulse the solver already sums) crosses a limit.</li>
+                <li><strong>Voronoi pre-fracture</strong> — a shard is the shape clipped by the bisectors between seed points; precompute, reveal on break.</li>
+                <li><strong>Debris pooling</strong> — a fixed budget with the oldest pieces retired, so body count &amp; GC stay bounded.</li>
+                <li><strong>Structural stress</strong> — a resting block's <code>impact</code> is its support load; the keystone glows red.</li>
+                <li><strong>Juice</strong> — dust, trauma² screen shake, and a few frames of hitstop.</li>
+                <li><strong>"Demolition"</strong> — a fracturing tower brought down on a shot budget, with juice.</li>
+            </ul>
+            <div class="key-point">
+                <strong>Next up — <span class="level-indicator level-expert">SIMULATIONS</span> "Soft Bodies, Ragdolls &amp; Fluids":</strong>
+                the final tier scales it all up — a spatial-hash broad-phase and sleeping bodies to run hundreds
+                of pieces, pressure soft-bodies, ragdolls (jointed rigid bodies), SPH water with buoyancy, and
+                the grand capstone <em>"Rube"</em> — a chain reaction that fires every mechanic in the track.
+                <em>(Coming next commit.)</em>
+            </div>
+        </div>
+    </div>
+
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <!-- Dependencies, then the engine, then this tier's demos. Expert is the 2nd
+         consumer of the rigid engine, so it loads the promoted engine/rigid.js and
+         teaches its destruction-specific code (fracture, pooling, juice) inline. -->
+    <script src="../shared/utils.js"></script>
+    <script src="../shared/code-tabs.js"></script>
+    <script src="engine/loop.js"></script>
+    <script src="engine/render.js"></script>
+    <script src="engine/rigid.js"></script>
+    <script src="expert-demos.js"></script>
+</body>
+</html>

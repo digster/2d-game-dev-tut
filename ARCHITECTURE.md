@@ -125,13 +125,21 @@ velocity to reflect), so it does NOT consume the Beginner circle routines. The
 impulses with `r × J` + Coulomb friction + Baumgarte bias, `PZJoint` = a 2×2
 effective-mass pivot constraint with a break threshold) — a *different, more general*
 collision family that **supersedes** the Beginner circle solver rather than reusing it.
-Net: through Advanced the circle routines (`pzResolveStatic`/`pzCollideCircles`) and the
-Verlet classes both **stay inline** with only a single real consumer each, so `engine/`
-remains the **3 scaffolded modules** — no promotion has fired yet. The genuine 2nd
-consumers come later: the circle family in the grand-capstone slingshot, the Verlet
-classes in Simulations soft-bodies/ragdolls (→ `engine/constraints.js`), and the rigid
-family in Expert destruction (→ `engine/collide.js` + a rigid module). This is the
-honest application of "promote on the 2nd consumer" — never promote on a guess. Two
+The **Expert** tier ("Destruction & Debris") is the rigid engine's genuine 2nd consumer
+(debris are rigid fragments; demolition reads the impact impulse) — so that engine was
+**promoted** from inline into **`engine/rigid.js`** (a *move*: `advanced.html` +
+`expert.html` both load it, `advanced-demos.js` no longer declares it), and the engine
+gained one reporting feature the tier needs: `body.impact` (the total normal impulse a
+body received last step, summed in `pzSolveManifold` and reset each step). Expert teaches
+its own destruction algorithms inline (`pzFractureBody` Voronoi shatter + the convex-clip
+helpers, a debris pool, dust/trauma-shake/hitstop juice). The Beginner circle routines
+(`pzResolveStatic`/`pzCollideCircles`) and the Intermediate Verlet classes still have a
+single consumer each and **stay inline** — their 2nd consumers come in Simulations (the
+grand-capstone slingshot for circles; soft-bodies/ragdolls for Verlet → a future
+`engine/constraints.js`). So `engine/` is now **4 modules** (world, loop, render, rigid).
+This is the honest application of "promote on the 2nd consumer" — never promote on a
+guess (the earlier "promotes in the next tier" notes were wrong twice because each tier
+brings its own collision family). Two
 track-specific footguns are load-bearing here: (1)
 `Vector2D` **mutates in place** (`add`/`multiply`/`divide`/`normalize`/`limit` change
 `this`; only `subtract`/`copy` return new), so all engine maths `.copy()`s a shared
@@ -139,8 +147,8 @@ vector before mutating — corrupting the shared `gravity` vector is the classic
 this avoids; (2) launch speed is clamped so a fast shot still steps less than its
 radius, honouring the per-step resolver's sub-tile contract (high-speed tunneling is a
 deferred Simulations topic). Demos are pointer-driven, so (like platformer/roguelike)
-they omit `data-demo-id`. **Status: scaffold + Beginner + Intermediate + Advanced
-shipped (18 demos, 3 engine modules); 2 tiers to come.**
+they omit `data-demo-id`. **Status: Beginner + Intermediate + Advanced + Expert shipped
+(24 demos, 4 engine modules: world, loop, render, rigid); Simulations to come.**
 
 **Why tiers are separate files:** content is split beginner → intermediate →
 expert → raymarching → stylization → distortion → advanced → simulations so each

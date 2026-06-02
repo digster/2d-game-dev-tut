@@ -467,7 +467,7 @@ per-tier file structure mirroring the Fundamentals layout.
   keyboard/canvas-driven so (like roguelike/netcode) they omit `data-demo-id` to
   opt out of the Export button for now.
 
-- `physics-puzzle/` — **in progress — scaffold + Beginner + Intermediate + Advanced shipped (18 demos).**
+- `physics-puzzle/` — **in progress — Beginner + Intermediate + Advanced + Expert shipped (24 demos, 4 engine modules); Simulations to come.**
   Build the physics behind the genre's classics — Angry Birds (slingshot), Cut the
   Rope (ropes you sever), World of Goo (contraptions) — from one falling circle up
   to a chain-reaction puzzle game. This is the **applied home** for the repo's
@@ -523,12 +523,24 @@ per-tier file structure mirroring the Fundamentals layout.
   positional correction — verified: a box rests at 0.5px slop, a 3-box stack holds at
   0.2° tilt), breakable joint chains, and the capstone **"Contraption"** — a see-saw
   catapult (plank on a pivot joint, held level by a rest-pillar) that flings a ball into
-  a basket goal (verified winnable by direct simulation). This rigid family *supersedes*
-  the Beginner circle solver and is itself inline, to be promoted to `engine/` (a
-  `collide.js` + a rigid module) when the Expert tier (destruction = rigid debris)
-  becomes its 2nd consumer. So `engine/` stays at **3 modules** through Advanced. Demos
-  are pointer/canvas-driven so (like platformer/roguelike) they omit `data-demo-id` to
-  opt out of the Export button for now.
+  a basket goal (verified winnable by direct simulation). **Expert tier ("Destruction &
+  Debris", 6 demos)** is the rigid engine's 2nd consumer, so that engine was **promoted**
+  (a *move*) from inline into **`engine/rigid.js`** — both `advanced.html` and
+  `expert.html` load it, `advanced-demos.js` no longer declares it, and the engine gains
+  one feature the destruction tier needs: `body.impact` (the total normal impulse a body
+  received last step, summed in `pzSolveManifold`). Expert teaches its destruction
+  algorithms inline in `expert-demos.js`: impact thresholds (break when `impact` crosses a
+  limit), **Voronoi pre-fracture** (`pzFractureBody` — a shard is the body's polygon
+  clipped by the bisectors between random seeds; verified the cells tile the shape with
+  zero area loss), a recycled **debris pool** (a capped budget), **structural stress**
+  (colour blocks by `impact` — a resting block's support load — verified a 4-stack reads a
+  clean 1176/840/504/168 top-to-bottom gradient; click the red keystone to collapse it),
+  and **juice** (dust particles, trauma² screen shake, hitstop). Capstone **"Demolition"**:
+  a stable brick wall (the orange blocks shatter into Voronoi debris on a hard wrecking-ball
+  hit — a *contact-based* break that ignores resting load) brought down below a line on a
+  3-shot budget (verified clearable). So `engine/` is now **4 modules** (world, loop,
+  render, rigid). Demos are pointer/canvas-driven so (like platformer/roguelike) they omit
+  `data-demo-id` to opt out of the Export button for now.
 
 ## Shared assets
 

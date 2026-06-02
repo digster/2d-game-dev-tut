@@ -26,6 +26,7 @@
             <a href="index.html" class="nav-button">Track Index</a>
             <a href="intermediate.html" class="nav-button">← Intermediate</a>
             <a href="advanced.html" class="nav-button active">Advanced</a>
+            <a href="expert.html" class="nav-button">Expert →</a>
         </div>
 
         <div class="toc">
@@ -316,25 +317,24 @@ const k22 = ma + mb + ia*ra.x*ra.x + ib*rb.x*rb.x;
                 <li><strong>"Contraption"</strong> — a see-saw catapult composing all of the above.</li>
             </ul>
             <div class="key-point">
-                <strong>Next up — <span class="level-indicator level-expert">EXPERT</span> "Destruction &amp; Debris":</strong>
+                <strong>Next up — <a href="expert.html"><span class="level-indicator level-expert">EXPERT</span> "Destruction &amp; Debris"</a>:</strong>
                 we already compute the impact impulse at every contact — so we know exactly how hard things
                 hit. The next tier reads that to <em>break</em> bodies: impact thresholds, pre-fractured
                 (Voronoi) shards, pooled debris, structural collapse, and the juice that sells it.
-                <em>(Coming next commit.)</em>
             </div>
         </div>
     </div>
 
     <div class="scroll-to-top" id="scrollToTop">↑</div>
 
-    <!-- Dependencies, then the engine core, then this tier's demos. The rigid-body
-         engine itself is taught inline in advanced-demos.js (promotes to engine/
-         when the Expert tier reuses it), so only the shared core loads here. -->
+    <!-- Dependencies, then the engine, then this tier's demos. The rigid-body
+         engine now lives in engine/rigid.js (promoted when the Expert tier became
+         its 2nd consumer); advanced-demos.js uses it and no longer declares it. -->
     <script src="../shared/utils.js"></script>
     <script src="../shared/code-tabs.js"></script>
-    <script src="engine/world.js"></script>
     <script src="engine/loop.js"></script>
     <script src="engine/render.js"></script>
+    <script src="engine/rigid.js"></script>
     <script src="advanced-demos.js"></script>
 </body>
 </html>

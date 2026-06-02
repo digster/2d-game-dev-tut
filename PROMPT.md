@@ -1352,3 +1352,20 @@ rest-pillar + a basket goal zone, prove winnable by simulation). Flip the landin
 card to Ready + nav, link from intermediate.html, promote the root-index TOC sublink.
 Verify console-clean before the commit message. (Note: preview rAF is paused/bursty, so
 the grab-drag can't be scripted — verify via synchronous physics sim.)
+
+# 2026-06-01 (pt.4) — Physics Puzzle: Expert tier "Destruction & Debris"
+
+"Okay, continue with the next iteration." — the Expert tier. First do the PROMOTION: the
+rigid engine's 2nd consumer is here, so MOVE the whole rigid engine from inline
+advanced-demos.js into engine/rigid.js (advanced.html + expert.html load it; advanced-demos.js
+deletes its copy), and add `body.impact` (total normal impulse last step) for the
+destruction tier to read. Ship physics-puzzle/expert.html + expert-demos.js, 6 demos:
+impact thresholds, Voronoi pre-fracture (pzFractureBody via half-plane clipping), debris
+pool, structural stress (colour by impact = load), juice (dust + trauma shake + hitstop),
+capstone "Demolition" (wrecking-ball slingshot brings a brittle tower below a line). Watch
+out for: the floor-top is H-6 not H-26; stacked blocks have big RESTING impact so don't use
+an absolute break/juice threshold on them (use static targets / the thrown ball's impact /
+contact-with-fast-ball); keep structures stable (trilithon for stress, brick wall for
+demolish) — stability-test them. Flip the landing Expert card to Ready + nav, link from
+advanced.html, promote the root-index TOC sublink. Verify console-clean + the Voronoi/stress
+math synchronously before the commit message.
