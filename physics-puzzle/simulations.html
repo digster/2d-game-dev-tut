@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulations — Physics Puzzle Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+    <style>
+        canvas.pz-canvas { cursor: crosshair; outline: none; background: #0d1117; border-radius: 6px; touch-action: none; }
+        .pz-slider { display: inline-flex; align-items: center; gap: 8px; color: #c9d1d9; font-size: 0.92em; }
+        .pz-slider input[type="range"] { width: 130px; }
+        .pz-slider .val { color: #4fc3f7; font-family: monospace; min-width: 2.5em; display: inline-block; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌊 Simulations — Soft Bodies, Ragdolls &amp; Fluids</h1>
+        <p class="subtitle">The finale. The engineering to run hundreds of bodies (spatial hashing, sleeping), then the squishy and wet physics it unlocks (pressure soft-bodies, ragdolls, particle fluid with buoyancy) — and the grand capstone, "Rube", where every system fires in one world.</p>
+
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="expert.html" class="nav-button">← Expert</a>
+            <a href="simulations.html" class="nav-button active">Simulations</a>
+        </div>
+
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#intro">Scaling up — and the payoff physics it buys</a></li>
+                <li><a href="#broad">Spatial hash — O(n²) → ~O(n)</a></li>
+                <li><a href="#sleep">Sleeping bodies &amp; islands</a></li>
+                <li><a href="#soft">Soft bodies — a closed Verlet mesh + pressure</a></li>
+                <li><a href="#ragdoll">Ragdolls — jointed rigid bodies</a></li>
+                <li><a href="#fluid">Fluid &amp; buoyancy — water is many particles</a></li>
+                <li><a href="#mini-project">Grand Capstone: "Rube"</a></li>
+            </ul>
+        </div>
+
+        <!-- INTRO -->
+        <div id="intro" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>🧮 Scaling up — and the payoff physics it buys</h2>
+            <p>
+                Soft bodies, ragdolls and fluids all mean <em>many</em> bodies — hundreds of particles, dozens
+                of jointed parts. Two pieces of engineering make that affordable, and then three classic
+                effects fall out:
+            </p>
+            <ul>
+                <li><strong>A spatial hash</strong> kills the O(n²) "test every pair" cost — only bodies sharing
+                    a grid cell can touch.</li>
+                <li><strong>Sleeping</strong> stops simulating bodies that have come to rest until something
+                    disturbs them.</li>
+                <li>Then: <strong>soft bodies</strong> (a closed Verlet mesh with internal pressure),
+                    <strong>ragdolls</strong> (just the Advanced tier's jointed rigid bodies), and
+                    <strong>fluid</strong> (a swarm of particles whose pressure floats what's submerged).</li>
+            </ul>
+            <div class="key-point">
+                <strong>💡 Both physics families, side by side.</strong> This tier runs the
+                <em>position-based</em> family (Verlet — soft bodies, from <code>engine/constraints.js</code>)
+                and the <em>velocity/impulse</em> family (rigid — ragdolls, from <code>engine/rigid.js</code>)
+                at once. The capstone makes them cooperate: rigid blocks topple into a particle fluid and the
+                displaced water floats a duck to the finish.
+            </div>
+            <div class="concept-box">
+                <h4>🧰 What the engine looks like now (5 modules)</h4>
+                <ul>
+                    <li><code>world.js</code> (the Beginner integrator), <code>loop.js</code>, <code>render.js</code> — the scaffold.</li>
+                    <li><code>rigid.js</code> — rigid bodies + SAT + joints (promoted from Advanced; reused here for ragdolls &amp; the capstone).</li>
+                    <li><code>constraints.js</code> — the Verlet core (promoted from Intermediate; reused here for soft bodies).</li>
+                </ul>
+                <p>This tier's own new code — the spatial hash, sleeping, the pressure soft-body and the particle
+                    fluid — stays inline: it's the terminal tier, so there's no later consumer to promote to.</p>
+            </div>
+        </div>
+
+        <!-- BROADPHASE -->
+        <div id="broad" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>🔲 Spatial hash — O(n²) → ~O(n)</h2>
+            <p>
+                Testing every pair of bodies is <code>n(n-1)/2</code> checks — 200 balls is ~20,000 per frame,
+                and it explodes from there. A <strong>spatial hash</strong> drops each body into a grid cell and
+                only tests it against bodies in the same and neighbouring cells. Toggle the grid and watch the
+                pair-test count collapse as you add balls.
+            </p>
+            <div class="diagram"><canvas id="pzBroadCanvas" class="pz-canvas" width="640" height="340"></canvas></div>
+            <div class="controls">
+                <span class="pz-slider">balls
+                    <input type="range" id="pzBroadN" min="20" max="260" step="10" value="140">
+                    <span class="val" id="pzBroadNVal">140</span>
+                </span>
+                <label class="pz-slider"><input type="checkbox" id="pzBroadGrid" checked> use spatial hash</label>
+                <button id="pzBroadReset">↻ Reset</button>
+            </div>
+            <div id="pzBroadHud" class="info-display" style="font-family:monospace;">toggle the grid; add balls…</div>
+
+            <details>
+                <summary>📝 Click to see: the spatial hash</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class PZSpatialHash {
+  constructor(cell) { this.cell = cell; this.map = new Map(); }
+  insert(o) {                         // bucket o by its grid cell
+    const k = key(o.pos.x / cell | 0, o.pos.y / cell | 0);
+    (this.map.get(k) ?? this.map.set(k, []).get(k)).push(o);
+  }
+  nearby(o) {                         // everything in the 3×3 cells around o
+    const out = [];
+    for (let dx = -1; dx &lt;= 1; dx++) for (let dy = -1; dy &lt;= 1; dy++)
+      for (const x of this.map.get(key(...)) ?? []) out.push(x);
+    return out;
+  }
+}
+// collision becomes: for each ball, only test pzBallPair against nearby(ball)</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Same idea the platformer's SpatialGrid uses. The cell size should be ~the
+// largest body's diameter, so a body only ever spans a 3×3 neighbourhood. Pairs
+// tested drops from n²/2 to roughly n × (avg bodies per cell) — near-linear.</code></pre>
+                </div>
+            </details>
+        </div>
+
+        <!-- SLEEPING -->
+        <div id="sleep" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>😴 Sleeping bodies &amp; islands</h2>
+            <p>
+                A settled pile is still being simulated every frame for no visible change. <strong>Sleeping</strong>
+                fixes that: a body whose speed stays below a threshold for a moment goes to sleep — it stops
+                integrating and dims. A moving body that touches a sleeper <em>wakes</em> it (and, through
+                contacts, its whole island). Click to drop a ball into the pile and watch it ripple awake.
+            </p>
+            <div class="diagram"><canvas id="pzSleepCanvas" class="pz-canvas" width="640" height="340"></canvas></div>
+            <div class="controls"><button id="pzSleepReset">↻ Reset</button></div>
+            <div id="pzSleepHud" class="info-display" style="font-family:monospace;">click to drop a ball…</div>
+            <div class="key-point">
+                <strong>Why it matters:</strong> sleeping is what lets a game leave hundreds of settled crates
+                lying around at almost no cost — only the handful that are actually moving get simulated. Waking
+                "islands" (groups connected by contact) together avoids a sleeper hanging in mid-air when its
+                support is knocked out.
+            </div>
+        </div>
+
+        <!-- SOFT BODY -->
+        <div id="soft" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>🫧 Soft bodies — a closed Verlet mesh + pressure</h2>
+            <p>
+                A soft body is the Intermediate rope tier, bent into a loop. Take a ring of Verlet points joined
+                by perimeter constraints (the membrane), then add one force: <strong>pressure</strong>. Measure
+                the enclosed area each step; if it's smaller than the rest area, push every edge outward. The
+                blob holds its round shape, squishes when you press it into a wall, and springs back. Drag it;
+                drop the pressure and it deflates like a sad balloon.
+            </p>
+            <div class="diagram"><canvas id="pzSoftCanvas" class="pz-canvas" width="640" height="320"></canvas></div>
+            <div class="controls">
+                <span class="pz-slider">pressure
+                    <input type="range" id="pzSoftPressure" min="0" max="3" step="0.1" value="1.4">
+                    <span class="val" id="pzSoftPressureVal">1.4</span>
+                </span>
+                <button id="pzSoftReset">↻ Reset</button>
+            </div>
+            <div id="pzSoftHud" class="info-display" style="font-family:monospace;">drag the blob…</div>
+
+            <details>
+                <summary>📝 Click to see: the pressure force</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// integrate the points (Verlet) and relax the perimeter constraints, then:
+const area = polygonArea(points);
+const pressure = (restArea / area - 1) * pressureK;   // &gt;0 when compressed
+for (const [a, b] of edges) {
+  const n = outwardNormal(a, b);          // perpendicular to the edge
+  const f = pressure * edgeLength(a, b);  // bigger edges push harder
+  a.pos.add(n.scale(f * 0.5));
+  b.pos.add(n.scale(f * 0.5));            // inflate the membrane outward
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// This is the classic 2D "pressurised soft body": a closed mass-spring (here
+// Verlet) membrane + an ideal-gas-like pressure term ∝ (restArea/area − 1). The
+// same PZVerletPoint / PZConstraint from engine/constraints.js — just wired into
+// a loop and inflated.</code></pre>
+                </div>
+            </details>
+        </div>
+
+        <!-- RAGDOLL -->
+        <div id="ragdoll" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>🧍 Ragdolls — jointed rigid bodies</h2>
+            <p>
+                A ragdoll is the most "advanced-looking" effect in the track and the least new code: it's the
+                Advanced tier's rigid bodies and pivot joints, assembled into a skeleton — a torso, a head, and
+                jointed arms and legs (10 bodies, 9 joints). Every joint just keeps two parts pinned at a shared
+                point, so the whole thing flops under gravity. Drag a hand or a foot to puppet it.
+            </p>
+            <div class="diagram"><canvas id="pzRagdollCanvas" class="pz-canvas" width="640" height="340"></canvas></div>
+            <div class="controls"><button id="pzRagdollReset">↻ Reset</button></div>
+            <div id="pzRagdollHud" class="info-display" style="font-family:monospace;">drag a limb…</div>
+
+            <details>
+                <summary>📝 Click to see: jointing two bodies at a shared point</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// place the two parts, then pin them at the world point they share (the elbow,
+// the hip…). PZJoint wants the anchor in each body's LOCAL frame, so convert:
+function pzJointAt(a, b, wx, wy) {
+  return new PZJoint(a, worldToLocal(a, wx, wy), b, worldToLocal(b, wx, wy));
+}
+joints = [
+  pzJointAt(torso, head,   cx,      cy - 30),   // neck
+  pzJointAt(torso, upperArmL, cx-12, cy - 24),  // shoulder
+  pzJointAt(upperArmL, lowerArmL, cx-42, cy-22),// elbow
+  /* …hips, knees… */
+];
+pzStepWorld(bodies, joints, 0, GRAVITY, dt);    // the engine does the rest</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function worldToLocal(b: PZRigidBody, wx: number, wy: number) {
+  const dx = wx - b.pos.x, dy = wy - b.pos.y;
+  const c = Math.cos(-b.angle), s = Math.sin(-b.angle);
+  return { x: dx * c - dy * s, y: dx * s + dy * c };
+}
+// Real games add angle LIMITS to each joint so elbows don't bend backwards; the
+// constraint is the same, just clamped.</code></pre>
+                </div>
+            </details>
+        </div>
+
+        <!-- FLUID -->
+        <div id="fluid" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>💧 Fluid &amp; buoyancy — water is many particles</h2>
+            <p>
+                Water is just a swarm of particles that don't like being crowded. Each one pushes neighbours
+                that get too close (that's <strong>pressure</strong>) and nudges toward their average velocity
+                (that's <strong>viscosity</strong>) — over the spatial hash, near-linear. Drop something light
+                in and it <strong>floats</strong>: the dense fluid beneath nets an upward shove. Drag the duck
+                under the surface and let go.
+            </p>
+            <div class="diagram"><canvas id="pzFluidCanvas" class="pz-canvas" width="640" height="340"></canvas></div>
+            <div class="controls">
+                <span class="pz-slider">particles
+                    <input type="range" id="pzFluidN" min="80" max="380" step="20" value="220">
+                    <span class="val" id="pzFluidNVal">220</span>
+                </span>
+                <button id="pzFluidReset">↻ Reset</button>
+            </div>
+            <div id="pzFluidHud" class="info-display" style="font-family:monospace;">drag the duck under…</div>
+            <div class="key-point">
+                <strong>Simplified, but honest:</strong> this is a position-based fluid — pressure is implicit
+                in neighbour repulsion. The rigorous version uses smoothing kernels (poly6 for density, a spiky
+                gradient for pressure, a viscosity laplacian) — see the
+                <a href="../simulation-v2.html">SPH demo in simulation-v2</a>. Both say the same thing: water is
+                many tiny bodies, and floating is their pressure pushing up on what's submerged.
+            </div>
+        </div>
+
+        <!-- MINI-PROJECT / CAPSTONE -->
+        <div id="mini-project" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>🏆 Grand Capstone: "Rube"</h2>
+            <p>
+                The whole track in one world. <strong>Slingshot</strong> a rigid ball and land it in the
+                <strong>water tank</strong> on the right — where a duck bobs on the <strong>buoyancy</strong> —
+                smashing through the <span style="color:#b8743b;">brittle</span> tower (it
+                <strong>shatters</strong>, Voronoi) on the way. Two physics families — impulse-based rigid
+                bodies and position-based fluid — coexisting in one scene: the rigid side delivers the ball,
+                the fluid side receives it. You get six shots.
+            </p>
+            <div class="diagram"><canvas id="pzRubeCanvas" class="pz-canvas" width="640" height="360"></canvas></div>
+            <div class="controls"><button id="pzRubeReset">↻ Reset</button></div>
+            <div id="pzRubeHud" class="info-display" style="font-family:monospace;">drag from the peg to launch…</div>
+        </div>
+
+        <!-- RECAP / TRACK COMPLETE -->
+        <div class="recap">
+            <h2>✅ Recap — and the track is complete</h2>
+            <ul>
+                <li><strong>Spatial hash</strong> — bucket bodies into a grid; only test neighbours. O(n²) → ~O(n).</li>
+                <li><strong>Sleeping &amp; islands</strong> — stop simulating resting bodies; wake them on contact.</li>
+                <li><strong>Soft bodies</strong> — a closed Verlet mesh inflated by an area-pressure force.</li>
+                <li><strong>Ragdolls</strong> — the Advanced tier's rigid bodies + pivot joints, as a skeleton.</li>
+                <li><strong>Fluid &amp; buoyancy</strong> — particles that repel (pressure) and average velocity (viscosity); submerged things float.</li>
+                <li><strong>"Rube"</strong> — slingshot + rigid + fracture + fluid + buoyancy, all in one world.</li>
+            </ul>
+            <div class="key-point">
+                <strong>🎉 That's the whole Physics Puzzle track.</strong> From a single falling circle you built
+                a slingshot, ropes you cut, rigid bodies that spin and stack, breakable joints, destruction and
+                debris, and soft bodies, ragdolls &amp; fluids — across <strong>two physics families</strong> in
+                one consistent engine (<code>world</code>, <code>loop</code>, <code>render</code>,
+                <code>rigid</code>, <code>constraints</code>), grown tier by tier exactly as a real engine does.
+                Go build a puzzle game.
+            </div>
+        </div>
+    </div>
+
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <!-- Dependencies, then BOTH physics families (rigid + Verlet constraints), then
+         this tier's demos. The broadphase/sleeping/soft-body/fluid code is inline
+         (terminal tier — nothing later to promote to). -->
+    <script src="../shared/utils.js"></script>
+    <script src="../shared/code-tabs.js"></script>
+    <script src="engine/loop.js"></script>
+    <script src="engine/render.js"></script>
+    <script src="engine/rigid.js"></script>
+    <script src="engine/constraints.js"></script>
+    <script src="simulations-demos.js"></script>
+</body>
+</html>

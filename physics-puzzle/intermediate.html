@@ -380,13 +380,13 @@ function pzVerletBlock(p, block) {
     <div class="scroll-to-top" id="scrollToTop">↑</div>
 
     <!-- Dependencies, then the engine, then this tier's demos. This tier is
-         position-based (Verlet) and teaches its rope code inline, so it loads the
-         engine core for PZ/pzLoop/pzInstallPointer but not a collision module. -->
+         position-based (Verlet); the Verlet core lives in engine/constraints.js
+         (promoted once the Simulations tier became its 2nd consumer). -->
     <script src="../shared/utils.js"></script>
     <script src="../shared/code-tabs.js"></script>
-    <script src="engine/world.js"></script>
     <script src="engine/loop.js"></script>
     <script src="engine/render.js"></script>
+    <script src="engine/constraints.js"></script>
     <script src="intermediate-demos.js"></script>
 </body>
 </html>

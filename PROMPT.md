@@ -1369,3 +1369,19 @@ contact-with-fast-ball); keep structures stable (trilithon for stress, brick wal
 demolish) — stability-test them. Flip the landing Expert card to Ready + nav, link from
 advanced.html, promote the root-index TOC sublink. Verify console-clean + the Voronoi/stress
 math synchronously before the commit message.
+
+# 2026-06-01 (pt.5) — Physics Puzzle: Simulations tier (TRACK COMPLETE)
+
+"Okay, work on the next iteration." / "continue" — the FINAL tier. First the PROMOTION: soft
+bodies are the Verlet core's 2nd consumer, so MOVE PZVerletPoint/PZConstraint/pzStepRope/
+pzVerletArena from intermediate-demos.js into engine/constraints.js (both pages load it;
+engine → 5 modules). Ship physics-puzzle/simulations.html + simulations-demos.js, 6 demos:
+spatial-hash broadphase, sleeping + island wake, pressure soft-body (closed Verlet mesh),
+ragdoll (jointed PZRigidBody), particle fluid + buoyancy, and the grand capstone "Rube".
+Lib-copy dust + pzFractureBody into the file. Watch out: heavy rigid bodies in a position-based
+fluid explode (NaN) — only buoy light objects, and remove rigid bodies on water entry (splash);
+use position-based relaxation for the fluid (velocity-repulsion collapses to a puddle). Make the
+capstone reliably winnable (slingshot a ball into the tank, smashing a brittle Voronoi tower).
+Flip the landing Simulations card to Ready + nav; link from expert.html; root-index TOC + "all 5
+tiers"; mark the track COMPLETE in README + ARCHITECTURE. Verify physics synchronously (rAF is
+paused in preview); note the *.js cache needs a ?v= bump to refetch. Then the commit message.

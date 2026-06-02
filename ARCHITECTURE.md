@@ -147,8 +147,17 @@ vector before mutating — corrupting the shared `gravity` vector is the classic
 this avoids; (2) launch speed is clamped so a fast shot still steps less than its
 radius, honouring the per-step resolver's sub-tile contract (high-speed tunneling is a
 deferred Simulations topic). Demos are pointer-driven, so (like platformer/roguelike)
-they omit `data-demo-id`. **Status: Beginner + Intermediate + Advanced + Expert shipped
-(24 demos, 4 engine modules: world, loop, render, rigid); Simulations to come.**
+they omit `data-demo-id`. The **Simulations** tier (the finale) is the Verlet core's 2nd
+consumer, so `PZVerletPoint`/`PZConstraint`/`pzStepRope`/`pzVerletArena` were **promoted**
+(a *move*) from `intermediate-demos.js` into **`engine/constraints.js`** — so the engine
+ends at **5 modules** (world, loop, render, rigid, constraints), the two physics families
+(position-based Verlet + impulse-based rigid) side by side, each promoted on its genuine
+2nd consumer. The tier's own content (a `PZSpatialHash` broadphase, sleeping/islands, a
+pressure soft-body on the Verlet core, a ragdoll on the rigid core, and a position-based
+particle fluid `pzFluidStep` with emergent buoyancy) is inline (terminal consumer); the
+grand capstone "Rube" runs both families in one world (heavy rigid bodies are kept out of /
+removed-on-entry to the fluid so the position-based water stays stable). **Status: the
+Physics Puzzle track is COMPLETE — 5 tiers, 30 demos, 5 engine modules.**
 
 **Why tiers are separate files:** content is split beginner → intermediate →
 expert → raymarching → stylization → distortion → advanced → simulations so each

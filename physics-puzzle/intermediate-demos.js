@@ -12,11 +12,11 @@
 //   6. deliverDemo    — capstone "Deliver": cut to swing a payload into the goal
 //
 // DEPENDENCIES (loaded BEFORE this file by intermediate.html):
-//   ../shared/utils.js   — Vector2D, clearCanvas, clamp, lineIntersection (globals)
-//   engine/world.js      — (loaded for parity; this tier is position-based, so it
-//                           mostly uses its own Verlet integrator below)
-//   engine/loop.js       — window.pzLoop, pzInstallPointer
-//   engine/render.js     — window.PZ, pzDrawDots
+//   ../shared/utils.js       — Vector2D, clearCanvas, clamp, lineIntersection
+//   engine/loop.js           — window.pzLoop, pzInstallPointer
+//   engine/render.js         — window.PZ, pzDrawDots
+//   engine/constraints.js    — the Verlet core: PZVerletPoint, PZConstraint,
+//                              pzStepRope, pzVerletArena, pzVerletBlock
 //
 // TWO FAMILIES OF PHYSICS: the Beginner tier was velocity/impulse-based (PZBody:
 // store velocity, apply forces). This tier is POSITION-based (Verlet: store the
@@ -24,12 +24,10 @@
 // the right tool for ropes because a "constraint" becomes a one-line position
 // nudge. The two families share one world in the grand capstone later.
 //
-// COLLISION NOTE: this tier's new top-level names are all pz/PZ-prefixed and do
-// not shadow shared/utils.js or engine globals: the classes PZVerletPoint /
-// PZConstraint and the helpers pzStepRope, pzDrawRope, pzCutBlade, pzClickCut,
-// pzPointToSeg, pzVerletArena, pzVerletBlock. PZVerletPoint/PZConstraint are
-// taught INLINE here; they get promoted to engine/constraints.js when the
-// Simulations tier (soft bodies / ragdolls) becomes their 2nd consumer.
+// PROMOTION: the Verlet core was taught inline here originally; when the
+// Simulations tier (soft bodies) became its 2nd consumer it MOVED to
+// engine/constraints.js. This file now only adds the rope-specific verbs (all
+// pz-prefixed): pzDrawRope, pzCutBlade, pzClickCut, pzPointToSeg, pzDrawCandy.
 // =============================================================================
 
 // ---- Scroll-to-top (identical on every tier page) --------------------------
@@ -43,66 +41,12 @@
 })();
 
 // =============================================================================
-// INLINE VERLET ENGINE (this tier's lesson; promoted to engine/ later)
+// VERLET ENGINE: promoted to engine/constraints.js (loaded before this file).
+// PZVerletPoint, PZConstraint, pzStepRope, pzVerletArena, pzVerletBlock now live
+// there — the Simulations tier (soft bodies) became their 2nd consumer, so per
+// the "promote on the 2nd consumer" rule they moved. This file keeps only the
+// ROPE-SPECIFIC verbs below: drawing the rope and cutting it.
 // =============================================================================
-
-// A Verlet point stores its CURRENT and PREVIOUS position. There is no velocity
-// variable — the velocity is implicit: (pos − prev). To integrate, we reflect
-// that gap forward and add acceleration·dt². A pinned point ignores integration
-// (anchors, or a point the pointer is dragging).
-class PZVerletPoint {
-    constructor(x, y, radius = 4) {
-        this.pos = new Vector2D(x, y);
-        this.prev = new Vector2D(x, y);   // equal to pos ⇒ starts at rest
-        this.radius = radius;
-        this.pinned = false;
-    }
-    // gx, gy are acceleration in px/s² (passed as numbers so we never mutate a
-    // shared gravity vector). `damping` < 1 bleeds a sliver of energy each step.
-    integrate(gx, gy, dt, damping) {
-        if (this.pinned) return;
-        const vx = (this.pos.x - this.prev.x) * damping;   // implicit velocity·dt
-        const vy = (this.pos.y - this.prev.y) * damping;
-        this.prev.x = this.pos.x; this.prev.y = this.pos.y;
-        this.pos.x += vx + gx * dt * dt;                    // x += v·dt + a·dt²
-        this.pos.y += vy + gy * dt * dt;
-    }
-    // implicit velocity in px/s, for HUD readouts
-    speed(dt) { return Math.hypot(this.pos.x - this.prev.x, this.pos.y - this.prev.y) / dt; }
-}
-
-// A distance constraint keeps two points `rest` apart. "Solving" it is one nudge:
-// measure the current distance, and move each point half the error along the line
-// between them (a pinned point doesn't move, so its partner takes the full
-// correction). Run this several times per step (relaxation) to make it stiff.
-class PZConstraint {
-    constructor(a, b, opts = {}) {
-        this.a = a; this.b = b;
-        this.rest = opts.rest ?? Math.hypot(b.pos.x - a.pos.x, b.pos.y - a.pos.y);
-        this.stiffness = opts.stiffness ?? 1;
-        this.broken = false;
-    }
-    solve() {
-        if (this.broken) return;
-        const a = this.a, b = this.b;
-        const dx = b.pos.x - a.pos.x, dy = b.pos.y - a.pos.y;
-        const d = Math.hypot(dx, dy) || 1e-6;
-        const diff = ((d - this.rest) / d) * this.stiffness;
-        // distribute the correction: a pinned endpoint stays put
-        const aMove = a.pinned ? 0 : (b.pinned ? 1 : 0.5);
-        const bMove = b.pinned ? 0 : (a.pinned ? 1 : 0.5);
-        a.pos.x += dx * diff * aMove; a.pos.y += dy * diff * aMove;
-        b.pos.x -= dx * diff * bMove; b.pos.y -= dy * diff * bMove;
-    }
-}
-
-// One Verlet step: integrate every point, then relax every constraint K times.
-// More iterations ⇒ stiffer ropes (the corrections converge).
-function pzStepRope(points, constraints, gx, gy, dt, iterations, damping) {
-    for (const p of points) p.integrate(gx, gy, dt, damping);
-    for (let k = 0; k < iterations; k++)
-        for (const c of constraints) c.solve();
-}
 
 // Draw the live (un-cut) constraints as a rope.
 function pzDrawRope(ctx, constraints, color = PZ.rope, width = 4) {
@@ -152,37 +96,8 @@ function pzClickCut(constraints, px, py, maxDist = 12) {
     return false;
 }
 
-// Verlet collision is just depenetration: push a point's pos out of a wall. We
-// DON'T touch a velocity variable — Verlet derives velocity from (pos − prev),
-// so moving pos while prev stays put kills the inward motion automatically.
-function pzVerletArena(p, arena) {
-    if (p.pos.x < arena.x + p.radius) p.pos.x = arena.x + p.radius;
-    if (p.pos.x > arena.x + arena.w - p.radius) p.pos.x = arena.x + arena.w - p.radius;
-    if (p.pos.y < arena.y + p.radius) p.pos.y = arena.y + p.radius;
-    if (p.pos.y > arena.y + arena.h - p.radius) p.pos.y = arena.y + arena.h - p.radius;
-}
-function pzVerletBlock(p, block) {
-    const cx = clamp(p.pos.x, block.x, block.x + block.w);
-    const cy = clamp(p.pos.y, block.y, block.y + block.h);
-    let dx = p.pos.x - cx, dy = p.pos.y - cy;
-    let d2 = dx * dx + dy * dy;
-    if (d2 > p.radius * p.radius) return false;
-    if (d2 > 1e-6) {
-        const d = Math.sqrt(d2);
-        p.pos.x += (dx / d) * (p.radius - d);
-        p.pos.y += (dy / d) * (p.radius - d);
-    } else {
-        // centre inside → eject through the nearest face
-        const dl = p.pos.x - block.x, dr = block.x + block.w - p.pos.x;
-        const dtp = p.pos.y - block.y, dbt = block.y + block.h - p.pos.y;
-        const m = Math.min(dl, dr, dtp, dbt);
-        if (m === dtp) p.pos.y = block.y - p.radius;
-        else if (m === dbt) p.pos.y = block.y + block.h + p.radius;
-        else if (m === dl) p.pos.x = block.x - p.radius;
-        else p.pos.x = block.x + block.w + p.radius;
-    }
-    return true;
-}
+// (pzVerletArena / pzVerletBlock — Verlet point-vs-wall depenetration — moved to
+// engine/constraints.js alongside the Verlet core.)
 
 // Small shared helper: draw a candy/payload point as a filled circle.
 function pzDrawCandy(ctx, p, fill = PZ.target, stroke = '#b58a2a') {

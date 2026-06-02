@@ -467,7 +467,7 @@ per-tier file structure mirroring the Fundamentals layout.
   keyboard/canvas-driven so (like roguelike/netcode) they omit `data-demo-id` to
   opt out of the Export button for now.
 
-- `physics-puzzle/` — **in progress — Beginner + Intermediate + Advanced + Expert shipped (24 demos, 4 engine modules); Simulations to come.**
+- `physics-puzzle/` — **fully shipped — all 5 tiers, 30 demos, 5 engine modules.**
   Build the physics behind the genre's classics — Angry Birds (slingshot), Cut the
   Rope (ropes you sever), World of Goo (contraptions) — from one falling circle up
   to a chain-reaction puzzle game. This is the **applied home** for the repo's
@@ -539,8 +539,25 @@ per-tier file structure mirroring the Fundamentals layout.
   a stable brick wall (the orange blocks shatter into Voronoi debris on a hard wrecking-ball
   hit — a *contact-based* break that ignores resting load) brought down below a line on a
   3-shot budget (verified clearable). So `engine/` is now **4 modules** (world, loop,
-  render, rigid). Demos are pointer/canvas-driven so (like platformer/roguelike) they omit
-  `data-demo-id` to opt out of the Export button for now.
+  render, rigid). **Simulations tier ("Soft Bodies, Ragdolls & Fluids", 6 demos)** is the
+  finale and the Verlet core's 2nd consumer, so `PZVerletPoint`/`PZConstraint`/`pzStepRope`/
+  `pzVerletArena` were **promoted** (a *move*) from `intermediate-demos.js` into
+  **`engine/constraints.js`** (intermediate.html + simulations.html both load it) — bringing
+  `engine/` to **5 modules** (world, loop, render, rigid, constraints), the two physics
+  families side by side. The tier's own new content is inline (terminal consumer): a
+  `PZSpatialHash` broadphase (verified ~11× fewer pair tests — 859 vs 9730 at 140 balls),
+  sleeping/island waking, a **pressure soft-body** (a closed Verlet mesh inflated by an area
+  force — holds ~99% of rest area), a **ragdoll** (10 jointed `PZRigidBody`s — the Advanced
+  toolkit applied), and a **position-based particle fluid** (`pzFluidStep` — neighbour
+  repulsion as incompressibility + viscosity over the hash; verified it pools ~65px deep and
+  floats a duck; full SPH kernels cross-linked to `simulation-v2.html`). Grand capstone
+  **"Rube"**: slingshot a ball through a brittle (Voronoi-shattering) tower into a water tank
+  where a duck bobs on the buoyancy — impulse-rigid and position-fluid families coexisting
+  (verified winnable + stable; heavy bodies are kept out of / removed-on-entry to the water so
+  the two families don't destabilise). **Track total: 5 tiers, 30 demos, 5 engine modules** —
+  from a falling circle to a chain-reaction finale across two physics families. Demos are
+  pointer/canvas-driven so (like platformer/roguelike) they omit `data-demo-id` to opt out of
+  the Export button.
 
 ## Shared assets
 
