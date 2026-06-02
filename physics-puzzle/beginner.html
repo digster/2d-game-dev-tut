@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beginner — Physics Puzzle Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <!-- Prism.js Syntax Highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+
+    <!-- Tier-local styles: the pointer-driven canvases want a crosshair cursor,
+         and the slider rows read better with a little structure. Everything else
+         reuses shared/styles.css. -->
+    <style>
+        canvas.pz-canvas { cursor: crosshair; outline: none; background: #0d1117; border-radius: 6px; touch-action: none; }
+        .pz-slider { display: inline-flex; align-items: center; gap: 8px; color: #c9d1d9; font-size: 0.92em; }
+        .pz-slider input[type="range"] { width: 130px; }
+        .pz-slider .val { color: #4fc3f7; font-family: monospace; min-width: 2.5em; display: inline-block; }
+        .pz-hint { font-family: monospace; background: #0d1117; border: 1px solid #2d3354; border-radius: 4px; padding: 1px 6px; color: #7CF2C8; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 Beginner — Launch &amp; Land</h1>
+        <p class="subtitle">An Angry-Birds in miniature. We build a physics World, drop a ball into it, make it bounce, fling it with a slingshot, predict where it lands, and finish by knocking a stack of pins off a ledge.</p>
+
+        <!-- Navigation -->
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="beginner.html" class="nav-button active">Beginner</a>
+        </div>
+
+        <!-- Table of Contents -->
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#intro">What a physics puzzle really is (a world + bodies + collision)</a></li>
+                <li><a href="#world">The World &amp; gravity — a falling ball</a></li>
+                <li><a href="#bounce">Walls, ground &amp; restitution — the bounce</a></li>
+                <li><a href="#slingshot">The slingshot — drag to aim, release to launch</a></li>
+                <li><a href="#predict">Trajectory prediction — running the sim ahead</a></li>
+                <li><a href="#collide">Circle–circle collision — trading momentum</a></li>
+                <li><a href="#mini-project">Mini-Project: "Knock-Down"</a></li>
+            </ul>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- INTRO -->
+        <!-- ============================================ -->
+        <div id="intro" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🧱 What a physics puzzle really is</h2>
+            <p>
+                Strip the slingshot and the smug green pigs away, and an Angry-Birds-style game is three
+                pieces working together, sixty times a second:
+            </p>
+            <ul>
+                <li><strong>A world</strong> that, every fixed step, pulls each body down by gravity and moves
+                    it by its velocity. That's the <em>integrator</em> — and it's all our
+                    <code>PZWorld</code> does.</li>
+                <li><strong>Bodies</strong> — circles, for now — each with a position, a velocity, a mass and
+                    a bounciness.</li>
+                <li><strong>Collision</strong> — the rules that stop a ball at a wall and let two balls shove
+                    each other. This is the <em>lesson</em>, so we write it ourselves, on top of the world.</li>
+            </ul>
+            <p>
+                That's the whole skeleton. Ropes, rigid bodies, fracture, fluids — everything later in this
+                track is more bodies and cleverer collision on this same world. So we build the world first,
+                then add collision one case at a time, each demo introducing exactly one idea.
+            </p>
+
+            <div class="key-point">
+                <strong>💡 Why a <em>fixed</em> timestep?</strong> If you moved bodies by
+                <code>velocity × (time since last frame)</code>, a launched ball would fly a different arc on a
+                30 Hz laptop than a 240 Hz monitor, and a frame hitch could glitch it through a wall. Instead
+                we advance physics in fixed 1/60-second steps and render whenever we can. The engine's
+                <code>pzLoop</code> already does this — we just hand it an <code>update(dt)</code> and a
+                <code>render()</code>. It's also <em>why</em> the trajectory preview later can be trusted: the
+                preview is the very same simulation, run forward.
+            </div>
+
+            <div class="concept-box">
+                <h4>🧰 The engine, loaded on every page in this track</h4>
+                <ul>
+                    <li><code>PZWorld</code> + <code>PZBody</code> — the integrator and a body (a circle with
+                        position, velocity, mass, restitution).</li>
+                    <li><code>pzLoop</code> — the fixed-timestep loop. <code>pzInstallPointer</code> — drag
+                        input (where a pull started, where it is now, where it was released).</li>
+                    <li><code>PZ</code> + <code>pzDrawBody</code> / <code>pzDrawArena</code> /
+                        <code>pzDrawDots</code> — the shared palette and asset-free drawing.</li>
+                </ul>
+                <p>Open the <a href="index.html">track index</a> and scroll to the Scaffold Self-Check to see
+                    the integrator proven — a ball dropped under gravity rests exactly on the floor.</p>
+            </div>
+
+            <div class="key-point" style="border-left-color:#ffa726;">
+                <strong>⚠️ One trap worth knowing up front:</strong> our <code>Vector2D</code> (from the shared
+                utils) <em>mutates in place</em> — <code>v.add(...)</code>, <code>v.multiply(...)</code> change
+                <code>v</code> itself. Only <code>v.subtract(...)</code> and <code>v.copy()</code> return a new
+                vector. So we always <code>.copy()</code> a shared vector (like gravity) before doing maths on
+                it, or we'd corrupt it for every body at once.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- WORLD / GRAVITY -->
+        <!-- ============================================ -->
+        <div id="world" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🌍 The World &amp; gravity</h2>
+            <p>
+                The whole world is two lines per body: gravity adds to velocity, velocity moves the body.
+                Watch the ball fall, speed up, and (for now) sail straight off the bottom — there's no
+                collision yet, so it just re-drops from the top. The fading trail shows it
+                <em>accelerating</em>: the gaps between ghosts grow each step. Drag the gravity slider.
+            </p>
+            <div class="diagram">
+                <canvas id="pzWorldCanvas" class="pz-canvas" width="640" height="360"></canvas>
+            </div>
+            <div class="controls">
+                <span class="pz-slider">gravity
+                    <input type="range" id="pzWorldG" min="200" max="3000" step="50" value="1400">
+                    <span class="val" id="pzWorldGVal">1400</span> px/s²
+                </span>
+                <label class="pz-slider"><input type="checkbox" id="pzWorldTrail" checked> show trail</label>
+                <button id="pzWorldDrop">↻ Drop again</button>
+            </div>
+            <div id="pzWorldHud" class="info-display" style="font-family:monospace;">dropping…</div>
+
+            <details>
+                <summary>📝 Click to see: the entire world is two lines of integration</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// PZWorld.step(dt), once per fixed 1/60 s. For each dynamic body:
+for (const b of bodies) {
+  b.vel.add(gravity.copy().multiply(dt)); // 1) velocity += g·dt  (COPY g!)
+  b.vel.multiply(damping);                 //    bleed a sliver of speed
+  b.pos.add(b.vel.copy().multiply(dt));    // 2) position += v·dt  (COPY vel!)
+}
+
+// In the demo we just feed that to the loop:
+const world = new PZWorld({ gravity: 1400 });
+world.add(new PZBody(x, y, 14));
+pzLoop((dt) => world.step(dt), render).start();</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// semi-implicit (symplectic) Euler — velocity first, THEN position.
+for (const b of bodies) {
+  b.vel.add(gravity.copy().multiply(dt)); // COPY g — Vector2D.multiply mutates!
+  b.vel.multiply(damping);
+  b.pos.add(b.vel.copy().multiply(dt));   // COPY vel — same reason
+}
+
+const world = new PZWorld({ gravity: 1400 });
+world.add(new PZBody(x, y, 14));
+pzLoop((dt: number) => world.step(dt), render).start();</code></pre>
+                </div>
+            </details>
+            <div class="key-point">
+                <strong>Why "semi-implicit" Euler?</strong> We update velocity <em>before</em> using it to
+                move. That one ordering choice makes gravity far more stable than the naïve version (move
+                first, then accelerate), and it's what almost every 2D game ships. The damping is an honest
+                cheat — a stand-in for air drag so things eventually settle; real friction arrives in the
+                Advanced tier.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- BOUNCE / RESTITUTION -->
+        <!-- ============================================ -->
+        <div id="bounce" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🧊 Walls, ground &amp; restitution — the bounce</h2>
+            <p>
+                Now we add the arena. When the ball crosses a wall we push it back inside and <strong>reflect
+                its velocity along the wall's normal</strong>, scaled by <em>restitution</em> — the bounciness,
+                0 (dead clay) to 1 (a perfect superball). Click anywhere to toss a ball; drag restitution and
+                watch the bounces grow or die.
+            </p>
+            <div class="diagram">
+                <canvas id="pzBounceCanvas" class="pz-canvas" width="640" height="360"></canvas>
+            </div>
+            <div class="controls">
+                <span class="pz-slider">restitution
+                    <input type="range" id="pzBounceE" min="0" max="1" step="0.05" value="0.7">
+                    <span class="val" id="pzBounceEVal">0.70</span>
+                </span>
+                <span class="pz-slider">gravity
+                    <input type="range" id="pzBounceG" min="200" max="2600" step="50" value="1400">
+                    <span class="val" id="pzBounceGVal">1400</span>
+                </span>
+                <button id="pzBounceClear">↻ Clear</button>
+            </div>
+            <div id="pzBounceHud" class="info-display" style="font-family:monospace;">click to toss a ball…</div>
+
+            <details>
+                <summary>📝 Click to see: a bounce is reflect-and-attenuate along the normal</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Resolve a circle against the arena box. Axis-aligned walls make this
+// simple: the normal is always horizontal or vertical, so "reflect" is
+// just "flip that velocity component and scale by restitution e".
+function pzResolveStatic(b, arena) {
+  const e = b.restitution;
+  if (b.left   &lt; arena.x)            { b.pos.x = arena.x + b.radius;          if (b.vel.x &lt; 0) b.vel.x *= -e; }
+  if (b.right  &gt; arena.x + arena.w)  { b.pos.x = arena.x + arena.w - b.radius; if (b.vel.x &gt; 0) b.vel.x *= -e; }
+  if (b.top    &lt; arena.y)            { b.pos.y = arena.y + b.radius;          if (b.vel.y &lt; 0) b.vel.y *= -e; }
+  if (b.bottom &gt; arena.y + arena.h)  { b.pos.y = arena.y + arena.h - b.radius; if (b.vel.y &gt; 0) b.vel.y *= -e; }
+}
+
+function update(dt) { world.step(dt); for (const b of world.bodies) pzResolveStatic(b, arena); }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function pzResolveStatic(b: PZBody, arena: Rect): void {
+  const e = b.restitution;
+  if (b.left   &lt; arena.x)           { b.pos.x = arena.x + b.radius;           if (b.vel.x &lt; 0) b.vel.x *= -e; }
+  if (b.right  &gt; arena.x + arena.w) { b.pos.x = arena.x + arena.w - b.radius; if (b.vel.x &gt; 0) b.vel.x *= -e; }
+  if (b.top    &lt; arena.y)           { b.pos.y = arena.y + b.radius;           if (b.vel.y &lt; 0) b.vel.y *= -e; }
+  if (b.bottom &gt; arena.y + arena.h) { b.pos.y = arena.y + arena.h - b.radius; if (b.vel.y &gt; 0) b.vel.y *= -e; }
+}</code></pre>
+                </div>
+            </details>
+            <div class="key-point">
+                <strong>Restitution is a multiplier, not a force.</strong> At <code>e = 1</code> the ball keeps
+                all its speed and bounces forever; at <code>e = 0</code> it sticks the moment it lands. Real
+                games live around 0.2–0.6. The walls here are axis-aligned, so the normal is always ±x or ±y —
+                the Advanced tier handles bounces off <em>tilted</em> surfaces with the full reflection vector.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- SLINGSHOT -->
+        <!-- ============================================ -->
+        <div id="slingshot" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🪃 The slingshot — drag to aim, release to launch</h2>
+            <p>
+                The signature move. <strong>Press on the ball and drag backwards</strong> — the further you
+                pull, the harder it launches (we clamp the pull so it can't go absurd). Releasing applies an
+                <em>impulse</em>: an instant change in velocity, <code>v += J / m</code>, pointed from the
+                pull back toward the anchor. It's a one-shot kick, not a held force.
+            </p>
+            <div class="diagram">
+                <canvas id="pzSlingCanvas" class="pz-canvas" width="640" height="360"></canvas>
+            </div>
+            <div class="controls">
+                <span class="pz-slider">power
+                    <input type="range" id="pzSlingPower" min="3" max="14" step="0.5" value="8">
+                    <span class="val" id="pzSlingPowerVal">8.0</span>
+                </span>
+                <button id="pzSlingReset">↻ Reset</button>
+            </div>
+            <div id="pzSlingHud" class="info-display" style="font-family:monospace;">drag the ball back &amp; release…</div>
+
+            <details>
+                <summary>📝 Click to see: release applies an impulse</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">const pointer = pzInstallPointer(canvas);
+
+function update(dt) {
+  if (pointer.justReleased) {
+    // pull vector = anchor − release point; launch the OPPOSITE way.
+    const pull = anchor.subtract(pointer.releaseEnd); // subtract → NEW vector
+    const launchVel = pull.copy().multiply(POWER).limit(MAX_SPEED);
+    ball.vel.set(launchVel.x, launchVel.y);           // impulse on a fresh ball
+    flying = true;
+  }
+  if (flying) { world.step(dt); pzResolveStatic(ball, arena); }
+  pointer.endFrame();
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const pointer = pzInstallPointer(canvas);
+
+function update(dt: number): void {
+  if (pointer.justReleased) {
+    const pull = anchor.subtract(pointer.releaseEnd!);   // NEW vector
+    const launchVel = pull.copy().multiply(POWER).limit(MAX_SPEED);
+    ball.vel.set(launchVel.x, launchVel.y);
+    flying = true;
+  }
+  if (flying) { world.step(dt); pzResolveStatic(ball, arena); }
+  pointer.endFrame();
+}</code></pre>
+                </div>
+            </details>
+            <div class="key-point">
+                <strong>Impulse vs force.</strong> Gravity is a <em>force</em> — it nudges velocity a little
+                every step. A launch is an <em>impulse</em> — it sets velocity all at once. Same units in the
+                end (both change velocity), but one is spread over time and the other is instantaneous. We clamp
+                launch speed with <code>limit()</code> so a fast shot still steps less than its own radius and
+                can't tunnel through a thin wall (high-speed tunneling is a Simulations-tier topic).
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- TRAJECTORY PREDICTION -->
+        <!-- ============================================ -->
+        <div id="predict" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🔮 Trajectory prediction — running the sim ahead</h2>
+            <p>
+                Angry Birds shows you a dotted arc before you fire. There's no secret formula behind it — it's
+                the <strong>exact same physics, simulated forward</strong> on a throwaway copy of the ball.
+                Drag to aim and the dots trace where it would go. Because both use <code>world.step</code>, the
+                preview and the real flight agree to the pixel.
+            </p>
+            <div class="diagram">
+                <canvas id="pzPredictCanvas" class="pz-canvas" width="640" height="360"></canvas>
+            </div>
+            <div class="controls">
+                <span class="pz-slider">preview steps
+                    <input type="range" id="pzPredictSteps" min="20" max="160" step="10" value="90">
+                    <span class="val" id="pzPredictStepsVal">90</span>
+                </span>
+                <label class="pz-slider"><input type="checkbox" id="pzPredictShow" checked> show preview</label>
+                <button id="pzPredictReset">↻ Reset</button>
+            </div>
+            <div id="pzPredictHud" class="info-display" style="font-family:monospace;">drag to aim — watch the dots…</div>
+
+            <details>
+                <summary>📝 Click to see: predict = step a copy forward and record the points</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Same integrator, run on a temporary world that holds one cloned ball.
+function predict(launchVel, steps) {
+  const ghostWorld = new PZWorld({ gravity: world.gravity.y });
+  const ghost = new PZBody(anchor.x, anchor.y, ball.radius, {
+    vx: launchVel.x, vy: launchVel.y, restitution: ball.restitution,
+  });
+  ghostWorld.add(ghost);
+  const points = [];
+  for (let i = 0; i &lt; steps; i++) {
+    ghostWorld.step(1 / 60);
+    pzResolveStatic(ghost, arena);          // bounce the preview too
+    points.push({ x: ghost.pos.x, y: ghost.pos.y });
+  }
+  return points;                            // → pzDrawDots(ctx, points)
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function predict(launchVel: Vector2D, steps: number): Point[] {
+  const ghostWorld = new PZWorld({ gravity: world.gravity.y });
+  const ghost = new PZBody(anchor.x, anchor.y, ball.radius, {
+    vx: launchVel.x, vy: launchVel.y, restitution: ball.restitution,
+  });
+  ghostWorld.add(ghost);
+  const points: Point[] = [];
+  for (let i = 0; i &lt; steps; i++) {
+    ghostWorld.step(1 / 60);
+    pzResolveStatic(ghost, arena);
+    points.push({ x: ghost.pos.x, y: ghost.pos.y });
+  }
+  return points;
+}</code></pre>
+                </div>
+            </details>
+            <div class="key-point">
+                <strong>Determinism is the whole trick.</strong> A fixed timestep means "the same inputs
+                produce the same motion, every time" — so a forward simulation is a perfect crystal ball. This
+                is the same property that lets the netcode track replay inputs and the Simulations tier prove
+                its physics is frame-rate independent.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- CIRCLE-CIRCLE COLLISION -->
+        <!-- ============================================ -->
+        <div id="collide" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🎱 Circle–circle collision — trading momentum</h2>
+            <p>
+                Until now balls ignored each other. Here a launched ball cracks into a stationary rack like a
+                pool break. When two circles overlap we do two things: <strong>push them apart</strong> so they
+                stop interpenetrating, then <strong>exchange momentum along the line between their centres</strong>.
+                Heavier balls shove lighter ones, not the reverse. Drag to launch the cyan cue ball.
+            </p>
+            <div class="diagram">
+                <canvas id="pzCollideCanvas" class="pz-canvas" width="640" height="360"></canvas>
+            </div>
+            <div class="controls">
+                <span class="pz-slider">restitution
+                    <input type="range" id="pzCollideE" min="0" max="1" step="0.05" value="0.85">
+                    <span class="val" id="pzCollideEVal">0.85</span>
+                </span>
+                <button id="pzCollideReset">↻ Re-rack</button>
+            </div>
+            <div id="pzCollideHud" class="info-display" style="font-family:monospace;">drag the cyan ball to break the rack…</div>
+
+            <details>
+                <summary>📝 Click to see: separate, then impulse along the normal</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">function pzCollideCircles(a, b) {
+  const delta = b.pos.subtract(a.pos);            // NEW vector, a → b
+  const dist = delta.length();
+  const minDist = a.radius + b.radius;
+  if (dist === 0 || dist &gt;= minDist) return;      // not touching
+  const n = delta.copy().divide(dist);            // unit normal (copy → safe)
+  const invSum = a.invMass + b.invMass;
+  if (invSum === 0) return;
+
+  // 1) positional correction — push apart, split by inverse mass
+  const overlap = minDist - dist;
+  a.pos.add(n.copy().multiply(-overlap * a.invMass / invSum));
+  b.pos.add(n.copy().multiply( overlap * b.invMass / invSum));
+
+  // 2) impulse — only if they're approaching
+  const relVel = b.vel.subtract(a.vel);           // NEW vector
+  const vn = relVel.dot(n);
+  if (vn &gt; 0) return;                             // already separating
+  const e = Math.min(a.restitution, b.restitution);
+  const j = -(1 + e) * vn / invSum;               // impulse magnitude
+  const imp = n.copy().multiply(j);
+  a.vel.add(imp.copy().multiply(-a.invMass));     // lighter ball moves more
+  b.vel.add(imp.copy().multiply( b.invMass));
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function pzCollideCircles(a: PZBody, b: PZBody): void {
+  const delta = b.pos.subtract(a.pos);
+  const dist = delta.length();
+  const minDist = a.radius + b.radius;
+  if (dist === 0 || dist &gt;= minDist) return;
+  const n = delta.copy().divide(dist);
+  const invSum = a.invMass + b.invMass;
+  if (invSum === 0) return;
+
+  const overlap = minDist - dist;
+  a.pos.add(n.copy().multiply(-overlap * a.invMass / invSum));
+  b.pos.add(n.copy().multiply( overlap * b.invMass / invSum));
+
+  const relVel = b.vel.subtract(a.vel);
+  const vn = relVel.dot(n);
+  if (vn &gt; 0) return;
+  const e = Math.min(a.restitution, b.restitution);
+  const j = -(1 + e) * vn / invSum;
+  const imp = n.copy().multiply(j);
+  a.vel.add(imp.copy().multiply(-a.invMass));
+  b.vel.add(imp.copy().multiply( b.invMass));
+}</code></pre>
+                </div>
+            </details>
+            <div class="key-point">
+                <strong>Inverse mass is the unifier.</strong> By dividing impulses by mass (really, multiplying
+                by <code>1/m</code>), a static body — modelled as <em>infinite</em> mass, so <code>1/m = 0</code>
+                — simply never moves. The same two lines handle "ball hits ball" and "ball hits wall" with no
+                special cases. This impulse is exactly what the Advanced tier extends with rotation.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- MINI-PROJECT -->
+        <!-- ============================================ -->
+        <div id="mini-project" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🎮 Mini-Project: "Knock-Down"</h2>
+            <p>
+                Everything at once. A slingshot (drag-to-aim + preview), an arena with restitution, and a stack
+                of red pins balanced on a ledge — all colliding through the same impulse code. <strong>Knock
+                every pin off the ledge into the gold zone</strong> below, with three shots. Heavy shots scatter
+                the stack; a clever bank shot off a wall can clean up a straggler.
+            </p>
+            <div class="diagram">
+                <canvas id="pzKnockCanvas" class="pz-canvas" width="640" height="360"></canvas>
+            </div>
+            <div class="controls">
+                <button id="pzKnockReset">↻ New rack</button>
+            </div>
+            <div id="pzKnockHud" class="info-display" style="font-family:monospace;">drag the ball to aim — 3 shots…</div>
+
+            <details>
+                <summary>📝 Click to see: the whole Beginner game in one update()</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">function update(dt) {
+  // 1. fire on release (if shots remain)
+  if (pointer.justReleased &amp;&amp; shots &gt; 0 &amp;&amp; !ball.flying) {
+    const pull = anchor.subtract(pointer.releaseEnd);
+    const v = pull.copy().multiply(POWER).limit(MAX);
+    ball.vel.set(v.x, v.y); ball.flying = true; shots--;
+  }
+
+  // 2. one physics step, then ALL collisions: walls + every body pair
+  world.step(dt);
+  for (const b of world.bodies) pzResolveStatic(b, arena);
+  for (let i = 0; i &lt; world.bodies.length; i++)
+    for (let j = i + 1; j &lt; world.bodies.length; j++)
+      pzCollideCircles(world.bodies[i], world.bodies[j]);
+
+  // 3. win = every pin has fallen below the ledge into the zone
+  won = pins.every((p) =&gt; p.pos.y &gt; ledgeY + 30);
+  pointer.endFrame();
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function update(dt: number): void {
+  if (pointer.justReleased &amp;&amp; shots &gt; 0 &amp;&amp; !ball.flying) {
+    const pull = anchor.subtract(pointer.releaseEnd!);
+    const v = pull.copy().multiply(POWER).limit(MAX);
+    ball.vel.set(v.x, v.y); ball.flying = true; shots--;
+  }
+  world.step(dt);
+  for (const b of world.bodies) pzResolveStatic(b, arena);
+  for (let i = 0; i &lt; world.bodies.length; i++)
+    for (let j = i + 1; j &lt; world.bodies.length; j++)
+      pzCollideCircles(world.bodies[i], world.bodies[j]);
+  won = pins.every((p) =&gt; p.pos.y &gt; ledgeY + 30);
+  pointer.endFrame();
+}</code></pre>
+                </div>
+            </details>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- RECAP / NEXT -->
+        <!-- ============================================ -->
+        <div class="recap">
+            <h2>✅ Recap — what you built</h2>
+            <ul>
+                <li><strong>The physics World</strong> — <code>PZWorld.step</code> integrates every body with semi-implicit Euler on a fixed timestep.</li>
+                <li><strong>Restitution bounces</strong> — reflect the velocity along the wall normal, scaled by <code>e</code>.</li>
+                <li><strong>The slingshot</strong> — a drag becomes an impulse: <code>v += J/m</code>, clamped so it can't tunnel.</li>
+                <li><strong>Trajectory prediction</strong> — step a throwaway copy of the ball forward; determinism makes it exact.</li>
+                <li><strong>Circle–circle collision</strong> — separate, then impulse along the normal, weighted by inverse mass.</li>
+                <li><strong>"Knock-Down"</strong> — a complete slingshot puzzle on the same world + the same two collision routines.</li>
+            </ul>
+            <div class="key-point">
+                <strong>Next up — <span class="level-indicator level-intermediate">INTERMEDIATE</span> "Ropes &amp; Chains":</strong>
+                our bodies fly free; the next tier ties them together. We switch to <em>position-based</em>
+                (Verlet) physics, build a rope out of distance constraints, pin it to anchors — and add the
+                genre's signature verb: cutting it at the right moment to swing a payload home (Cut the Rope).
+                <em>(Coming next commit.)</em>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scroll to Top Button -->
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <!-- Dependencies, then the engine, then this tier's demos. Order matters:
+         utils.js (Vector2D / clearCanvas / clamp) and the engine globals must
+         exist before beginner-demos.js runs. -->
+    <script src="../shared/utils.js"></script>
+    <script src="../shared/code-tabs.js"></script>
+    <script src="engine/world.js"></script>
+    <script src="engine/loop.js"></script>
+    <script src="engine/render.js"></script>
+    <script src="beginner-demos.js"></script>
+</body>
+</html>

@@ -102,6 +102,31 @@ inline rather than loading the Advanced/Expert demos files, and teaches its four
 performance systems (culling, `ParticlePool`, `SpatialGrid`, `ChunkCache`) as new
 inline lessons. **The platformer track is complete — 5 tiers, 28 demos, 5 engine modules.**
 
+`physics-puzzle/engine/` is the **fourth** instance of the per-track helper-folder
+pattern, scaffolded the same way (names on `window`, `pz`/`PZ`-prefixed, pre-checked
+vs `shared/utils.js`, and deliberately reusing utils' `Vector2D` rather than
+rebuilding vectors). It splits the core three ways by concern: `world.js`
+(`PZWorld`/`PZBody`) is a **pure integrator** — gravity + semi-implicit Euler only;
+`loop.js` (`pzLoop` fixed-timestep accumulator, a sibling of `pfLoop`, +
+`pzInstallPointer` for drag/touch input); `render.js` (`PZ` palette +
+`pzDrawBody`/`pzDrawArena`/`pzDrawDots`). The deliberate design choice mirrors the
+platformer's "one shared primitive, lessons on top": collision is **not** in the
+engine — the Beginner tier teaches it inline in `beginner-demos.js` as three
+top-level (console-testable) routines `pzResolveStatic` (circle-vs-arena),
+`pzResolveBlock` (circle-vs-AABB) and `pzCollideCircles` (impulse along the normal,
+inverse-mass weighted). Those get **promoted** to a future `engine/collide.js` only
+when the Intermediate tier becomes their 2nd consumer (a *move*); the Intermediate
+Verlet `PZConstraint` and Advanced `PZJoint` will likewise land in
+`engine/constraints.js` on their 2nd consumer. Two track-specific footguns are
+load-bearing here: (1) `Vector2D` **mutates in place** (`add`/`multiply`/`divide`/
+`normalize`/`limit` change `this`; only `subtract`/`copy` return new), so all engine
+maths `.copy()`s a shared vector before mutating — corrupting the shared `gravity`
+vector is the classic bug this avoids; (2) launch speed is clamped so a fast shot
+still steps less than its radius, honouring the per-step resolver's sub-tile
+contract (high-speed tunneling is a deferred Simulations topic). Demos are
+pointer-driven, so (like platformer/roguelike) they omit `data-demo-id`. **Status:
+scaffold + Beginner shipped (6 demos, 3 engine modules); 4 tiers to come.**
+
 **Why tiers are separate files:** content is split beginner → intermediate →
 expert → raymarching → stylization → distortion → advanced → simulations so each
 file stays editable without hitting length limits, and the per-track

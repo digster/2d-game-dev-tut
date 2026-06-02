@@ -1297,3 +1297,22 @@ nav; drop the last "(coming soon)" marker; mark the track COMPLETE in indexes +
 README + ARCHITECTURE. Console-test the new perf systems headlessly, verify
 console-clean on both expert (post-camera-move) and simulations pages before the
 commit message.
+
+# 2026-06-01 — New track: Physics Puzzle — scaffold + Beginner tier
+
+Plan a new **Physics Puzzle track** (Angry Birds / Cut the Rope / World of Goo style),
+prompted by a screenshot proposing a tiered physics-puzzle arc — "Take inspiration from
+this to create a plan but do not copy it as is. Add and change whatever is required to
+make it a comprehensive and a complete game track." Confirmed via AskUserQuestion:
+scaffold + Beginner first then one tier per commit; grand capstone named **"Rube"**.
+Remap the screenshot's order into the repo's Beginner→Intermediate→Advanced→Expert→
+Simulations and expand it. This pass: ship `physics-puzzle/` with a 3-module engine core
+(`world.js` = `PZWorld` integrator + `PZBody`; `loop.js` = `pzLoop` + `pzInstallPointer`;
+`render.js` = `PZ` palette + draw helpers; all `pz`/`PZ`-prefixed, reusing utils
+`Vector2D`), the landing page with a scaffold self-check, and the full Beginner tier
+"Launch & Land" (6 demos: world/gravity, restitution bounce, slingshot impulse,
+trajectory prediction, circle–circle momentum, capstone "Knock-Down"). Collision taught
+inline (`pzResolveStatic`/`pzResolveBlock`/`pzCollideCircles`) for later promotion to
+`engine/collide.js`. Register in root index (nav + nested TOC, later tiers "coming
+soon"), update README + ARCHITECTURE. Verify console-clean + unit-test the collision math
+headlessly + script a slingshot drag on the capstone before the commit message.

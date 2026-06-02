@@ -467,6 +467,41 @@ per-tier file structure mirroring the Fundamentals layout.
   keyboard/canvas-driven so (like roguelike/netcode) they omit `data-demo-id` to
   opt out of the Export button for now.
 
+- `physics-puzzle/` — **in progress — scaffold + Beginner tier shipped (6 demos).**
+  Build the physics behind the genre's classics — Angry Birds (slingshot), Cut the
+  Rope (ropes you sever), World of Goo (contraptions) — from one falling circle up
+  to a chain-reaction puzzle game. This is the **applied home** for the repo's
+  homeless physics content (`simulation.html` / `simulation-v2.html`'s verlet,
+  springs, rigid bodies, SAT, SPH), re-taught puzzle-first. The screenshots that
+  prompted the track are inspiration only; the tiers are remapped into the repo's
+  own difficulty order and expanded. **Through-line:** the track teaches *two
+  families* of 2D physics in one world — position-based **Verlet** (ropes, soft
+  bodies) and velocity/**impulse**-based rigid bodies — bridged in the grand
+  capstone. **Tier arc:** Beginner (Launch & Land — the World, slingshot, bounces,
+  circle collisions), Intermediate (Ropes & Chains — Verlet + constraints + the
+  cut), Advanced (Rigid Bodies & Joints — rotation, SAT, friction, breakable
+  joints), Expert (Destruction & Debris — impact thresholds, Voronoi fracture,
+  pooled debris, juice), Simulations (Soft Bodies, Ragdolls & Fluids — broadphase,
+  sleeping, SPH + buoyancy, and the grand capstone **"Rube"**). The **scaffold**
+  shipped three engine-core modules in `physics-puzzle/engine/` (names on `window`,
+  `pz`/`PZ`-prefixed, pre-checked vs `shared/utils.js`, reusing its `Vector2D`):
+  `world.js` (`PZWorld` integrator + `PZBody` circle body — gravity + semi-implicit
+  Euler; collision is taught on top, not hidden), `loop.js` (`pzLoop`
+  fixed-timestep accumulator + `pzInstallPointer` drag/touch input with pointer
+  capture & correct canvas-local coords), and `render.js` (`PZ` palette +
+  `pzDrawBody`/`pzDrawArena`/`pzDrawDots`). **Beginner tier ("Launch & Land", 6
+  demos):** the World & gravity (falling ball, fading trail shows acceleration),
+  walls/restitution (reflect-and-attenuate bounces), the slingshot (drag → impulse,
+  clamped against tunneling), trajectory prediction (steps a throwaway clone — exact
+  because the timestep is fixed), circle–circle momentum exchange (inverse-mass
+  impulse), and the capstone **"Knock-Down"** (slingshot a 3-shot budget to knock a
+  row of pins off a ledge — every mechanic on one world). The tier's three collision
+  routines (`pzResolveStatic` circle-vs-arena, `pzResolveBlock` circle-vs-AABB,
+  `pzCollideCircles`) are taught **inline** in `beginner-demos.js`, to be promoted to
+  `engine/collide.js` once the Intermediate tier is their 2nd consumer. Demos are
+  pointer/canvas-driven so (like platformer/roguelike) they omit `data-demo-id` to
+  opt out of the Export button for now.
+
 ## Shared assets
 
 All pages load CSS and JS from `shared/`:
