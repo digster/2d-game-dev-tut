@@ -467,7 +467,7 @@ per-tier file structure mirroring the Fundamentals layout.
   keyboard/canvas-driven so (like roguelike/netcode) they omit `data-demo-id` to
   opt out of the Export button for now.
 
-- `physics-puzzle/` — **in progress — scaffold + Beginner tier shipped (6 demos).**
+- `physics-puzzle/` — **in progress — scaffold + Beginner + Intermediate shipped (12 demos).**
   Build the physics behind the genre's classics — Angry Birds (slingshot), Cut the
   Rope (ropes you sever), World of Goo (contraptions) — from one falling circle up
   to a chain-reaction puzzle game. This is the **applied home** for the repo's
@@ -498,9 +498,20 @@ per-tier file structure mirroring the Fundamentals layout.
   row of pins off a ledge — every mechanic on one world). The tier's three collision
   routines (`pzResolveStatic` circle-vs-arena, `pzResolveBlock` circle-vs-AABB,
   `pzCollideCircles`) are taught **inline** in `beginner-demos.js`, to be promoted to
-  `engine/collide.js` once the Intermediate tier is their 2nd consumer. Demos are
-  pointer/canvas-driven so (like platformer/roguelike) they omit `data-demo-id` to
-  opt out of the Export button for now.
+  `engine/collide.js` when the **Advanced** tier (the genuine 2nd `PZBody` consumer)
+  reuses them. **Intermediate tier ("Ropes & Chains", 6 demos)** switches to the
+  *other* physics family — position-based **Verlet** — taught entirely inline in
+  `intermediate-demos.js`: Verlet vs Euler (store the previous position; velocity is
+  the implicit `pos − prev`), the distance constraint (`PZConstraint.solve` = one
+  nudge to rest length), a rope (`pzStepRope` = integrate then relax K times;
+  iterations = stiffness), swinging (Verlet conserves the arc — momentum is release
+  timing), the cut (`pzCutBlade`/`pzClickCut` flip a `broken` flag via
+  `lineIntersection`), and the capstone **"Deliver"** (drag to build a swing, cut to
+  fling a candy over a shelf into the goal; payload-vs-wall is Verlet depenetration,
+  no velocity to reflect). `PZVerletPoint`/`PZConstraint` stay inline here, to be
+  promoted to `engine/constraints.js` when the Simulations tier (soft bodies /
+  ragdolls) reuses them. Demos are pointer/canvas-driven so (like platformer/
+  roguelike) they omit `data-demo-id` to opt out of the Export button for now.
 
 ## Shared assets
 

@@ -1316,3 +1316,20 @@ inline (`pzResolveStatic`/`pzResolveBlock`/`pzCollideCircles`) for later promoti
 `engine/collide.js`. Register in root index (nav + nested TOC, later tiers "coming
 soon"), update README + ARCHITECTURE. Verify console-clean + unit-test the collision math
 headlessly + script a slingshot drag on the capstone before the commit message.
+
+# 2026-06-01 (pt.2) — Physics Puzzle: Intermediate tier "Ropes & Chains"
+
+"Okay, work on the next iteration." — the Intermediate tier (Cut the Rope). Build it
+pure **Verlet** (position-based): ship `physics-puzzle/intermediate.html` +
+`intermediate-demos.js`, 6 demos — Verlet vs Euler, the distance constraint, building a
+rope (iterations = stiffness), swinging for momentum, the cut (swipe/click severs a
+constraint via `lineIntersection`), and the capstone "Deliver" (swing + cut a candy over
+a shelf into the goal; Verlet payload-vs-wall = depenetration). Teach `PZVerletPoint`/
+`PZConstraint` inline (promote to engine/constraints.js when Simulations reuses). Decision
+made during build: Intermediate does NOT consume the Beginner `pzResolveStatic`, so that
+resolver's promotion to engine/collide.js slips to Advanced (the real 2nd PZBody
+consumer) — fix the forward-looking note in README + ARCHITECTURE. Flip the landing
+Intermediate card to Ready + nav; link it from beginner.html (drop "coming next commit");
+promote the root-index TOC sublink from "(coming soon)" to a real link. Verify
+console-clean, unit-test the Verlet math headlessly, and script an end-to-end rope-cut on
+the cut demo before the commit message.

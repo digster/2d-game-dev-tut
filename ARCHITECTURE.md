@@ -115,17 +115,25 @@ engine — the Beginner tier teaches it inline in `beginner-demos.js` as three
 top-level (console-testable) routines `pzResolveStatic` (circle-vs-arena),
 `pzResolveBlock` (circle-vs-AABB) and `pzCollideCircles` (impulse along the normal,
 inverse-mass weighted). Those get **promoted** to a future `engine/collide.js` only
-when the Intermediate tier becomes their 2nd consumer (a *move*); the Intermediate
-Verlet `PZConstraint` and Advanced `PZJoint` will likewise land in
-`engine/constraints.js` on their 2nd consumer. Two track-specific footguns are
-load-bearing here: (1) `Vector2D` **mutates in place** (`add`/`multiply`/`divide`/
-`normalize`/`limit` change `this`; only `subtract`/`copy` return new), so all engine
-maths `.copy()`s a shared vector before mutating — corrupting the shared `gravity`
-vector is the classic bug this avoids; (2) launch speed is clamped so a fast shot
-still steps less than its radius, honouring the per-step resolver's sub-tile
-contract (high-speed tunneling is a deferred Simulations topic). Demos are
-pointer-driven, so (like platformer/roguelike) they omit `data-demo-id`. **Status:
-scaffold + Beginner shipped (6 demos, 3 engine modules); 4 tiers to come.**
+when the **Advanced** tier (the genuine 2nd `PZBody` consumer) reuses them (a *move*).
+The **Intermediate** tier deliberately does NOT consume them: it teaches the *other*
+family of 2D physics — **position-based Verlet** — inline in `intermediate-demos.js`
+(`PZVerletPoint`/`PZConstraint`/`pzStepRope`, the cut via `pzCutBlade`/`pzClickCut` +
+`lineIntersection`, and Verlet payload-vs-wall as plain `pos`-depenetration, since a
+Verlet point has no velocity to reflect). Those Verlet classes stay inline until the
+Simulations tier (soft bodies / ragdolls) becomes their 2nd consumer, then promote to
+`engine/constraints.js` (alongside the Advanced `PZJoint`). This is the cleanest read
+of the "promote on the 2nd consumer" rule — a contrived `PZBody` payload in
+Intermediate would have forced an early promotion; keeping Intermediate pure Verlet
+keeps each promotion honest. Two track-specific footguns are load-bearing here: (1)
+`Vector2D` **mutates in place** (`add`/`multiply`/`divide`/`normalize`/`limit` change
+`this`; only `subtract`/`copy` return new), so all engine maths `.copy()`s a shared
+vector before mutating — corrupting the shared `gravity` vector is the classic bug
+this avoids; (2) launch speed is clamped so a fast shot still steps less than its
+radius, honouring the per-step resolver's sub-tile contract (high-speed tunneling is a
+deferred Simulations topic). Demos are pointer-driven, so (like platformer/roguelike)
+they omit `data-demo-id`. **Status: scaffold + Beginner + Intermediate shipped (12
+demos, 3 engine modules); 3 tiers to come.**
 
 **Why tiers are separate files:** content is split beginner → intermediate →
 expert → raymarching → stylization → distortion → advanced → simulations so each

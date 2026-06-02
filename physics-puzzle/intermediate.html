@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Intermediate — Physics Puzzle Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+    <style>
+        canvas.pz-canvas { cursor: crosshair; outline: none; background: #0d1117; border-radius: 6px; touch-action: none; }
+        .pz-slider { display: inline-flex; align-items: center; gap: 8px; color: #c9d1d9; font-size: 0.92em; }
+        .pz-slider input[type="range"] { width: 130px; }
+        .pz-slider .val { color: #4fc3f7; font-family: monospace; min-width: 2.5em; display: inline-block; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🪢 Intermediate — Ropes &amp; Chains</h1>
+        <p class="subtitle">Cut the Rope, from scratch. We switch from velocity physics to <em>position-based</em> Verlet, build a rope out of distance constraints, learn to swing it for momentum, and add the genre's one essential verb: the cut.</p>
+
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="beginner.html" class="nav-button">← Beginner</a>
+            <a href="intermediate.html" class="nav-button active">Intermediate</a>
+        </div>
+
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#intro">Two families of physics — why ropes want Verlet</a></li>
+                <li><a href="#verlet">Verlet vs Euler — store the previous position</a></li>
+                <li><a href="#constraint">The distance constraint — nudge to rest length</a></li>
+                <li><a href="#rope">Building a rope — iterations are stiffness</a></li>
+                <li><a href="#swing">Swinging &amp; momentum — timing is everything</a></li>
+                <li><a href="#cut">The cut — sever a constraint</a></li>
+                <li><a href="#mini-project">Mini-Project: "Deliver"</a></li>
+            </ul>
+        </div>
+
+        <!-- INTRO -->
+        <div id="intro" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🧬 Two families of physics</h2>
+            <p>
+                The Beginner tier stored a <strong>velocity</strong> on every body and changed it with forces
+                and impulses. That's the <em>impulse / velocity-based</em> family, and it's perfect for things
+                that fly and bounce. But it's clumsy for a rope: a rope is a hard rule — "these beads stay a
+                fixed distance apart" — and chasing that rule with forces makes springs that wobble.
+            </p>
+            <p>
+                So we switch families. <strong>Verlet integration</strong> stores each point's
+                <em>previous position</em> instead of a velocity; the velocity is the implicit gap between
+                where a point is and where it just was. The payoff is enormous: a constraint becomes a single
+                line — <em>"if these two points drifted apart, nudge them back."</em> No springs, no tuning.
+            </p>
+            <div class="key-point">
+                <strong>💡 Both families live in one world.</strong> Ropes and soft bodies are Verlet; crates
+                and cannonballs are impulse-based. They cooperate in the grand capstone (the candy you cut
+                here will land on rigid bodies later). For now, everything on this page is Verlet.
+            </div>
+            <div class="concept-box">
+                <h4>🧰 What we build this tier (all inline in <code>intermediate-demos.js</code>)</h4>
+                <ul>
+                    <li><code>PZVerletPoint</code> — a point with <code>pos</code> + <code>prev</code>; velocity is implicit.</li>
+                    <li><code>PZConstraint</code> — a distance rule between two points; <code>solve()</code> nudges them to rest length.</li>
+                    <li><code>pzStepRope</code> — integrate every point, then relax every constraint K times.</li>
+                    <li><code>pzCutBlade</code> / <code>pzClickCut</code> — sever a constraint with a swipe or a click (uses <code>lineIntersection</code> from the shared utils).</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- VERLET -->
+        <div id="verlet" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>↩️ Verlet vs Euler — store the previous position</h2>
+            <p>
+                Two particles fall under the same gravity. The red one is <strong>Euler</strong> — it keeps a
+                velocity <code>(vx, vy)</code>. The cyan one is <strong>Verlet</strong> — it keeps its
+                <em>previous position</em> (the faint ghost), and its velocity is just <code>pos − prev</code>.
+                They move identically. Hit <em>Gust</em>: Euler adds to its velocity variable, Verlet shifts
+                its previous position — same result, but Verlet never names a velocity.
+            </p>
+            <div class="diagram">
+                <canvas id="pzVerletCanvas" class="pz-canvas" width="640" height="300"></canvas>
+            </div>
+            <div class="controls">
+                <button id="pzVerletGust">💨 Gust →</button>
+                <button id="pzVerletReset">↻ Reset</button>
+            </div>
+            <div id="pzVerletHud" class="info-display" style="font-family:monospace;">both falling…</div>
+
+            <details>
+                <summary>📝 Click to see: the same step, two ways</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// EULER — store velocity, change it with acceleration:
+vy += g * dt;        pos.x += vx * dt;  pos.y += vy * dt;
+
+// VERLET — store the previous position; velocity is implicit:
+const vx = pos.x - prev.x;            // = velocity · dt, "for free"
+const vy = pos.y - prev.y;
+prev.x = pos.x;  prev.y = pos.y;      // remember where we were
+pos.x += vx;                          // carry the motion forward...
+pos.y += vy + g * dt * dt;            // ...and add gravity as a·dt²</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// integrate one Verlet point (no velocity field anywhere):
+integrate(gx: number, gy: number, dt: number, damping: number): void {
+  if (this.pinned) return;
+  const vx = (this.pos.x - this.prev.x) * damping;  // implicit velocity·dt
+  const vy = (this.pos.y - this.prev.y) * damping;
+  this.prev.x = this.pos.x;  this.prev.y = this.pos.y;
+  this.pos.x += vx + gx * dt * dt;
+  this.pos.y += vy + gy * dt * dt;
+}</code></pre>
+                </div>
+            </details>
+            <div class="key-point">
+                <strong>Why this matters for ropes:</strong> because velocity is implicit, you can just
+                <em>move a point</em> and its velocity updates itself. Constraints do exactly that — move points
+                to satisfy a distance — so they cost nothing extra. That's the whole reason ropes use Verlet.
+            </div>
+        </div>
+
+        <!-- CONSTRAINT -->
+        <div id="constraint" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>📏 The distance constraint — nudge to rest length</h2>
+            <p>
+                One peg, one bob, one rule between them: <em>stay 130 px apart</em>. Drag the peg and the bob
+                trails it at a fixed distance; drag the bob aside and let it swing. Solving the constraint is a
+                single nudge — measure how far off the rest length they are, and move each point half of that
+                error toward the other (a pinned point doesn't move, so its partner takes the whole correction).
+            </p>
+            <div class="diagram">
+                <canvas id="pzConstraintCanvas" class="pz-canvas" width="640" height="320"></canvas>
+            </div>
+            <div class="controls">
+                <button id="pzConstraintReset">↻ Reset</button>
+            </div>
+            <div id="pzConstraintHud" class="info-display" style="font-family:monospace;">drag the peg or the bob…</div>
+
+            <details>
+                <summary>📝 Click to see: solving one constraint</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">solve() {
+  const dx = b.pos.x - a.pos.x, dy = b.pos.y - a.pos.y;
+  const d  = Math.hypot(dx, dy) || 1e-6;
+  const diff = (d - this.rest) / d;          // &gt;0 stretched, &lt;0 squashed
+  // a pinned endpoint stays put, so its partner takes the full move:
+  const aMove = a.pinned ? 0 : (b.pinned ? 1 : 0.5);
+  const bMove = b.pinned ? 0 : (a.pinned ? 1 : 0.5);
+  a.pos.x += dx * diff * aMove;  a.pos.y += dy * diff * aMove;
+  b.pos.x -= dx * diff * bMove;  b.pos.y -= dy * diff * bMove;
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">solve(): void {
+  const dx = this.b.pos.x - this.a.pos.x;
+  const dy = this.b.pos.y - this.a.pos.y;
+  const d  = Math.hypot(dx, dy) || 1e-6;
+  const diff = ((d - this.rest) / d) * this.stiffness;
+  const aMove = this.a.pinned ? 0 : (this.b.pinned ? 1 : 0.5);
+  const bMove = this.b.pinned ? 0 : (this.a.pinned ? 1 : 0.5);
+  this.a.pos.x += dx * diff * aMove; this.a.pos.y += dy * diff * aMove;
+  this.b.pos.x -= dx * diff * bMove; this.b.pos.y -= dy * diff * bMove;
+}</code></pre>
+                </div>
+            </details>
+        </div>
+
+        <!-- ROPE -->
+        <div id="rope" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🪢 Building a rope — iterations are stiffness</h2>
+            <p>
+                A rope is just a <em>row</em> of those constraints, end to end, here pinned at both ends to
+                hang as a cable. One catch: solving each constraint once tugs its neighbours out of place, so a
+                single pass leaves the rope stretchy. The fix is <strong>relaxation</strong> — solve the whole
+                chain several times per step. Slide the iterations from 1 to 20 and watch the rope go from
+                rubber-band to steel. Grab any bead to yank it.
+            </p>
+            <div class="diagram">
+                <canvas id="pzRopeCanvas" class="pz-canvas" width="640" height="320"></canvas>
+            </div>
+            <div class="controls">
+                <span class="pz-slider">iterations
+                    <input type="range" id="pzRopeIters" min="1" max="20" step="1" value="2">
+                    <span class="val" id="pzRopeItersVal">2</span>
+                </span>
+                <button id="pzRopeReset">↻ Reset</button>
+            </div>
+            <div id="pzRopeHud" class="info-display" style="font-family:monospace;">drag a bead…</div>
+
+            <details>
+                <summary>📝 Click to see: one Verlet step for the whole rope</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">function pzStepRope(points, constraints, gx, gy, dt, iterations, damping) {
+  for (const p of points) p.integrate(gx, gy, dt, damping);   // move everything
+  for (let k = 0; k &lt; iterations; k++)                        // then relax the
+    for (const c of constraints) c.solve();                   // constraints K times
+}
+// build: a line of points, a constraint between each neighbour, ends pinned
+points[0].pinned = points[N - 1].pinned = true;
+for (let i = 0; i &lt; N - 1; i++)
+  constraints.push(new PZConstraint(points[i], points[i + 1]));</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function pzStepRope(points: PZVerletPoint[], constraints: PZConstraint[],
+                   gx: number, gy: number, dt: number,
+                   iterations: number, damping: number): void {
+  for (const p of points) p.integrate(gx, gy, dt, damping);
+  for (let k = 0; k &lt; iterations; k++)
+    for (const c of constraints) c.solve();
+}</code></pre>
+                </div>
+            </details>
+            <div class="key-point">
+                <strong>The classic trade-off:</strong> more iterations = stiffer and more stable, but more CPU.
+                Games pick the smallest count that looks right (often 3–8). It's the same relaxation idea the
+                rigid-body solver uses in the Advanced tier, and the soft bodies in Simulations.
+            </div>
+        </div>
+
+        <!-- SWING -->
+        <div id="swing" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🎯 Swinging &amp; momentum — timing is everything</h2>
+            <p>
+                A rope pinned at the top with a heavy bob is a pendulum. Drag the bob aside and let go — Verlet
+                keeps the swing energy almost perfectly, so the bob carries <em>momentum</em>. Try to fling it
+                through the gold ring: you can't aim it directly, you have to release at the right point in the
+                arc and let the swing do the rest. That timing <em>is</em> the puzzle in Cut the Rope.
+            </p>
+            <div class="diagram">
+                <canvas id="pzSwingCanvas" class="pz-canvas" width="640" height="320"></canvas>
+            </div>
+            <div class="controls">
+                <button id="pzSwingReset">↻ Reset</button>
+            </div>
+            <div id="pzSwingHud" class="info-display" style="font-family:monospace;">drag the bob & release…</div>
+            <div class="key-point">
+                <strong>Where does the velocity come from?</strong> While you drag, we move the bob and update
+                its <code>prev</code> each frame — so on release, <code>pos − prev</code> already holds your
+                drag velocity. The throw is free, straight out of the Verlet representation.
+            </div>
+        </div>
+
+        <!-- CUT -->
+        <div id="cut" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>✂️ The cut — sever a constraint</h2>
+            <p>
+                The signature verb. Three candies hang from ropes; <strong>swipe across a rope</strong> (or
+                click it) and that constraint is gone — the candy falls free. Cutting is almost insultingly
+                simple: a constraint has a <code>broken</code> flag, and a swipe that crosses the rope segment
+                flips it. Drop all three into the bowl.
+            </p>
+            <div class="diagram">
+                <canvas id="pzCutCanvas" class="pz-canvas" width="640" height="340"></canvas>
+            </div>
+            <div class="controls">
+                <button id="pzCutReset">↻ Reset</button>
+            </div>
+            <div id="pzCutHud" class="info-display" style="font-family:monospace;">swipe a rope to cut it…</div>
+
+            <details>
+                <summary>📝 Click to see: a cut is one flag + a segment test</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// blade = the segment the pointer swept this frame (lastPos → pos).
+// If it crosses a rope segment, break that constraint. (lineIntersection
+// is from shared/utils.js — it already returns the crossing point or null.)
+function pzCutBlade(constraints, x0, y0, x1, y1) {
+  for (const c of constraints) {
+    if (c.broken) continue;
+    if (lineIntersection({x:x0,y:y0}, {x:x1,y:y1}, c.a.pos, c.b.pos)) {
+      c.broken = true;                 // a severed constraint is just skipped
+    }
+  }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function pzCutBlade(constraints: PZConstraint[],
+                   x0: number, y0: number, x1: number, y1: number): void {
+  for (const c of constraints) {
+    if (c.broken) continue;
+    if (lineIntersection({x:x0,y:y0}, {x:x1,y:y1}, c.a.pos, c.b.pos))
+      c.broken = true;
+  }
+}
+// the solver and renderer both `if (c.broken) continue;` — that's the whole cut.</code></pre>
+                </div>
+            </details>
+        </div>
+
+        <!-- MINI-PROJECT -->
+        <div id="mini-project" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🎮 Mini-Project: "Deliver"</h2>
+            <p>
+                Everything together. A candy hangs from a rope, a shelf blocks the straight drop, and the goal
+                is off to the right. <strong>Drag the candy to build up a swing, then cut the rope at the right
+                moment</strong> so it sails over the shelf and into the goal. The candy is a Verlet point that
+                collides with the shelf and walls by simple depenetration — push it out, and its velocity
+                corrects itself.
+            </p>
+            <div class="diagram">
+                <canvas id="pzDeliverCanvas" class="pz-canvas" width="640" height="360"></canvas>
+            </div>
+            <div class="controls">
+                <button id="pzDeliverReset">↻ Reset</button>
+            </div>
+            <div id="pzDeliverHud" class="info-display" style="font-family:monospace;">drag to swing, then cut…</div>
+
+            <details>
+                <summary>📝 Click to see: Verlet payload-vs-wall is just depenetration</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// No velocity to reflect — Verlet derives it from (pos − prev), so simply
+// pushing pos out of the wall kills the inward motion automatically.
+function pzVerletBlock(p, block) {
+  const cx = clamp(p.pos.x, block.x, block.x + block.w);
+  const cy = clamp(p.pos.y, block.y, block.y + block.h);
+  const dx = p.pos.x - cx, dy = p.pos.y - cy;
+  const d2 = dx * dx + dy * dy;
+  if (d2 > p.radius * p.radius) return;        // not touching
+  const d = Math.sqrt(d2) || 1e-6;
+  p.pos.x += (dx / d) * (p.radius - d);        // push out along the normal
+  p.pos.y += (dy / d) * (p.radius - d);
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function pzVerletBlock(p: PZVerletPoint, block: Rect): void {
+  const cx = clamp(p.pos.x, block.x, block.x + block.w);
+  const cy = clamp(p.pos.y, block.y, block.y + block.h);
+  const dx = p.pos.x - cx, dy = p.pos.y - cy;
+  const d2 = dx * dx + dy * dy;
+  if (d2 > p.radius * p.radius) return;
+  const d = Math.sqrt(d2) || 1e-6;
+  p.pos.x += (dx / d) * (p.radius - d);
+  p.pos.y += (dy / d) * (p.radius - d);
+}</code></pre>
+                </div>
+            </details>
+        </div>
+
+        <!-- RECAP -->
+        <div class="recap">
+            <h2>✅ Recap — what you built</h2>
+            <ul>
+                <li><strong>Verlet integration</strong> — store the previous position; velocity is the implicit gap <code>pos − prev</code>.</li>
+                <li><strong>The distance constraint</strong> — one nudge toward rest length; a pinned point takes none of it.</li>
+                <li><strong>Ropes</strong> — a row of constraints, relaxed K times per step; iterations are stiffness.</li>
+                <li><strong>Swinging</strong> — Verlet conserves the arc's energy, so momentum is all about release timing.</li>
+                <li><strong>The cut</strong> — a <code>broken</code> flag flipped by a swipe-vs-segment test.</li>
+                <li><strong>"Deliver"</strong> — swing + cut + Verlet depenetration to land a payload in the goal.</li>
+            </ul>
+            <div class="key-point">
+                <strong>Next up — <span class="level-indicator level-advanced">ADVANCED</span> "Rigid Bodies &amp; Joints":</strong>
+                back to the velocity family, but now bodies <em>rotate</em>. Convex shapes that spin, stack and
+                topple (SAT collision + contact manifolds + friction), linked by breakable joints — the physics
+                of a World-of-Goo contraption. <em>(Coming next commit.)</em>
+            </div>
+        </div>
+    </div>
+
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <!-- Dependencies, then the engine, then this tier's demos. This tier is
+         position-based (Verlet) and teaches its rope code inline, so it loads the
+         engine core for PZ/pzLoop/pzInstallPointer but not a collision module. -->
+    <script src="../shared/utils.js"></script>
+    <script src="../shared/code-tabs.js"></script>
+    <script src="engine/world.js"></script>
+    <script src="engine/loop.js"></script>
+    <script src="engine/render.js"></script>
+    <script src="intermediate-demos.js"></script>
+</body>
+</html>
