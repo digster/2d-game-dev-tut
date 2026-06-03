@@ -1385,3 +1385,16 @@ capstone reliably winnable (slingshot a ball into the tank, smashing a brittle V
 Flip the landing Simulations card to Ready + nav; link from expert.html; root-index TOC + "all 5
 tiers"; mark the track COMPLETE in README + ARCHITECTURE. Verify physics synchronously (rAF is
 paused in preview); note the *.js cache needs a ?v= bump to refetch. Then the commit message.
+
+# 2026-06-01 (pt.6) — Fix the Grand Capstone "Rube"
+
+"There seems to be something wrong with the Grand Capstone 'Rube' project. Can you check
+once." — investigate + fix rubeDemo. Found 4 issues: (1) the win/splash check read `b.radius`
+on the slingshot ball, but it's a PZRigidBody POLYGON with no `.radius` → NaN → the win never
+fired; fixed by computing the bounding radius from the body's verts. (2) win fired in mid-air
+(tested the tank box top, not the water) → test "touches a fluid particle". (3) slingshot
+unplayable: anchor in the bottom-left corner with no room to pull + POWER too strong (shots hit
+the ceiling) → moved the anchor to (100,250), POWER 12→8, and added a dotted trajectory preview.
+(4) intro said "six shots" but code gave 5 → shots=6. Verify a comfortable aimed shot wins at
+the water (no NaN); confirm live (preview arc + Splashdown). Keep the committed simulations.html
+script tag clean (no ?v=).

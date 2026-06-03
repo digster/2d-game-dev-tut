@@ -520,8 +520,11 @@ function pzMakeRagdoll(cx, cy) {
     const W = canvas.width, H = canvas.height;
     const pointer = pzInstallPointer(canvas);
     const hud = document.getElementById('pzRubeHud');
-    const anchor = { x: 66, y: H - 60 };
-    const MAX_PULL = 150, POWER = 12;
+    // anchor sits up the left side (not jammed in the corner) so there's room to
+    // pull DOWN-LEFT for an up-right launch into the tank. POWER is gentle enough
+    // that a normal pull arcs into the tank instead of rocketing off the ceiling.
+    const anchor = { x: 100, y: 250 };
+    const MAX_PULL = 150, POWER = 8, GRAV = 1200;
     const hh = 15, hash = new PZSpatialHash(hh);
     const pool = { x: 440, y: 236, w: W - 18 - 440, h: H - 6 - 236 }; // tank on the right
     const wallTop = 292;
@@ -544,12 +547,11 @@ function pzMakeRagdoll(cx, cy) {
         const cols = Math.floor(pool.w / 12);
         for (let i = 0; i < 130; i++) parts.push({ pos: new Vector2D(pool.x + 8 + (i % cols) * 11, pool.y + 16 + Math.floor(i / cols) * 11), vel: new Vector2D(0, 0) });
         duck = { pos: new Vector2D(pool.x + pool.w / 2, pool.y + 50), vel: new Vector2D(0, 0), r: 15, invMass: 1 / 4 };
-        shots = 5; won = false; trauma = 0; dust.length = 0;
+        shots = 6; won = false; trauma = 0; dust.length = 0;
     }
     reset();
     document.getElementById('pzRubeReset').addEventListener('click', reset);
 
-    const inPool = (b) => b.pos.x > pool.x && b.pos.x < pool.x + pool.w && b.pos.y + (b.radius || 0) > pool.y;
     function update(dt) {
         if (pointer.justReleased && pointer.releaseStart && shots > 0 && !won) {
             const pull = new Vector2D(pointer.releaseEnd.x - anchor.x, pointer.releaseEnd.y - anchor.y); pull.limit(MAX_PULL);
@@ -564,14 +566,22 @@ function pzMakeRagdoll(cx, cy) {
             for (const o of bodies) { if (o !== b && !o.isStatic && o.vel.length() > 220 && pzPolyVsPoly(b, o)) { hit = true; break; } }
             if (hit) { const fr = pzFractureBody(b, 4, { kick: 60, color: '#b8743b' }); bodies.splice(i, 1, ...fr); pzDustBurst(dust, b.pos.x, b.pos.y, 12, '#caa'); trauma = Math.min(1, trauma + 0.5); }
         }
-        // anything that clears the wall into the pool SPLASHES (dust + a kick to the
-        // surface) and is removed — keeps the water stable. The GOAL ball wins.
+        // a body that actually REACHES THE WATER (touches a fluid particle) splashes
+        // (dust + a surface kick) and is removed — keeps the water stable. A shot
+        // doing so wins. We test against the WATER, not the tank's top edge, so the
+        // win fires on splashdown, not in mid-air above the tank.
         for (let i = bodies.length - 1; i >= 0; i--) {
             const b = bodies[i];
-            if (b.isStatic || !inPool(b)) continue;
-            pzDustBurst(dust, b.pos.x, pool.y, 14, '#9fd0f0'); trauma = Math.min(1, trauma + 0.3);
-            for (const p of parts) if (Math.abs(p.pos.x - b.pos.x) < 44 && p.pos.y < pool.y + 46) p.vel.y -= 140;
-            if (b.tag === 'shot') won = true;   // a slingshot ball reached the water
+            if (b.isStatic || b.pos.x < pool.x || b.pos.x > pool.x + pool.w) continue;
+            // a PZRigidBody has no .radius (it's a polygon) — its bounding radius is the
+            // farthest vertex from the centre. (The earlier b.radius read NaN → never won.)
+            let br = 0; for (const v of b.verts) { const d2 = v.x * v.x + v.y * v.y; if (d2 > br) br = d2; } br = Math.sqrt(br);
+            let touches = false; const reach = (br + 8) * (br + 8);
+            for (const p of parts) { const dx = p.pos.x - b.pos.x, dy = p.pos.y - b.pos.y; if (dx * dx + dy * dy < reach) { touches = true; break; } }
+            if (!touches) continue;
+            pzDustBurst(dust, b.pos.x, b.pos.y, 16, '#9fd0f0'); trauma = Math.min(1, trauma + 0.35);
+            for (const p of parts) if (Math.abs(p.pos.x - b.pos.x) < 46 && p.pos.y < b.pos.y + 30) p.vel.y -= 150;
+            if (b.tag === 'shot') won = true;
             bodies.splice(i, 1);
         }
         // fluid + the floating duck (the only body in the water)
@@ -609,6 +619,14 @@ function pzMakeRagdoll(cx, cy) {
         pzDustDraw(ctx, dust);
         if (pointer.isDown && pointer.start && shots > 0 && !won) {
             const pull = new Vector2D(pointer.pos.x - anchor.x, pointer.pos.y - anchor.y); pull.limit(MAX_PULL);
+            // dotted trajectory preview — the projectile maths sampled forward
+            const vx = -pull.x * POWER, vy = -pull.y * POWER;
+            ctx.fillStyle = PZ.trace;
+            for (let t = 0.04; t < 1.2; t += 0.05) {
+                const px = anchor.x + vx * t, py = anchor.y + vy * t + 0.5 * GRAV * t * t;
+                if (px > W - 6 || py > H - 6 || px < 6) break;
+                ctx.beginPath(); ctx.arc(px, py, 2.5, 0, Math.PI * 2); ctx.fill();
+            }
             ctx.strokeStyle = PZ.aim; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(anchor.x, anchor.y); ctx.lineTo(anchor.x + pull.x, anchor.y + pull.y); ctx.stroke();
         }
         ctx.fillStyle = PZ.anchor; ctx.beginPath(); ctx.arc(anchor.x, anchor.y, 5, 0, Math.PI * 2); ctx.fill();
