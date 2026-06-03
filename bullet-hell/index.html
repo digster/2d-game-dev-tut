@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bullet Hell / Danmaku Track - Game Dev Math Guide</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <!-- Prism kept for parity with sibling tracks; the landing page renders no
+         code, so it's a no-op here but keeps the tier pages consistent. -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+
+    <!-- Track-landing-only styles: roadmap cards. Same block the other track
+         landing pages use — kept inline so only this page pays their cost. -->
+    <style>
+        .roadmap {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-top: 25px;
+        }
+        .tier-card {
+            background-color: #252b4a;
+            border: 2px solid #2d3354;
+            border-radius: 12px;
+            padding: 22px;
+            text-decoration: none;
+            color: inherit;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+        }
+        .tier-card.active:hover {
+            transform: translateY(-3px);
+            border-color: #4fc3f7;
+            box-shadow: 0 6px 18px rgba(79, 195, 247, 0.25);
+        }
+        .tier-card.locked { opacity: 0.55; cursor: not-allowed; }
+        .tier-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+        }
+        .tier-card-title { color: #4fc3f7; font-size: 1.15em; font-weight: bold; }
+        .tier-card-status {
+            font-size: 0.75em;
+            padding: 3px 10px;
+            border-radius: 12px;
+            background-color: #1a1f3a;
+            color: #9e9e9e;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .tier-card-status.ready { background-color: #1e3a2f; color: #66bb6a; }
+        .tier-card-status.in-progress { background-color: #3d2817; color: #ffa726; }
+        .tier-card p { margin: 0; color: #c9d1d9; font-size: 0.95em; line-height: 1.5; }
+        .tier-card ul { padding-left: 20px; margin: 5px 0 0 0; color: #9e9e9e; font-size: 0.88em; }
+        .tier-card ul li { margin: 3px 0; }
+        .preview-banner {
+            background: linear-gradient(135deg, #2a1430 0%, #1a1f3a 100%);
+            border-left: 4px solid #ff5d8f;
+            padding: 24px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .preview-banner h4 { color: #ff5d8f; margin-top: 0; }
+        /* The self-check canvas is a portrait playfield, centred on a dark panel. */
+        #scaffoldCanvas { background: #070a1c; border-radius: 8px; display: block; margin: 0 auto; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌸 Bullet Hell / Danmaku</h1>
+        <p class="subtitle">End-to-end track — build a Touhou/Cave-style danmaku shooter from one ship dodging one bullet up to a complete, deterministic, replayable stage with a pooled 10,000-bullet field and a scripted multi-phase boss. Patterns are polar equations animated over time — the most math-beautiful 2D genre there is.</p>
+
+        <!-- Navigation. Tiers land iteratively — links appear here as each tier
+             ships. For now only Home + this index exist. -->
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button active">Track Index</a>
+        </div>
+
+        <!-- What we're building -->
+        <div class="section">
+            <h2>🌸 What You'll Build</h2>
+            <p>
+                The repo already teaches the <em>ingredients</em> — vectors, trigonometry,
+                <a href="../advanced.html#bezier">Bézier curves</a>,
+                <a href="../expert.html#pooling">object pooling</a>,
+                <a href="../advanced.html#spatial-hash">spatial hashing</a>,
+                <a href="../intermediate.html#particles">particles</a> — but it has
+                <strong>zero projectile management at scale</strong>. This track is that missing
+                piece: a small bullet-hell engine, built one mechanic at a time, that turns those
+                fundamentals into thousands of bullets on screen at 60&nbsp;fps.
+            </p>
+            <p>
+                Danmaku ("barrage") is the genre where a wall of enemy fire becomes a beautiful,
+                <em>readable</em> puzzle you thread your ship through. Its whole identity is one
+                idea: your visible ship is big, but the part that can actually be <strong>hit</strong>
+                is a single pixel-sized dot — and skimming bullets just past it ("grazing") is how
+                you score. We build the player, then the patterns (rings, spirals, aimed fans, rose
+                curves), then a scripted boss with phases and bombs, then make it all run at scale,
+                then add the tooling — a pattern editor and deterministic replay — and the juice.
+            </p>
+
+            <div class="key-point">
+                <strong>💡 Patterns are polar equations.</strong> A ring of bullets is just
+                <code>θ = i/n · 2π</code> turned into velocities with <code>Vector2D.fromAngle(θ)·speed</code>.
+                Spin that base angle a little each tick and you get a spiral; modulate the radius with
+                <code>cos(kθ)</code> and you get rose-curve petals. Every "advanced trig" topic suddenly
+                has a stunning visual payoff — that's why this genre is the perfect place to <em>apply</em>
+                the math the Fundamentals teach.
+            </div>
+
+            <div class="preview-banner">
+                <h4>🎬 The final game (by the end of the Simulations tier): <em>Danmaku</em></h4>
+                <ul>
+                    <li><strong>A complete mini-stage</strong> in one browser tab, asset-free Canvas2D shapes</li>
+                    <li><strong>A precise player</strong> — 8-way movement, focus/slow mode, tiny hitbox vs. graze-box</li>
+                    <li><strong>A scripted multi-phase boss</strong> — spell cards composed from rings, spirals, aimed fans &amp; sub-emitters</li>
+                    <li><strong>Bombs &amp; screen-clear</strong>, capture bonuses, graze &amp; bullet-cancel scoring</li>
+                    <li><strong>10,000 bullets at 60&nbsp;fps</strong> — pooled, Struct-of-Arrays, spatial-hash hit detection</li>
+                    <li><strong>A deterministic, replayable run</strong> — seeded RNG + fixed timestep, with a "watch replay" button — and a visual pattern editor that emits spell-card data</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- The roadmap -->
+        <div class="section">
+            <h2>🗺️ Track Roadmap</h2>
+            <p>
+                Five tiers, each in its own file so it stays focused and quick to load. Each tier ends
+                with a playable mini-project that feeds the next. Tiers land <strong>iteratively</strong>
+                — the engine core below is live now; the Beginner tier is next.
+            </p>
+
+            <div class="roadmap">
+
+                <!-- Beginner — PLANNED (lands next) -->
+                <div class="tier-card locked">
+                    <div class="tier-card-header">
+                        <span class="level-indicator level-beginner">BEGINNER</span>
+                        <span class="tier-card-status">Planned</span>
+                    </div>
+                    <div class="tier-card-title">One Ship, One Bullet</div>
+                    <p>The game loop, a precise player, and the genre's signature: a tiny hitbox vs. a larger graze-box.</p>
+                    <ul>
+                        <li>The fixed loop &amp; the vertical playfield</li>
+                        <li>8-way movement, normalized diagonals, focus/slow mode</li>
+                        <li>The bullet as a moving point — spawn, integrate, cull</li>
+                        <li>Hitbox vs. graze-box — the genre's whole identity</li>
+                        <li><em>Mini-project:</em> "First Dodge" — survive an aimed stream, graze for score</li>
+                    </ul>
+                </div>
+
+                <!-- Intermediate — PLANNED -->
+                <div class="tier-card locked">
+                    <div class="tier-card-header">
+                        <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+                        <span class="tier-card-status">Planned</span>
+                    </div>
+                    <div class="tier-card-title">Patterns Are Polar Equations</div>
+                    <p>The math-beautiful tier — emitters that turn polar equations into rings, fans, spirals, aimed shots, rose curves and curved paths.</p>
+                    <ul>
+                        <li>The emitter — separate <em>what</em> fires from <em>when</em></li>
+                        <li>Rings &amp; n-way fans; the spinning spiral; aimed shots</li>
+                        <li>Rose curves &amp; layered interference patterns</li>
+                        <li>Curved bullet paths — acceleration, turning, Bézier whips</li>
+                        <li><em>Mini-project:</em> "Pattern Stage" — an enemy cycling 3 patterns</li>
+                    </ul>
+                </div>
+
+                <!-- Advanced — PLANNED -->
+                <div class="tier-card locked">
+                    <div class="tier-card-header">
+                        <span class="level-indicator level-advanced">ADVANCED</span>
+                        <span class="tier-card-status">Planned</span>
+                    </div>
+                    <div class="tier-card-title">The Boss Fight</div>
+                    <p>Composition — a boss with HP, attack scripts ("spell cards") as data, phases, sub-emitters, and the player's bomb.</p>
+                    <ul>
+                        <li>The boss entity — HP, scripted movement, health bar</li>
+                        <li>Attack scripts / timelines; phases &amp; screen-clear transitions</li>
+                        <li>Sub-emitters &amp; composite patterns; bombs &amp; i-frames</li>
+                        <li>Spell-card capture bonus &amp; graze scoring</li>
+                        <li><em>Mini-project:</em> "Spell Card Duel" — a real 2-phase boss</li>
+                    </ul>
+                </div>
+
+                <!-- Expert — PLANNED -->
+                <div class="tier-card locked">
+                    <div class="tier-card-header">
+                        <span class="level-indicator level-expert">EXPERT</span>
+                        <span class="tier-card-status">Planned</span>
+                    </div>
+                    <div class="tier-card-title">Ten Thousand Bullets</div>
+                    <p>Performance at scale — object pooling, Struct-of-Arrays, spatial-hash hit detection, culling and render batching.</p>
+                    <ul>
+                        <li>Why naive arrays stutter (GC churn) → the zero-alloc pool</li>
+                        <li>Struct-of-Arrays bullets in flat <code>Float32Array</code>s</li>
+                        <li>Spatial hashing for hit/graze; off-screen culling</li>
+                        <li>Render batching — one pass per bullet kind</li>
+                        <li><em>Mini-project:</em> "Stress Test" — 10k+ bullets at 60&nbsp;fps</li>
+                    </ul>
+                </div>
+
+                <!-- Simulations — PLANNED -->
+                <div class="tier-card locked">
+                    <div class="tier-card-header">
+                        <span class="level-indicator level-expert">SIMULATIONS</span>
+                        <span class="tier-card-status">Planned</span>
+                    </div>
+                    <div class="tier-card-title">The Whole Game</div>
+                    <p>Tooling <em>and</em> spectacle — deterministic replay, a visual pattern editor, hitstop &amp; juice, and the grand capstone.</p>
+                    <ul>
+                        <li>Determinism — seeded RNG + fixed timestep</li>
+                        <li>Deterministic replay — record inputs, reconstruct the run</li>
+                        <li>A visual pattern editor that emits spell-card JSON</li>
+                        <li>Hitstop, screen shake, particles &amp; bullet-cancel scoring</li>
+                        <li><em>Grand capstone:</em> "Danmaku" — a full multi-phase boss rush</li>
+                    </ul>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Prerequisites from Fundamentals -->
+        <div class="section">
+            <h2>📚 Recommended Prerequisites</h2>
+            <p>
+                This track stands on topics from the <a href="../index.html">Fundamentals guide</a> —
+                each tier leans on a few. You can absolutely start cold; these just deepen the "why".
+            </p>
+
+            <div class="concept-box">
+                <h4>Before <span class="level-indicator level-beginner">BEGINNER</span></h4>
+                <ul>
+                    <li><a href="../beginner.html#vectors">Vectors</a> — a bullet's position and velocity are just 2D vectors</li>
+                    <li><a href="../beginner.html#trigonometry">Trigonometry</a> — <code>fromAngle(θ)</code> and <code>atan2</code> are the whole pattern toolkit</li>
+                    <li><a href="../expert.html#delta-time">Delta Time &amp; Fixed Timestep</a> — why patterns and replays need a constant <code>dt</code></li>
+                </ul>
+            </div>
+            <div class="concept-box">
+                <h4>For the later tiers</h4>
+                <ul>
+                    <li><a href="../advanced.html#bezier">Bézier Curves</a> — the Intermediate tier's curved bullet paths</li>
+                    <li><a href="../expert.html#pooling">Object Pooling</a> &amp; <a href="../advanced.html#spatial-hash">Spatial Hashing</a> — the Expert "10k bullets" tier applies both at production scale</li>
+                    <li><a href="../intermediate.html#particles">Particle Systems</a> — the Simulations tier's juice &amp; bullet-cancel showers</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Verify the scaffold loaded -->
+        <div class="section">
+            <h2>🔬 Scaffold Self-Check</h2>
+            <p>
+                The engine core — <code>BHField</code> + <code>BHBullet</code> (the bullet store
+                and integrator), <code>bhLoop</code> (the fixed-timestep loop),
+                <code>bhInstallKeys</code> (canvas-scoped player input) and <code>BH</code> +
+                <code>bhDrawField</code>/<code>bhDrawPlayer</code>/<code>bhDrawBullet</code> (the
+                look) — loads with this page so every tier can use it. The check below proves the
+                pieces load and that the field behaves: it integrates a bullet a known distance,
+                culls bullets that leave the playfield, and confirms two identically-seeded runs
+                land bit-for-bit identically (the determinism the Simulations replay depends on).
+            </p>
+            <div class="info-display" id="scaffoldCheck" style="font-family: monospace;">running…</div>
+            <div class="diagram" style="margin-top: 16px;">
+                <canvas id="scaffoldCanvas" width="420" height="300"></canvas>
+            </div>
+            <p style="color:#9e9e9e; font-size:0.9em;">
+                That little scene — a portrait playfield, a parallax starfield, the cyan ship with
+                its graze ring revealed, and a ring of bullets blooming outward — is the same
+                <code>BHField.step</code> integrator and <code>bhDraw*</code> helpers the whole track
+                is built on. Hit/graze collision (the Beginner tier's first lesson) is the one piece
+                deliberately <em>not</em> in the engine.
+            </p>
+        </div>
+    </div>
+
+    <!-- Scroll to Top Button -->
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <!-- Load the engine core so the self-check can exercise it. Tier pages load
+         these too; they're idempotent (class/const definitions on window). -->
+    <script src="../shared/utils.js"></script>
+    <script src="engine/loop.js"></script>
+    <script src="engine/render.js"></script>
+    <script src="engine/field.js"></script>
+
+    <script>
+        // Scroll-to-top behavior — identical to every other track landing page.
+        const scrollToTopBtn = document.getElementById('scrollToTop');
+        scrollToTopBtn.addEventListener('click', () => {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+        window.addEventListener('scroll', () => {
+            scrollToTopBtn.style.opacity = window.pageYOffset > 300 ? '1' : '0';
+        });
+        scrollToTopBtn.style.opacity = '0';
+        scrollToTopBtn.style.transition = 'opacity 0.3s';
+
+        // Scaffold self-check: prove the engine loaded and the field behaves.
+        // Doubles as the smoke test for the verification workflow (console must
+        // be clean). All synchronous — no rAF — so it runs deterministically.
+        (function () {
+            const out = document.getElementById('scaffoldCheck');
+            const lines = [];
+            try {
+                // 1) Globals present.
+                const need = {
+                    bhLoop, bhInstallKeys, bhInstallPointer, BHField, BHBullet,
+                    BH, bhDrawField, bhDrawStars, bhDrawPlayer, bhDrawBullet,
+                };
+                for (const [name, ref] of Object.entries(need)) {
+                    if (typeof ref === 'undefined') throw new Error(name + ' missing');
+                }
+                lines.push('✅ Engine globals present — BHField, BHBullet, bhLoop, bhInstallKeys, BH, bhDraw*');
+
+                const bounds = { x: 120, y: 12, w: 180, h: 276 };
+                const dt = 1 / 60;
+
+                // 2) Integration: a bullet at 120 px/s for 1 s falls exactly 120 px.
+                const fieldA = new BHField(bounds);
+                const probe = fieldA.spawn(bounds.x + bounds.w / 2, bounds.y + 4, 0, 120);
+                const startY = probe.pos.y;
+                for (let i = 0; i < 60; i++) fieldA.step(dt);
+                const fell = probe.pos.y - startY;
+                if (Math.abs(fell - 120) > 1e-3) throw new Error('integration off: fell ' + fell.toFixed(3) + 'px, expected 120');
+                lines.push('✅ BHField.step — bullet integrated exactly ' + fell.toFixed(2) + 'px in 1.0s (120 px/s)');
+
+                // 3) Culling: a fast bullet near the bottom edge leaves the field.
+                const fieldB = new BHField(bounds, { margin: 24 });
+                fieldB.spawn(bounds.x + bounds.w / 2, bounds.y + bounds.h - 4, 0, 900);
+                for (let i = 0; i < 30; i++) fieldB.step(dt);
+                if (fieldB.count !== 0) throw new Error('cull failed: ' + fieldB.count + ' bullet(s) still live off-field');
+                lines.push('✅ Off-screen culling — bullet past the field + margin was removed (count → 0)');
+
+                // 4) Determinism: two identically-built fields step bit-for-bit alike.
+                function buildRing(seedField) {
+                    const cx = bounds.x + bounds.w / 2, cy = bounds.y + 60;
+                    for (let i = 0; i < 16; i++) {
+                        const v = Vector2D.fromAngle((i / 16) * BH.TAU, 80);
+                        seedField.spawn(cx, cy, v.x, v.y, { radius: 4 });
+                    }
+                }
+                const d1 = new BHField(bounds), d2 = new BHField(bounds);
+                buildRing(d1); buildRing(d2);
+                for (let i = 0; i < 90; i++) { d1.step(dt); d2.step(dt); }
+                let maxDiff = 0;
+                for (let i = 0; i < d1.bullets.length; i++) {
+                    maxDiff = Math.max(maxDiff,
+                        Math.abs(d1.bullets[i].pos.x - d2.bullets[i].pos.x),
+                        Math.abs(d1.bullets[i].pos.y - d2.bullets[i].pos.y));
+                }
+                if (maxDiff !== 0) throw new Error('non-deterministic: runs diverged by ' + maxDiff);
+                lines.push('✅ Determinism — two seeded runs of ' + d1.bullets.length + ' bullets matched bit-for-bit (max diff 0)');
+
+                // 5) Input helper installs without throwing.
+                const keys = bhInstallKeys(document.getElementById('scaffoldCanvas'));
+                if (typeof keys.endFrame !== 'function') throw new Error('bhInstallKeys returned no API');
+                lines.push('✅ bhInstallKeys — canvas-scoped player input installed');
+
+                out.style.color = '#66bb6a';
+                out.innerHTML = lines.join('<br>');
+
+                // Render the demo scene with the real draw helpers: field panel,
+                // a starfield, a blooming bullet ring, and the ship (graze ring shown).
+                const ctx = document.getElementById('scaffoldCanvas').getContext('2d');
+                clearCanvas(ctx, ctx.canvas.width, ctx.canvas.height, BH.bg);
+                bhDrawField(ctx, bounds);
+                const stars = bhMakeStars(bounds, 60);
+                bhUpdateStars(stars, bounds, 0.5);
+                bhDrawStars(ctx, stars);
+                for (const b of d1.bullets) bhDrawBullet(ctx, b);
+                bhDrawPlayer(ctx, {
+                    pos: new Vector2D(bounds.x + bounds.w / 2, bounds.y + bounds.h - 34),
+                    radius: 3, grazeR: 16, focused: true,
+                });
+            } catch (err) {
+                out.style.color = '#ef5350';
+                out.innerHTML = '❌ ' + err.message;
+                console.error('[bullet-hell scaffold check]', err);
+            }
+        })();
+    </script>
+</body>
+</html>

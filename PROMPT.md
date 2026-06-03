@@ -1433,3 +1433,22 @@ the advancedTrig FOV bug in both synced copies (beginner-demos.js + demo-bundles
 snapped to face the cursor so the cone never gated detection; replaced with an independent sweep
 (enemy.angle += 0.01). Verified in Chromium (FOV in-cone true/out-cone false vs old both-true;
 exports regen clean; clipboard API+fallback+both-fail paths). Then the commit message.
+
+
+# 2026-06-03 (pt.3) — New track: Bullet Hell / Danmaku
+
+[two reference screenshots: "2. Bullet Hell / Shoot-'em-Up — Touhou / Cave style" and
+"3. Bullet Hell / Twin-Stick — the combat track", describing pattern math, pooled projectiles,
+spatial hash, graze & hitbox precision, juice & feedback]
+"This is one of the game tracks suggested in an earlier session. Take inspiration from it to
+create a plan, but do not copy it as is. Add and change whatever is required to make it
+comprehensive and complete."
+
+Clarifications answered during planning:
+- Genre framing → Vertical danmaku (Touhou/Cave).
+- Simulations finale → Both tooling + spectacle (pattern editor + deterministic replay +
+  hitstop/juice AND a multi-phase boss-rush capstone).
+
+Plan approved (plan file ~/.claude/plans/this-is-one-dynamic-snowglobe.md); delivery is iterative,
+one tier per pass. Pass 1 (scaffold: bullet-hell/engine/ 3 modules + track-index self-check + root
+index/README/ARCHITECTURE wiring) shipped and verified this session — see memory/2026-06-03.md pt.3.

@@ -559,6 +559,39 @@ per-tier file structure mirroring the Fundamentals layout.
   pointer/canvas-driven so (like platformer/roguelike) they omit `data-demo-id` to opt out of
   the Export button.
 
+- `bullet-hell/` — **scaffolded; tiers land iteratively (Beginner next).** Build a
+  Touhou/Cave-style **danmaku** (bullet-hell) shooter — the repo's answer to having *zero
+  projectile management at scale* — from one ship dodging one bullet up to a complete,
+  deterministic, replayable stage with a pooled 10,000-bullet field and a scripted multi-phase
+  boss. The genre's hook is that **bullet patterns are polar equations animated over time**, so
+  every "advanced trig" topic (rings, spirals, rose curves, aimed `atan2` fans, Bézier whips)
+  gets a stunning visual payoff. The reference screenshots that prompted the track are
+  inspiration only; the tiers are remapped into the repo's own difficulty order
+  (Beginner → Intermediate → **Advanced** boss-composition → **Expert** performance →
+  Simulations) and expanded. **Tier arc:** Beginner (One Ship, One Bullet — the fixed loop,
+  precise 8-way movement + focus mode, the genre-defining tiny **hitbox** vs larger
+  **graze-box**), Intermediate (Patterns Are Polar Equations — an emitter abstraction turning
+  polar math into rings/fans/spirals/aimed-shots/rose-curves/curved paths), Advanced (The Boss
+  Fight — HP, attack scripts/"spell cards" as data, phases, sub-emitters, bombs & screen-clear,
+  graze/capture scoring), Expert (Ten Thousand Bullets — object pooling, Struct-of-Arrays in
+  flat `Float32Array`s, spatial-hash hit detection, culling, render batching), Simulations
+  (The Whole Game — seeded-RNG **deterministic replay**, a visual **pattern editor** emitting
+  spell-card JSON, hitstop/screen-shake/particle juice + bullet-cancel scoring, and the grand
+  capstone **"Danmaku"** — a full multi-phase boss rush switching every system on at once). The
+  **scaffold** ships three engine-core modules in `bullet-hell/engine/` (names on `window`,
+  `bh`/`BH`-prefixed, pre-checked vs `shared/utils.js`, reusing its `Vector2D` and especially
+  `Vector2D.fromAngle` for polar bullets): `loop.js` (`bhLoop` fixed-timestep accumulator —
+  patterns and replays both need a constant `dt` — plus `bhInstallKeys` canvas-scoped player
+  input and `bhInstallPointer` for the editor), `render.js` (`BH` palette + the parallax
+  starfield, `bhDrawField`, `bhDrawPlayer` with its twin hitbox/graze boxes, and the classic
+  white-core `bhDrawBullet`), and `field.js` (`BHField` integrator + `BHBullet` — spawn, advance,
+  cull; collision is taught on top, not hidden, exactly like the Physics Puzzle's `PZWorld`).
+  Bullets carry inert `turn`/`accel` knobs the Intermediate "curved paths" lesson switches on.
+  The track index's **scaffold self-check** proves integration, off-screen culling, and
+  bit-for-bit **determinism** (the guarantee the replay tier rests on). Demos are
+  keyboard/pointer-driven so (like platformer/roguelike/physics-puzzle) they omit `data-demo-id`
+  to opt out of the Export button.
+
 ## Shared assets
 
 All pages load CSS and JS from `shared/`:

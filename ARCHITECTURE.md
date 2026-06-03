@@ -159,6 +159,44 @@ grand capstone "Rube" runs both families in one world (heavy rigid bodies are ke
 removed-on-entry to the fluid so the position-based water stays stable). **Status: the
 Physics Puzzle track is COMPLETE — 5 tiers, 30 demos, 5 engine modules.**
 
+`bullet-hell/engine/` is the **fifth** instance of the per-track helper-folder pattern (names
+on `window`, `bh`/`BH`-prefixed, pre-checked vs `shared/utils.js`, and deliberately reusing
+utils' `Vector2D` — especially `Vector2D.fromAngle(θ, len)`, since a danmaku bullet's velocity
+is a polar coordinate). It is a **vertical danmaku (Touhou/Cave) shooter** track, scaffolded the
+same way the physics-puzzle was — and split by the same "one shared primitive, lessons on top"
+principle. The **scaffold ships three modules**: `loop.js` (`bhLoop`, a fixed-timestep
+accumulator that is a near-verbatim sibling of `pzLoop`/`pfLoop` — patterns are equations in
+time and a replay must reproduce a run exactly, so both need a constant `dt`; plus
+`bhInstallKeys`, **canvas-scoped** held-key + edge-detected input, and `bhInstallPointer` for the
+editor); `render.js` (the `BH` palette + a parallax `bhMakeStars`/`bhUpdateStars`/`bhDrawStars`
+starfield, `bhDrawField`, `bhDrawPlayer`, `bhDrawBullet`); and `field.js` (`BHField` + `BHBullet`
+— a pure **bullet container/integrator**: spawn, advance positions, cull off-screen, **no
+collision**). The deliberate omission mirrors physics-puzzle keeping `PZWorld` a pure integrator:
+hit/graze detection is the *lesson* of the Beginner tier (the tiny **hitbox** vs larger
+**graze-box** is the genre's whole identity), taught inline there as `bhHitTest`/`bhGrazeTest`,
+not hidden in the engine. Two design choices worth flagging: (1) input is **canvas-scoped, not
+window-global** — a danmaku tier page stacks many keyboard demos on one scroll, so each canvas is
+made focusable (`tabIndex`) and only swallows the arrow/space keys (to stop page-scroll) **while
+focused**, clearing all held keys on `blur` so nothing sticks (the roguelike's
+`rlInstallCanvasKeys` made the same call; the platformer's window-global `pfInstallKeys` works
+only because it ships one demo per page); (2) `BHBullet` carries **inert** `turn` (angular
+velocity on the heading) and `accel` (speed change along it) knobs — zero by default so a plain
+bullet flies straight — which the Intermediate "curved paths" lesson simply switches on, the same
+way `PZBody`'s `angle`/`angularVel` sat inert until the Advanced rigid tier. The same
+**Vector2D-mutates-in-place footgun** applies (a bullet owns its `pos`/`vel`, so mutating those is
+safe, but the integrator still `.copy()`s `vel` before scaling it for the position update).
+**Planned promotions (on the genuine 2nd consumer, never on a guess):** the Intermediate
+`BHEmitter` + pattern primitives → `engine/emitter.js` when Advanced (boss) consumes them; the
+Advanced spell-card/timeline runtime → `engine/script.js` when Simulations consumes it; the Expert
+tier **upgrades `field.js` in place** to a pooled / Struct-of-Arrays store for 10k bullets (an
+upgrade-promote, like the rigid engine gaining `body.impact`); a seeded `BHRng` + spatial hash
+promote if Simulations is a true 2nd consumer (it is, for replay + dense hit-tests). The track
+`index.html` carries a **scaffold self-check** that proves integration (a bullet falls a known
+distance), off-screen culling, and **bit-for-bit determinism** across two identically-seeded runs
+— the guarantee the Simulations replay tier rests on. Demos are keyboard/pointer-driven so they
+omit `data-demo-id` (opt out of the Export button), like platformer/roguelike/physics-puzzle.
+**Status: scaffolded — engine core + track index live; tiers land iteratively (Beginner next).**
+
 **Why tiers are separate files:** content is split beginner → intermediate →
 expert → raymarching → stylization → distortion → advanced → simulations so each
 file stays editable without hitting length limits, and the per-track
