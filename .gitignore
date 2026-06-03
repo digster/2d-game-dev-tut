@@ -1,2 +1,7 @@
 # system
 .DS_Store
+
+# test/browser-tool artifacts (Playwright MCP output, exported demo test files)
+.playwright-mcp/
+exp_*.html
+verify_*.png

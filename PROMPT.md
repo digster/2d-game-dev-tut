@@ -1398,3 +1398,23 @@ the ceiling) → moved the anchor to (100,250), POWER 12→8, and added a dotted
 (4) intro said "six shots" but code gave 5 → shots=6. Verify a comfortable aimed shot wins at
 the water (no NaN); confirm live (preview arc + Splashdown). Keep the committed simulations.html
 script tag clean (no ?v=).
+
+# 2026-06-03 — Wire up the 5 missing Export buttons (beginner math track)
+
+"Why do some examples like these not have the code export option? Only identify such
+examples in the foundational guide." [screenshot of the Matrix Transformations demo] —
+then clarified: "When I said foundational, I meant the beginner's guide to game math
+track (beginner to simulation). You just looked into the beginner section." → "Okay,
+implement the plan." Surveyed the whole math track (canvas count vs data-demo-id count):
+intermediate/advanced/expert/simulation/simulation-v2 already 100% wired; only beginner
+had gaps (11 demos, 6 buttons). The Export button (shared/export-demo.js) only attaches
+to `<details data-demo-id data-deps>` AND needs the id registered in DEMO_CODE/DEMO_HTML.
+Wired all 5 gaps: vectorPlayground + advancedVector + advancedTrig + matrix on existing
+<details>, and a NEW <details> for vectorBasics (it had no code-reveal block). Authored 3
+new DEMO_CODE+DEMO_HTML bundles (advancedVector/advancedTrig/matrix) adapted from
+beginner-demos.js. Key gotcha — DEPENDENCY_BUNDLES is a hand-copied mirror of utils.js and
+had drifted: added the missing Vector2D.project/.reflect and a new matrix2d bundle
+(transformPoint returns Vector2D → vector2d must precede matrix2d in data-deps). Verified
+in real Chromium: 11 buttons, all 5 exports run with zero errors + render (incl. the new
+project/reflect and Matrix2D paths); screenshot-confirmed the matrix export. Then the
+commit message.

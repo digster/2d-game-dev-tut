@@ -2515,6 +2515,476 @@ function animate() {
 
 animate();`,
 
+    advancedVector: `
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const info = document.getElementById('info');
+let currentDemo = 'chase';
+let mousePos = new Vector2D(400, 250);
+
+let player = new Vector2D(400, 250);
+let enemy = new Vector2D(100, 100);
+let ball = new Vector2D(200, 200);
+let ballVelocity = new Vector2D(5, 3);
+
+canvas.addEventListener('mousemove', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    mousePos = new Vector2D(e.clientX - rect.left, e.clientY - rect.top);
+    player = mousePos.copy();
+});
+
+document.getElementById('btnChaseDemo').addEventListener('click', () => {
+    currentDemo = 'chase';
+    enemy = new Vector2D(100, 100);
+});
+document.getElementById('btnCrossDemo').addEventListener('click', () => {
+    currentDemo = 'cross';
+});
+document.getElementById('btnProjectDemo').addEventListener('click', () => {
+    currentDemo = 'project';
+});
+document.getElementById('btnReflectDemo').addEventListener('click', () => {
+    currentDemo = 'reflect';
+    ball = new Vector2D(200, 200);
+    ballVelocity = new Vector2D(5, 3);
+});
+
+function animateAdvancedVector() {
+    clearCanvas(ctx, canvas.width, canvas.height);
+
+    if (currentDemo === 'chase') {
+        const direction = player.subtract(enemy);
+        const distance = direction.length();
+        if (distance > 30) {
+            const movement = direction.copy().normalize().multiply(2);
+            enemy.add(movement);
+        }
+        ctx.fillStyle = '#ef5350';
+        ctx.beginPath();
+        ctx.arc(enemy.x, enemy.y, 20, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = '12px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('Enemy', enemy.x, enemy.y + 35);
+        drawVector(ctx, enemy, player, '#ffa726', 2);
+        ctx.fillStyle = '#4fc3f7';
+        ctx.beginPath();
+        ctx.arc(player.x, player.y, 20, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.fillText('Player', player.x, player.y - 25);
+        info.textContent = 'Move mouse: Enemy uses vector subtraction to chase player!';
+    }
+    else if (currentDemo === 'cross') {
+        const forward = new Vector2D(100, 0);
+        const toMouse = mousePos.subtract(new Vector2D(400, 250)).normalize();
+        const cross = forward.cross(toMouse);
+        ctx.fillStyle = '#4fc3f7';
+        ctx.beginPath();
+        ctx.arc(400, 250, 15, 0, Math.PI * 2);
+        ctx.fill();
+        const forwardEnd = new Vector2D(400 + forward.x, 250 + forward.y);
+        drawVector(ctx, new Vector2D(400, 250), forwardEnd, '#66bb6a', 3);
+        ctx.fillStyle = '#fff';
+        ctx.font = '12px Arial';
+        ctx.textAlign = 'left';
+        ctx.fillText('Forward', forwardEnd.x + 10, forwardEnd.y);
+        const targetEnd = new Vector2D(400 + toMouse.x * 100, 250 + toMouse.y * 100);
+        drawVector(ctx, new Vector2D(400, 250), targetEnd, '#ffa726', 3);
+        ctx.fillText('To Target', targetEnd.x + 10, targetEnd.y);
+        ctx.font = 'bold 20px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = cross > 0 ? '#66bb6a' : '#ef5350';
+        const turnText = cross > 0 ? '← TURN LEFT' : (cross < 0 ? 'TURN RIGHT →' : 'STRAIGHT');
+        ctx.fillText(turnText, 400, 450);
+        ctx.font = '14px monospace';
+        ctx.fillStyle = '#9e9e9e';
+        ctx.fillText('Cross Product: ' + cross.toFixed(2), 400, 470);
+        info.textContent = 'Move mouse: Cross product determines turn direction!';
+    }
+    else if (currentDemo === 'project') {
+        const wallStart = new Vector2D(150, 100);
+        const wallEnd = new Vector2D(650, 400);
+        const wallDir = wallEnd.subtract(wallStart).normalize();
+        const wallNormal = new Vector2D(-wallDir.y, wallDir.x);
+        ctx.strokeStyle = '#9e9e9e';
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.moveTo(wallStart.x, wallStart.y);
+        ctx.lineTo(wallEnd.x, wallEnd.y);
+        ctx.stroke();
+        const normalStart = new Vector2D(400, 250);
+        const normalEnd = normalStart.copy().add(wallNormal.copy().multiply(80));
+        drawVector(ctx, normalStart, normalEnd, '#ffa726', 2);
+        ctx.fillStyle = '#fff';
+        ctx.font = '12px Arial';
+        ctx.fillText('Normal', normalEnd.x + 10, normalEnd.y);
+        const movement = mousePos.subtract(normalStart);
+        const intoWall = movement.project(wallNormal);
+        const alongWall = movement.subtract(intoWall);
+        drawVector(ctx, normalStart, normalStart.copy().add(movement), '#ef5350', 2);
+        ctx.fillStyle = '#ef5350';
+        ctx.fillText('Desired', normalStart.x + movement.x / 2, normalStart.y + movement.y / 2 - 10);
+        drawVector(ctx, normalStart, normalStart.copy().add(alongWall), '#66bb6a', 3);
+        ctx.fillStyle = '#66bb6a';
+        ctx.fillText('Actual', normalStart.x + alongWall.x / 2, normalStart.y + alongWall.y / 2 + 20);
+        ctx.fillStyle = '#4fc3f7';
+        ctx.beginPath();
+        ctx.arc(normalStart.x, normalStart.y, 8, 0, Math.PI * 2);
+        ctx.fill();
+        info.textContent = 'Move mouse: Projection removes wall-collision component, allowing smooth sliding!';
+    }
+    else if (currentDemo === 'reflect') {
+        ball.add(ballVelocity);
+        if (ball.x - 15 < 0) {
+            ball.x = 15;
+            ballVelocity = ballVelocity.reflect(new Vector2D(1, 0)).multiply(0.95);
+        }
+        if (ball.x + 15 > canvas.width) {
+            ball.x = canvas.width - 15;
+            ballVelocity = ballVelocity.reflect(new Vector2D(-1, 0)).multiply(0.95);
+        }
+        if (ball.y - 15 < 0) {
+            ball.y = 15;
+            ballVelocity = ballVelocity.reflect(new Vector2D(0, 1)).multiply(0.95);
+        }
+        if (ball.y + 15 > canvas.height) {
+            ball.y = canvas.height - 15;
+            ballVelocity = ballVelocity.reflect(new Vector2D(0, -1)).multiply(0.95);
+        }
+        ctx.fillStyle = '#4fc3f7';
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, 15, 0, Math.PI * 2);
+        ctx.fill();
+        const velEnd = ball.copy().add(ballVelocity.copy().multiply(10));
+        drawVector(ctx, ball, velEnd, '#ffa726', 2);
+        ctx.strokeStyle = '#9e9e9e';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(0, 0, canvas.width, canvas.height);
+        info.textContent = 'Ball reflects off walls using vector reflection!';
+    }
+
+    requestAnimationFrame(animateAdvancedVector);
+}
+
+animateAdvancedVector();`,
+
+    advancedTrig: `
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const info = document.getElementById('info');
+let currentDemo = 'spiral';
+let time = 0;
+let mousePos = new Vector2D(400, 250);
+
+let spiral = { angle: 0, radius: 0 };
+let pendulum = { angle: Math.PI / 4, angleVel: 0, angleAcc: 0, length: 150 };
+let lissajous = { time: 0 };
+let enemy = { pos: new Vector2D(400, 250), angle: 0, fov: Math.PI / 3, range: 150 };
+
+canvas.addEventListener('mousemove', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    mousePos = new Vector2D(e.clientX - rect.left, e.clientY - rect.top);
+});
+
+document.getElementById('btnSpiralDemo').addEventListener('click', () => {
+    currentDemo = 'spiral';
+    spiral = { angle: 0, radius: 0 };
+});
+document.getElementById('btnPendulumDemo').addEventListener('click', () => {
+    currentDemo = 'pendulum';
+    pendulum = { angle: Math.PI / 4, angleVel: 0, angleAcc: 0, length: 150 };
+});
+document.getElementById('btnLissajousDemo').addEventListener('click', () => {
+    currentDemo = 'lissajous';
+    lissajous = { time: 0 };
+});
+document.getElementById('btnFOVDemo').addEventListener('click', () => {
+    currentDemo = 'fov';
+    enemy = { pos: new Vector2D(400, 250), angle: 0, fov: Math.PI / 3, range: 150 };
+});
+document.getElementById('btnDirectionDemo').addEventListener('click', () => {
+    currentDemo = 'direction';
+});
+
+function animateAdvancedTrig() {
+    time += 0.016;
+    clearCanvas(ctx, canvas.width, canvas.height);
+
+    if (currentDemo === 'spiral') {
+        const center = new Vector2D(400, 250);
+        spiral.angle += 0.05;
+        spiral.radius += 0.5;
+        if (spiral.radius > 200) {
+            spiral.angle = 0;
+            spiral.radius = 0;
+        }
+        const x = center.x + Math.cos(spiral.angle) * spiral.radius;
+        const y = center.y + Math.sin(spiral.angle) * spiral.radius;
+        ctx.strokeStyle = 'rgba(79, 195, 247, 0.3)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (let a = 0; a <= spiral.angle; a += 0.1) {
+            const r = (a / spiral.angle) * spiral.radius;
+            const px = center.x + Math.cos(a) * r;
+            const py = center.y + Math.sin(a) * r;
+            if (a === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+        ctx.fillStyle = '#9e9e9e';
+        ctx.beginPath();
+        ctx.arc(center.x, center.y, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#4fc3f7';
+        ctx.beginPath();
+        ctx.arc(x, y, 12, 0, Math.PI * 2);
+        ctx.fill();
+        info.textContent = 'Spiral: angle increases, radius increases → expanding spiral motion!';
+    }
+    else if (currentDemo === 'pendulum') {
+        const pivot = new Vector2D(400, 100);
+        const gravity = 0.5;
+        pendulum.angleAcc = (-gravity / pendulum.length) * Math.sin(pendulum.angle);
+        pendulum.angleVel += pendulum.angleAcc;
+        pendulum.angleVel *= 0.995;
+        pendulum.angle += pendulum.angleVel;
+        const bobX = pivot.x + Math.sin(pendulum.angle) * pendulum.length;
+        const bobY = pivot.y + Math.cos(pendulum.angle) * pendulum.length;
+        ctx.strokeStyle = 'rgba(158, 158, 158, 0.3)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(pivot.x, pivot.y, pendulum.length, 0, Math.PI);
+        ctx.stroke();
+        ctx.strokeStyle = '#9e9e9e';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(pivot.x, pivot.y);
+        ctx.lineTo(bobX, bobY);
+        ctx.stroke();
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(pivot.x, pivot.y, 8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#4fc3f7';
+        ctx.beginPath();
+        ctx.arc(bobX, bobY, 20, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#ffa726';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(pivot.x, pivot.y, 40, Math.PI / 2, Math.PI / 2 + pendulum.angle);
+        ctx.stroke();
+        ctx.fillStyle = '#fff';
+        ctx.font = '14px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('Angle: ' + (pendulum.angle * 180 / Math.PI).toFixed(1) + '°', 400, 450);
+        info.textContent = 'Realistic pendulum using trigonometry and physics!';
+    }
+    else if (currentDemo === 'lissajous') {
+        const center = new Vector2D(400, 250);
+        const radiusX = 150;
+        const radiusY = 150;
+        const freqX = 3;
+        const freqY = 2;
+        const phase = Math.PI / 2;
+        lissajous.time += 0.02;
+        ctx.strokeStyle = 'rgba(79, 195, 247, 0.5)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (let t = 0; t < lissajous.time; t += 0.05) {
+            const x = center.x + Math.sin(t * freqX) * radiusX;
+            const y = center.y + Math.sin(t * freqY + phase) * radiusY;
+            if (t === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+        const x = center.x + Math.sin(lissajous.time * freqX) * radiusX;
+        const y = center.y + Math.sin(lissajous.time * freqY + phase) * radiusY;
+        ctx.fillStyle = '#4fc3f7';
+        ctx.beginPath();
+        ctx.arc(x, y, 10, 0, Math.PI * 2);
+        ctx.fill();
+        if (lissajous.time > Math.PI * 4) lissajous.time = 0;
+        info.textContent = 'Lissajous curve: Different frequencies create complex patterns!';
+    }
+    else if (currentDemo === 'fov') {
+        const toMouse = mousePos.subtract(enemy.pos);
+        enemy.angle = Math.atan2(toMouse.y, toMouse.x);
+        const dist = toMouse.length();
+        const angleToMouse = Math.atan2(toMouse.y, toMouse.x);
+        let angleDiff = angleToMouse - enemy.angle;
+        while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+        while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+        const canSee = dist < enemy.range && Math.abs(angleDiff) < enemy.fov / 2;
+        ctx.save();
+        ctx.translate(enemy.pos.x, enemy.pos.y);
+        ctx.rotate(enemy.angle);
+        ctx.fillStyle = canSee ? 'rgba(239, 83, 80, 0.2)' : 'rgba(255, 255, 0, 0.2)';
+        ctx.strokeStyle = canSee ? '#ef5350' : '#ffa726';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.arc(0, 0, enemy.range, -enemy.fov / 2, enemy.fov / 2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+        ctx.fillStyle = canSee ? '#ef5350' : '#ffa726';
+        ctx.beginPath();
+        ctx.arc(enemy.pos.x, enemy.pos.y, 15, 0, Math.PI * 2);
+        ctx.fill();
+        const dirEnd = enemy.pos.copy().add(Vector2D.fromAngle(enemy.angle, 30));
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.moveTo(dirEnd.x, dirEnd.y);
+        ctx.lineTo(dirEnd.x - 8, dirEnd.y - 5);
+        ctx.lineTo(dirEnd.x - 8, dirEnd.y + 5);
+        ctx.fill();
+        ctx.fillStyle = canSee ? '#ef5350' : '#4fc3f7';
+        ctx.beginPath();
+        ctx.arc(mousePos.x, mousePos.y, 10, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 18px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(canSee ? '🔴 DETECTED!' : '✓ Hidden', 400, 450);
+        info.textContent = 'Move mouse: Enemy has limited field of view - stay behind or outside range!';
+    }
+    else if (currentDemo === 'direction') {
+        const center = new Vector2D(400, 250);
+        const toMouse = mousePos.subtract(center);
+        const angle = Math.atan2(toMouse.y, toMouse.x);
+        let normalized = angle % (2 * Math.PI);
+        if (normalized < 0) normalized += 2 * Math.PI;
+        const section = Math.round(normalized / (Math.PI / 4)) % 8;
+        const directions = ['→', '↘', '↓', '↙', '←', '↖', '↑', '↗'];
+        const directionNames = ['Right', 'Down-Right', 'Down', 'Down-Left', 'Left', 'Up-Left', 'Up', 'Up-Right'];
+        for (let i = 0; i < 8; i++) {
+            const a = i * Math.PI / 4;
+            const x = center.x + Math.cos(a) * 150;
+            const y = center.y + Math.sin(a) * 150;
+            ctx.strokeStyle = i === section ? '#4fc3f7' : 'rgba(158, 158, 158, 0.3)';
+            ctx.lineWidth = i === section ? 3 : 1;
+            ctx.beginPath();
+            ctx.moveTo(center.x, center.y);
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            ctx.fillStyle = i === section ? '#4fc3f7' : '#9e9e9e';
+            ctx.font = i === section ? 'bold 24px Arial' : '16px Arial';
+            ctx.textAlign = 'center';
+            const labelDist = i === section ? 180 : 170;
+            const lx = center.x + Math.cos(a) * labelDist;
+            const ly = center.y + Math.sin(a) * labelDist;
+            ctx.fillText(directions[i], lx, ly);
+        }
+        ctx.fillStyle = '#4fc3f7';
+        ctx.beginPath();
+        ctx.arc(center.x, center.y, 25, 0, Math.PI * 2);
+        ctx.fill();
+        if (toMouse.length() > 10) {
+            drawVector(ctx, center, mousePos, '#ffa726', 2);
+        }
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 20px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(directionNames[section], 400, 450);
+        ctx.font = '14px monospace';
+        ctx.fillStyle = '#9e9e9e';
+        ctx.fillText('Angle: ' + (angle * 180 / Math.PI).toFixed(1) + '°', 400, 470);
+        info.textContent = 'Move mouse: Converts any angle to one of 8 sprite directions!';
+    }
+
+    requestAnimationFrame(animateAdvancedTrig);
+}
+
+animateAdvancedTrig();`,
+
+    matrix: `
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const info = document.getElementById('info');
+let currentTransform = 'rotate';
+let time = 0;
+
+const shape = [
+    new Vector2D(-50, -30),
+    new Vector2D(50, -30),
+    new Vector2D(50, 30),
+    new Vector2D(-50, 30)
+];
+
+function drawShape(ctx, points, matrix, color) {
+    const transformed = points.map(p => matrix.transformPoint(p));
+    ctx.fillStyle = color;
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(transformed[0].x, transformed[0].y);
+    for (let i = 1; i < transformed.length; i++) {
+        ctx.lineTo(transformed[i].x, transformed[i].y);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+}
+
+function animateMatrix() {
+    clearCanvas(ctx, canvas.width, canvas.height);
+    drawGrid(ctx, canvas.width, canvas.height);
+
+    const matrix = new Matrix2D();
+    matrix.translate(400, 200);
+
+    time += 0.02;
+
+    if (currentTransform === 'rotate') {
+        matrix.rotate(time);
+        info.textContent = 'Rotation: Object spins around its center';
+    }
+    else if (currentTransform === 'scale') {
+        const scale = 1 + Math.sin(time) * 0.5;
+        matrix.scale(scale, scale);
+        info.textContent = 'Scale: Object grows and shrinks';
+    }
+    else if (currentTransform === 'translate') {
+        const offsetX = Math.cos(time) * 100;
+        const offsetY = Math.sin(time) * 50;
+        matrix.translate(offsetX, offsetY);
+        info.textContent = 'Translation: Object moves in a circle';
+    }
+    else if (currentTransform === 'combined') {
+        matrix.rotate(time);
+        const scale = 1 + Math.sin(time * 2) * 0.3;
+        matrix.scale(scale, scale);
+        info.textContent = 'Combined: Rotation + Scale together';
+    }
+
+    drawShape(ctx, shape, matrix, '#4fc3f7');
+
+    requestAnimationFrame(animateMatrix);
+}
+
+document.getElementById('btnRotate').addEventListener('click', () => {
+    currentTransform = 'rotate';
+    time = 0;
+});
+document.getElementById('btnScale').addEventListener('click', () => {
+    currentTransform = 'scale';
+    time = 0;
+});
+document.getElementById('btnTranslate').addEventListener('click', () => {
+    currentTransform = 'translate';
+    time = 0;
+});
+document.getElementById('btnCombined').addEventListener('click', () => {
+    currentTransform = 'combined';
+    time = 0;
+});
+
+animateMatrix();`,
+
     // ============ ADVANCED DEMOS ============
 
     steering: `
@@ -6890,6 +7360,40 @@ const DEMO_HTML = {
             { id: 'btnReset', text: 'Reset' }
         ],
         info: 'Click to fire homing missiles at the target!'
+    },
+    advancedVector: {
+        title: 'Advanced Vector Operations Demo',
+        canvas: { width: 800, height: 500 },
+        controls: [
+            { id: 'btnChaseDemo', text: 'Enemy Chase Player' },
+            { id: 'btnCrossDemo', text: 'Cross Product (Turning)' },
+            { id: 'btnProjectDemo', text: 'Wall Sliding' },
+            { id: 'btnReflectDemo', text: 'Bouncing Ball' }
+        ],
+        info: 'Click buttons to see different vector operations in action!'
+    },
+    advancedTrig: {
+        title: 'Advanced Trigonometry Demo',
+        canvas: { width: 800, height: 500 },
+        controls: [
+            { id: 'btnSpiralDemo', text: 'Spiral Motion' },
+            { id: 'btnPendulumDemo', text: 'Pendulum' },
+            { id: 'btnLissajousDemo', text: 'Lissajous Curve' },
+            { id: 'btnFOVDemo', text: 'Field of View' },
+            { id: 'btnDirectionDemo', text: '8-Direction Sprites' }
+        ],
+        info: 'Explore advanced trigonometry patterns!'
+    },
+    matrix: {
+        title: 'Matrix Transformations Demo',
+        canvas: { width: 800, height: 400 },
+        controls: [
+            { id: 'btnRotate', text: 'Rotate' },
+            { id: 'btnScale', text: 'Scale' },
+            { id: 'btnTranslate', text: 'Translate' },
+            { id: 'btnCombined', text: 'Combined Transform' }
+        ],
+        info: 'Watch how different transformations affect the shape'
     },
 
     // ============ ADVANCED DEMOS ============

@@ -247,6 +247,20 @@ omitting `data-demo-id` cleanly opts a demo out (no broken button). The Physarum
 demo currently ships page-only — registering `sh_makeAgentSim` + `sh_slime` for
 export is a clean follow-up iteration.
 
+The **game-math track** (`beginner`→`simulations`) shares one pair of registries —
+[`shared/demo-bundles.js`](shared/demo-bundles.js) (`DEMO_CODE`/`DEMO_HTML`) +
+[`shared/dependency-bundles.js`](shared/dependency-bundles.js) (`DEPENDENCY_BUNDLES`) —
+instead of per-tier `bundles-*.js`. As of this iteration the **Beginner page is fully
+exportable**: its last 5 unwired demos (`vectorBasics`, `vectorPlayground`,
+`advancedVector`, `advancedTrig`, `matrix`) are now registered, matching
+`intermediate`→`simulation-v2` (already 100% wired). **Mirror-drift caveat:**
+`DEPENDENCY_BUNDLES` is a hand-copied mirror of `shared/utils.js` and can silently lag
+it — wiring `advancedVector` first required adding the missing `Vector2D.project`/
+`.reflect`, and `matrix` required a brand-new `matrix2d` bundle (whose `transformPoint`
+returns a `Vector2D`, so `vector2d` must precede `matrix2d` in `data-deps`). When
+registering a demo, verify every class/method it calls exists in the *mirror*, not just
+in `utils.js`, or the exported file throws at runtime while the page demo still works.
+
 ## Conventions that differ from common practice
 
 - GLSL lives in JS template literals; **every shader's first line is literally

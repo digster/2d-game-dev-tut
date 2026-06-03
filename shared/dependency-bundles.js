@@ -109,6 +109,22 @@ class Vector2D {
         return new Vector2D(-this.y, this.x);
     }
 
+    project(onto) {
+        const dotProduct = this.dot(onto);
+        const ontoLengthSq = onto.lengthSquared();
+        if (ontoLengthSq === 0) return new Vector2D(0, 0);
+        const scalar = dotProduct / ontoLengthSq;
+        return new Vector2D(onto.x * scalar, onto.y * scalar);
+    }
+
+    reflect(normal) {
+        const dot = this.dot(normal);
+        return new Vector2D(
+            this.x - 2 * dot * normal.x,
+            this.y - 2 * dot * normal.y
+        );
+    }
+
     static fromAngle(angle, length = 1) {
         return new Vector2D(
             Math.cos(angle) * length,
@@ -204,5 +220,61 @@ function drawVector(ctx, start, end, color = '#4fc3f7', width = 2) {
     );
     ctx.closePath();
     ctx.fill();
+}`,
+
+    matrix2d: `
+class Matrix2D {
+    constructor() {
+        // Matrix format:
+        // | a  b  tx |
+        // | c  d  ty |
+        // | 0  0  1  |
+        this.a = 1; this.b = 0; this.tx = 0;
+        this.c = 0; this.d = 1; this.ty = 0;
+    }
+
+    // Rotate by angle (in radians)
+    rotate(angle) {
+        const cos = Math.cos(angle);
+        const sin = Math.sin(angle);
+        const a = this.a * cos - this.c * sin;
+        const c = this.a * sin + this.c * cos;
+        const b = this.b * cos - this.d * sin;
+        const d = this.b * sin + this.d * cos;
+        this.a = a; this.b = b;
+        this.c = c; this.d = d;
+        return this;
+    }
+
+    // Scale by sx and sy
+    scale(sx, sy) {
+        this.a *= sx;
+        this.b *= sx;
+        this.c *= sy;
+        this.d *= sy;
+        return this;
+    }
+
+    // Translate by tx and ty
+    translate(tx, ty) {
+        this.tx += tx;
+        this.ty += ty;
+        return this;
+    }
+
+    // Transform a point using this matrix (returns a new Vector2D)
+    transformPoint(point) {
+        return new Vector2D(
+            point.x * this.a + point.y * this.b + this.tx,
+            point.x * this.c + point.y * this.d + this.ty
+        );
+    }
+
+    // Reset to identity matrix
+    identity() {
+        this.a = 1; this.b = 0; this.tx = 0;
+        this.c = 0; this.d = 1; this.ty = 0;
+        return this;
+    }
 }`
 };

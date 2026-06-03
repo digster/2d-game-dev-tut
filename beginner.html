@@ -94,6 +94,88 @@
             </div>
             <div id="vectorInfo" class="info-display"></div>
 
+            <details class="code-block" data-demo-id="vectorBasics" data-deps="vector2d,clearCanvas,drawGrid,drawVector">
+                <summary>📝 Click to see: Vector Basics Demo Code</summary>
+                <pre><code class="language-javascript">// ===================================
+// VECTOR BASICS - Interactive Examples
+// ===================================
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const info = document.getElementById('info');
+let currentExample = 'simple';
+
+function drawVectorBasics(type) {
+    currentExample = type;
+    clearCanvas(ctx, canvas.width, canvas.height);
+    drawGrid(ctx, canvas.width, canvas.height);
+
+    if (type === 'simple') {
+        const start = new Vector2D(100, 200);
+        const end = new Vector2D(400, 100);
+        drawVector(ctx, start, end, '#4fc3f7', 3);
+
+        ctx.fillStyle = '#4fc3f7';
+        ctx.font = '16px Arial';
+        ctx.fillText('Vector: (' + (end.x - start.x) + ', ' + (end.y - start.y) + ')', 250, 140);
+        ctx.fillText('Start', start.x - 30, start.y + 30);
+        ctx.fillText('End', end.x + 20, end.y);
+
+        info.textContent = 'Simple vector from (' + start.x + ', ' + start.y + ') to (' + end.x + ', ' + end.y + ')';
+    }
+    else if (type === 'player') {
+        const player = new Vector2D(200, 300);
+        const movement = new Vector2D(150, -100);
+        const newPos = new Vector2D(player.x + movement.x, player.y + movement.y);
+
+        ctx.fillStyle = '#66bb6a';
+        ctx.beginPath();
+        ctx.arc(player.x, player.y, 20, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = '14px Arial';
+        ctx.fillText('Player', player.x - 20, player.y - 30);
+
+        drawVector(ctx, player, newPos, '#ffa726', 3);
+
+        ctx.fillStyle = '#66bb6a';
+        ctx.globalAlpha = 0.5;
+        ctx.beginPath();
+        ctx.arc(newPos.x, newPos.y, 20, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        info.textContent = 'Player moves by vector (' + movement.x + ', ' + movement.y + ')';
+    }
+    else if (type === 'bullet') {
+        const gun = new Vector2D(100, 300);
+        const target = new Vector2D(600, 150);
+        const direction = target.subtract(gun);
+
+        ctx.fillStyle = '#4fc3f7';
+        ctx.fillRect(gun.x - 15, gun.y - 10, 30, 20);
+        ctx.fillText('Gun', gun.x - 15, gun.y + 35);
+
+        ctx.strokeStyle = '#ef5350';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(target.x, target.y, 25, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = '#fff';
+        ctx.fillText('Target', target.x - 20, target.y + 45);
+
+        drawVector(ctx, gun, target, '#ffa726', 3);
+
+        info.textContent = 'Bullet direction: (' + direction.x.toFixed(1) + ', ' + direction.y.toFixed(1) + '), Distance: ' + direction.length().toFixed(1);
+    }
+}
+
+document.getElementById('btnSimple').addEventListener('click', () => drawVectorBasics('simple'));
+document.getElementById('btnPlayer').addEventListener('click', () => drawVectorBasics('player'));
+document.getElementById('btnBullet').addEventListener('click', () => drawVectorBasics('bullet'));
+
+drawVectorBasics('simple');</code></pre>
+            </details>
+
             <h3>Building a Vector Class - Step by Step</h3>
 
             <div class="step">
@@ -273,7 +355,7 @@ if (distance &lt; 10) {  // Hit radius = 10 pixels
                 </div>
             </details>
 
-            <details class="code-block">
+            <details class="code-block" data-demo-id="vectorPlayground" data-deps="vector2d,clearCanvas,drawGrid,drawVector,clamp,randomFloat">
                 <summary>📖 Complete Code: Vector Playground</summary>
                 <pre><code class="language-javascript">// ===================================
 // VECTOR PLAYGROUND - Complete Implementation
@@ -887,7 +969,7 @@ velocity.multiply(0.8);  // 80% of original speed
                 </div>
             </details>
 
-            <details class="code-block">
+            <details class="code-block" data-demo-id="advancedVector" data-deps="vector2d,clearCanvas,drawVector">
                 <summary>📖 Complete Code: Advanced Vector Operations</summary>
                 <pre><code class="language-javascript">// ===================================
 // ADVANCED VECTOR OPERATIONS - Complete Implementation
@@ -2033,7 +2115,7 @@ class Character {
             <div id="advTrigInfo" class="info-display">Explore advanced trigonometry patterns!</div>
 
             <h3>Practical Game System: Radar/Minimap</h3>
-            <details>
+            <details data-demo-id="advancedTrig" data-deps="vector2d,clearCanvas,drawVector">
                 <summary>📝 Click to see: Complete Radar System</summary>
                 <div class="code-container" data-code-tabs>
                     <div class="code-tabs" role="tablist">
@@ -2841,7 +2923,7 @@ class SpiralMissile extends HomingMissile {
                 </ul>
             </div>
 
-            <details>
+            <details data-demo-id="matrix" data-deps="vector2d,matrix2d,clearCanvas,drawGrid">
                 <summary>📝 Click to see: Matrix2D Class</summary>
                 <div class="code-container" data-code-tabs>
                     <div class="code-tabs" role="tablist">

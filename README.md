@@ -566,4 +566,4 @@ All pages load CSS and JS from `shared/`:
 - `shared/styles.css` — single source of truth for theme and layout
 - `shared/utils.js` — `Vector2D`, `Matrix2D`, canvas helpers
 - `shared/code-tabs.js` — JavaScript / TypeScript tab toggle inside code blocks
-- `shared/export-demo.js` + `shared/demo-bundles*.js` — export-demo feature
+- `shared/export-demo.js` + `shared/demo-bundles*.js` + `shared/dependency-bundles.js` — export-demo feature (the math track's `DEMO_CODE`/`DEMO_HTML` payloads + shared helper `DEPENDENCY_BUNDLES`; the Beginner page is now fully exportable — all 11 demos wired)
