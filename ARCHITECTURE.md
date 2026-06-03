@@ -260,6 +260,10 @@ it — wiring `advancedVector` first required adding the missing `Vector2D.proje
 returns a `Vector2D`, so `vector2d` must precede `matrix2d` in `data-deps`). When
 registering a demo, verify every class/method it calls exists in the *mirror*, not just
 in `utils.js`, or the exported file throws at runtime while the page demo still works.
+(The `vector2d`/`matrix2d` bundles are now exact mirrors of `utils.js`.) The Export button
+itself copies via the async Clipboard API with a hidden-`<textarea>` + `execCommand('copy')`
+fallback (`copyTextToClipboard` in `export-demo.js`), so it still works when the guide is
+opened from `file://` (no secure context) instead of failing with "✗ Error".
 
 ## Conventions that differ from common practice
 

@@ -1418,3 +1418,18 @@ had drifted: added the missing Vector2D.project/.reflect and a new matrix2d bund
 in real Chromium: 11 buttons, all 5 exports run with zero errors + render (incl. the new
 project/reflect and Matrix2D paths); screenshot-confirmed the matrix export. Then the
 commit message.
+
+# 2026-06-03 (pt.2) — Fix the real issues from the edge-case review
+
+"For all the five above edge cases and suggested tests, see if it's feasible implementing them."
+→ then: "Ok, don't add any tests but see if you can fix issues that were mentioned." Triaged the 5
+review items: #2 (TS→JS fallback) and #4 (no-mouse NaN) are non-bugs (graceful by design / already
+guarded). Fixed the other three: (1) completed the vector2d/matrix2d dependency-bundle mirror vs
+utils.js (added static subtract, distanceSquared, setLength, divide zero-warn, Matrix2D.copy) —
+preventive, since none were called by a current export, verified 0 drift via a throwaway
+getOwnPropertyNames compare; (2) added a clipboard fallback in export-demo.js (copyTextToClipboard:
+async Clipboard API → hidden textarea + execCommand('copy')) so Export works on file://; (3) fixed
+the advancedTrig FOV bug in both synced copies (beginner-demos.js + demo-bundles.js) — the enemy
+snapped to face the cursor so the cone never gated detection; replaced with an independent sweep
+(enemy.angle += 0.01). Verified in Chromium (FOV in-cone true/out-cone false vs old both-true;
+exports regen clean; clipboard API+fallback+both-fail paths). Then the commit message.

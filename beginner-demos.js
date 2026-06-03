@@ -2358,7 +2358,9 @@ if (advancedTrigCanvas) {
         else if (currentDemo === 'fov') {
             // Field of view detection
             const toMouse = mousePos.subtract(enemy.pos);
-            enemy.angle = Math.atan2(toMouse.y, toMouse.x);
+            // Sweep the enemy's facing independently of the cursor so the
+            // field-of-view cone actually gates detection (hide outside the cone).
+            enemy.angle += 0.01;
 
             const dist = toMouse.length();
             const angleToMouse = Math.atan2(toMouse.y, toMouse.x);

@@ -2811,7 +2811,8 @@ function animateAdvancedTrig() {
     }
     else if (currentDemo === 'fov') {
         const toMouse = mousePos.subtract(enemy.pos);
-        enemy.angle = Math.atan2(toMouse.y, toMouse.x);
+        // Sweep the facing independently of the cursor so the FOV cone gates detection.
+        enemy.angle += 0.01;
         const dist = toMouse.length();
         const angleToMouse = Math.atan2(toMouse.y, toMouse.x);
         let angleDiff = angleToMouse - enemy.angle;

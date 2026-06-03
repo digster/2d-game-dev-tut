@@ -21,6 +21,10 @@ class Vector2D {
         return new Vector2D(this.x - other.x, this.y - other.y);
     }
 
+    static subtract(a, b) {
+        return new Vector2D(a.x - b.x, a.y - b.y);
+    }
+
     multiply(scalar) {
         this.x *= scalar;
         this.y *= scalar;
@@ -31,6 +35,8 @@ class Vector2D {
         if (scalar !== 0) {
             this.x /= scalar;
             this.y /= scalar;
+        } else {
+            console.warn('Vector2D: Division by zero');
         }
         return this;
     }
@@ -47,6 +53,12 @@ class Vector2D {
         const dx = other.x - this.x;
         const dy = other.y - this.y;
         return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    distanceSquared(other) {
+        const dx = other.x - this.x;
+        const dy = other.y - this.y;
+        return dx * dx + dy * dy;
     }
 
     normalize() {
@@ -96,6 +108,12 @@ class Vector2D {
             this.normalize();
             this.multiply(max);
         }
+        return this;
+    }
+
+    setLength(len) {
+        this.normalize();
+        this.multiply(len);
         return this;
     }
 
@@ -275,6 +293,14 @@ class Matrix2D {
         this.a = 1; this.b = 0; this.tx = 0;
         this.c = 0; this.d = 1; this.ty = 0;
         return this;
+    }
+
+    // Create a copy of this matrix
+    copy() {
+        const m = new Matrix2D();
+        m.a = this.a; m.b = this.b; m.tx = this.tx;
+        m.c = this.c; m.d = this.d; m.ty = this.ty;
+        return m;
     }
 }`
 };

@@ -217,6 +217,50 @@ ${demoCode}
 }
 
 /**
+ * Copy text to the clipboard with a graceful fallback.
+ *
+ * Prefers the async Clipboard API, which requires a *secure context*
+ * (https:// or localhost). When that's unavailable — most commonly when the
+ * guide is opened directly from disk via `file://` — it falls back to a hidden
+ * `<textarea>` + the legacy `document.execCommand('copy')`. The fallback still
+ * works because this runs synchronously inside the Export button's click
+ * (a user gesture), which `execCommand('copy')` requires.
+ *
+ * @param {string} text - The text to copy.
+ * @returns {Promise<boolean>} true if the copy succeeded by either path.
+ */
+async function copyTextToClipboard(text) {
+    // Preferred path: async Clipboard API in a secure context.
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        try {
+            await navigator.clipboard.writeText(text);
+            return true;
+        } catch (err) {
+            // Permission denied / blocked — fall through to the legacy path.
+            console.warn('Clipboard API failed, trying execCommand fallback:', err);
+        }
+    }
+
+    // Legacy fallback: works on file:// and older browsers.
+    try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';   // avoid scrolling to the bottom
+        ta.style.top = '-9999px';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        return ok;
+    } catch (err) {
+        console.error('Clipboard fallback failed:', err);
+        return false;
+    }
+}
+
+/**
  * Injects export buttons into code sections with data-demo-id attributes.
  */
 function initExportButtons() {
@@ -248,7 +292,12 @@ function initExportButtons() {
                     return;
                 }
 
-                await navigator.clipboard.writeText(html);
+                const copied = await copyTextToClipboard(html);
+                if (!copied) {
+                    btn.innerHTML = '✗ Error';
+                    setTimeout(() => btn.innerHTML = '📋 Export', 2000);
+                    return;
+                }
                 btn.innerHTML = lang === 'ts' ? '✓ Copied (TS)!' : '✓ Copied (JS)!';
                 btn.classList.add('success');
                 setTimeout(() => {
@@ -256,7 +305,7 @@ function initExportButtons() {
                     btn.classList.remove('success');
                 }, 2000);
             } catch (err) {
-                console.error('Failed to copy to clipboard:', err);
+                console.error('Export failed:', err);
                 btn.innerHTML = '✗ Error';
                 setTimeout(() => btn.innerHTML = '📋 Export', 2000);
             }
