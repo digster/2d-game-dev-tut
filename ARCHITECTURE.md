@@ -204,8 +204,16 @@ physics-puzzle ARCHITECTURE already documents; the SoA store + spatial hash woul
 **scaffold self-check** that proves integration, off-screen culling, and **bit-for-bit determinism**
 across two identically-seeded runs — the guarantee the Simulations replay tier rests on. Demos are
 keyboard/pointer-driven so they omit `data-demo-id` (opt out of the Export button), like
-platformer/roguelike/physics-puzzle. **Status: Beginner → Expert shipped (4 tiers, 25 demos, engine
-= loop/render/field/emitter); Simulations finale next.**
+platformer/roguelike/physics-puzzle. The **Simulations** finale (`BHSpellCard`+`BHBoss` are its 2nd
+consumer ⇒ both **moved** to `engine/boss.js`) adds the tooling — a seeded `BHRng` (mulberry32) for
+bit-exact determinism, input-stream **replay** (record per-tick inputs + seed → reconstruct; proven
+0.000 max-diff), a visual **pattern editor** emitting spell-card JSON (`bhPatternFromSpec`), and the
+juice toolkit (hitstop that pauses the sim without desyncing the replay, trauma² screen-shake,
+pooled `BHParticles`, Cave-style bullet-cancel) — culminating in the capstone **"Danmaku"**, a
+deterministic, replayable two-phase boss rush composing every system. (Determinism discipline: only
+the sim touches `BHRng`; cosmetics use `Math.random`, so shake/particles never break the replay.
+`BHRng`/`BHParticles` stay inline — the finale is their terminal consumer.) **Status: the Bullet Hell
+track is COMPLETE — 5 tiers, 31 demos, 5 engine modules (loop, render, field, emitter, boss).**
 
 **Why tiers are separate files:** content is split beginner → intermediate →
 expert → raymarching → stylization → distortion → advanced → simulations so each

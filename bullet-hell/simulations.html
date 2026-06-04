@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulations — Bullet Hell / Danmaku Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+    <style>
+        canvas.bh-canvas { outline: none; background: #070a1c; border-radius: 8px; display: block; margin: 0 auto; touch-action: none; }
+        canvas.bh-canvas:focus { box-shadow: 0 0 0 2px #4fc3f7; }
+        .bh-slider { display: inline-flex; align-items: center; gap: 8px; color: #c9d1d9; font-size: 0.92em; }
+        .bh-slider input[type="range"] { width: 120px; }
+        .bh-slider .val { color: #4fc3f7; font-family: monospace; min-width: 3.2em; display: inline-block; }
+        .bh-key { font-family: monospace; background: #0d1117; border: 1px solid #2d3354; border-radius: 4px; padding: 1px 6px; color: #7CF2C8; }
+        .bh-editor-json { width: 100%; max-width: 440px; height: 150px; margin: 12px auto 0; display: block; background: #0d1117; color: #7CF2C8; border: 1px solid #30363d; border-radius: 6px; font-family: 'Courier New', monospace; font-size: 13px; padding: 10px; resize: vertical; }
+        select.bh-select { background: #0d1117; color: #c9d1d9; border: 1px solid #2d3354; border-radius: 4px; padding: 3px 8px; font-size: 0.92em; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌸 Simulations — The Whole Game</h1>
+        <p class="subtitle">The finale: the <em>tooling</em> that makes a real danmaku — deterministic seeded replay and a visual pattern editor — plus the juice that makes hits land, and the grand capstone that switches every system on at once: <strong>"Danmaku"</strong>.</p>
+
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="expert.html" class="nav-button">← Expert</a>
+            <a href="simulations.html" class="nav-button active">Simulations</a>
+        </div>
+
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#intro">Tooling + spectacle</a></li>
+                <li><a href="#determinism">Determinism — same seed, same run</a></li>
+                <li><a href="#replay">Deterministic replay — record &amp; reconstruct</a></li>
+                <li><a href="#editor">The pattern editor — patterns as data</a></li>
+                <li><a href="#juice">Juice — hitstop, shake, particles, audio</a></li>
+                <li><a href="#cancel">Bullet-cancel — turn danger into points</a></li>
+                <li><a href="#mini-project">Grand Capstone: "Danmaku"</a></li>
+            </ul>
+        </div>
+
+        <!-- INTRO -->
+        <div id="intro" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>🎬 Tooling + spectacle</h2>
+            <p>
+                You can build patterns, fight a boss, and run ten thousand bullets. What turns that into a
+                <em>game</em> is the layer around it: the ability to <strong>reproduce</strong> a run exactly (for
+                replays, debugging, and fairness), to <strong>author</strong> attacks as data instead of code,
+                and to make every hit <strong>feel</strong> like something. Then we compose all of it — patterns,
+                boss, phases, bombs, scoring, performance, juice — into one complete fight.
+            </p>
+            <div class="key-point">
+                <strong>💡 The one rule that makes replays work:</strong> a fixed timestep plus a
+                <em>seeded</em> RNG means the simulation is a pure function of <code>(seed, inputs)</code>. Record
+                the seed and the per-tick inputs and you can reconstruct the run bit-for-bit. The discipline:
+                <strong>only the simulation may touch the seeded RNG</strong> — cosmetics (particles, screen
+                shake) use <code>Math.random</code> so they can vary without breaking the replay.
+            </div>
+        </div>
+
+        <!-- DETERMINISM -->
+        <div id="determinism" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>🎲 Determinism — same seed, same run</h2>
+            <p>
+                Two simulations, both firing an RNG-jittered ring. The left always uses a seeded
+                <code>BHRng</code>; the right uses the same seed too — until you tick "desync," which switches it
+                to <code>Math.random()</code>. Watch the "max position diff": <strong>0</strong> while both are
+                seeded (bit-identical), nonzero the instant one goes non-deterministic.
+            </p>
+            <div class="diagram"><canvas id="bhDetCanvas" class="bh-canvas" width="440" height="270"></canvas></div>
+            <div class="controls">
+                <button id="bhDetReseed">↻ Reseed both</button>
+                <label class="bh-slider"><input type="checkbox" id="bhDetDesync"> desync right (use Math.random)</label>
+            </div>
+            <div id="bhDetHud" class="info-display" style="font-family:monospace;">both seeded — identical…</div>
+
+            <details>
+                <summary>📝 Click to see: a seeded PRNG (mulberry32)</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class BHRng {                       // deterministic: same seed → same stream
+  constructor(seed) { this.s = seed >>> 0; }
+  reseed(seed) { this.s = seed >>> 0; }
+  next() {                          // mulberry32 — fast, good enough for games
+    this.s = (this.s + 0x6D2B79F5) >>> 0;
+    let t = this.s;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;   // → [0, 1)
+  }
+  range(a, b) { return a + this.next() * (b - a); }
+}
+// Use rng.next() for ANYTHING the sim depends on (spread, timing). Never Math.random.</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">class BHRng {
+  s: number;
+  constructor(seed: number) { this.s = seed >>> 0; }
+  next(): number { /* …mulberry32… */ return v; }
+  range(a: number, b: number): number { return a + this.next() * (b - a); }
+}</code></pre>
+                </div>
+            </details>
+            <div class="key-point">
+                <strong>Why not <code>Math.random()</code>?</strong> It's unseedable — you can't ask it to repeat
+                a sequence. A seeded PRNG gives you the same stream every time from the same seed, which is the
+                foundation of replays, netcode lockstep (the Netcode track), and reproducible bug reports.
+            </div>
+        </div>
+
+        <!-- REPLAY -->
+        <div id="replay" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>⏺️ Deterministic replay — record &amp; reconstruct</h2>
+            <p>
+                A replay file is tiny: just the <strong>seed</strong> and the <strong>per-tick inputs</strong>.
+                Press <span class="bh-key">● Record</span>, fly around for a few seconds, then
+                <span class="bh-key">▶ Replay</span> — the run reconstructs <em>exactly</em>, bullets and all,
+                because the sim is a pure function of seed + inputs. The HUD reports the max difference between
+                the recorded path and the replayed one: <strong>0.000</strong>.
+            </p>
+            <div class="diagram"><canvas id="bhReplayCanvas" class="bh-canvas" width="420" height="440"></canvas></div>
+            <div class="controls">
+                <button id="bhReplayRec">● Record</button>
+                <button id="bhReplayPlay">▶ Replay</button>
+            </div>
+            <div id="bhReplayHud" class="info-display" style="font-family:monospace;">click · record · replay…</div>
+
+            <details>
+                <summary>📝 Click to see: record then play back the input stream</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// RECORD: reset(seed); each tick, capture the input and advance the sim.
+function update(dt) {
+  let inp;
+  if (mode === 'record') { inp = readKeys(); inputs.push(inp); }
+  else if (mode === 'replay') { inp = inputs[tick]; }   // feed the SAME inputs back
+  em.step(dt, field); field.step(dt);                   // RNG-driven → reproduces from the seed
+  applyMove(player, inp.ax, inp.ay, inp.focus, dt);      // deterministic from input
+  tick++;
+}
+// REPLAY: reset(seed); tick=0; feed inputs[tick] each step → identical run.</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface Tick { ax: number; ay: number; focus: boolean; }
+let inputs: Tick[] = [];
+// record: inputs.push(readKeys());  replay: inp = inputs[tick];
+// reset the seeded rng + sim before each mode → reconstruct bit-for-bit.</code></pre>
+                </div>
+            </details>
+            <div class="key-point">
+                <strong>Replays are almost free.</strong> You don't store positions — those are <em>derived</em>.
+                A whole run compresses to one integer (the seed) plus a few bytes of input per frame. That's how
+                arcade danmaku ships replay files measured in kilobytes.
+            </div>
+        </div>
+
+        <!-- EDITOR -->
+        <div id="editor" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>🛠️ The pattern editor — patterns as data</h2>
+            <p>
+                The Advanced tier said attacks should be data; here's the tool that proves it. Pick a pattern
+                type, tune the parameters, watch it live — and read the <strong>JSON</strong> it emits below. That
+                object is exactly what a spell-card step stores; feed it to <code>bhPatternFromSpec()</code> and
+                you get the <code>fire</code> callback back. Author visually, ship as data.
+            </p>
+            <div class="diagram"><canvas id="bhEditorCanvas" class="bh-canvas" width="420" height="420"></canvas></div>
+            <div class="controls">
+                <label class="bh-slider">type
+                    <select id="bhEditorType" class="bh-select">
+                        <option value="ring">ring</option>
+                        <option value="fan">fan</option>
+                        <option value="spiral">spiral</option>
+                        <option value="aimed">aimed</option>
+                        <option value="rose">rose</option>
+                    </select>
+                </label>
+                <span class="bh-slider">n <input type="range" id="bhEditorN" min="1" max="36" step="1" value="16"></span>
+                <span class="bh-slider">speed <input type="range" id="bhEditorSpeed" min="60" max="240" step="10" value="140"></span>
+                <span class="bh-slider">arc <input type="range" id="bhEditorArc" min="10" max="360" step="10" value="120"></span>
+                <span class="bh-slider">spin <input type="range" id="bhEditorSpin" min="-200" max="200" step="10" value="90"></span>
+                <span class="bh-slider">k <input type="range" id="bhEditorK" min="2" max="8" step="1" value="3"></span>
+                <button id="bhEditorCopy">⧉ Copy JSON</button>
+            </div>
+            <textarea id="bhEditorJson" class="bh-editor-json" readonly></textarea>
+            <div id="bhEditorHud" class="info-display" style="font-family:monospace; margin-top:12px;">tune a pattern; the JSON below is its data…</div>
+
+            <details>
+                <summary>📝 Click to see: data → a fire callback</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// the editor emits a plain spec; this turns ANY spec back into a pattern.
+function bhPatternFromSpec(spec) {
+  const { type, n, speed, arc, k } = spec;
+  switch (type) {
+    case 'ring':   return (e, f) =&gt; ring(f, e, n, speed);
+    case 'fan':    return (e, f) =&gt; fan(f, e, n, arc * Math.PI/180, e.angle, speed);
+    case 'aimed':  return (e, f) =&gt; fan(f, e, n, arc * Math.PI/180, Math.PI/2, speed);
+    case 'spiral': return (e, f) =&gt; { /* n-arm ring; emitter.spin set from spec */ };
+    case 'rose':   return (e, f) =&gt; { /* speed = |cos(kθ)| ring */ };
+  }
+}
+// editor: em.fire = bhPatternFromSpec(spec); textarea.value = JSON.stringify(spec);</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface PatternSpec { type: 'ring'|'fan'|'spiral'|'aimed'|'rose'; n: number; speed: number; arc?: number; spin?: number; k?: number; }
+function bhPatternFromSpec(spec: PatternSpec): (e: BHEmitter, f: BHField) =&gt; void { /* … */ }</code></pre>
+                </div>
+            </details>
+            <div class="key-point">
+                <strong>This closes the loop.</strong> Intermediate built patterns in code; Advanced ran them
+                from data; here you author that data by eye. A real game's content team lives in a tool like this —
+                designers make attacks without touching the engine, and the JSON drops straight into a spell card.
+            </div>
+        </div>
+
+        <!-- JUICE -->
+        <div id="juice" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>🧃 Juice — hitstop, shake, particles, audio</h2>
+            <p>
+                "Juice" is the feedback that makes an action feel powerful. Shoot the dummy down and toggle each
+                layer to feel its contribution: <strong>hitstop</strong> (freeze a few frames on impact),
+                <strong>screen shake</strong> (trauma that decays), <strong>particles</strong> (a burst of debris),
+                and an <strong>audio cue</strong> (here a "♪" flash — you'd trigger a sound sample). None of it
+                changes the rules; all of it changes the <em>feel</em>.
+            </p>
+            <div class="diagram"><canvas id="bhJuiceCanvas" class="bh-canvas" width="420" height="440"></canvas></div>
+            <div class="controls">
+                <label class="bh-slider"><input type="checkbox" id="bhJuiceHitstop" checked> hitstop</label>
+                <label class="bh-slider"><input type="checkbox" id="bhJuiceShake" checked> screen shake</label>
+                <label class="bh-slider"><input type="checkbox" id="bhJuiceParticles" checked> particles</label>
+                <label class="bh-slider"><input type="checkbox" id="bhJuiceAudio" checked> audio cue (♪)</label>
+            </div>
+            <div id="bhJuiceHud" class="info-display" style="font-family:monospace;">click · Z to shoot…</div>
+
+            <details>
+                <summary>📝 Click to see: hitstop + trauma shake</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// HITSTOP: on a big hit, freeze the SIM for a few frames (cosmetics still run).
+function update(dt) {
+  particles.step(dt);                       // cosmetics advance during the freeze
+  trauma = Math.max(0, trauma - dt * 1.6);
+  if (freeze &gt; 0) { freeze -= dt; return; } // ← the sim is paused here
+  // …normal sim…
+  if (killedSomething) { freeze = 0.12; trauma = Math.min(1, trauma + 0.8); particles.burst(...); }
+}
+// SHAKE (render-only): translate the canvas by a decaying random offset.
+const s = trauma * trauma;                  // square so it falls off fast
+ctx.translate((Math.random()-0.5) * s * 22, (Math.random()-0.5) * s * 22);</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">let freeze = 0, trauma = 0;
+if (freeze &gt; 0) { freeze -= dt; return; }   // hitstop pauses the sim
+const s = trauma * trauma;                   // trauma² → shake amount (render-only)</code></pre>
+                </div>
+            </details>
+            <div class="key-point">
+                <strong>Trauma, not shake.</strong> Storing a <em>trauma</em> value (0–1) that decays, and using
+                <code>trauma²</code> for the shake amount, makes shakes add up smoothly and fall off fast — far
+                better than setting a raw shake that lingers. It's the standard "screenshake" recipe.
+            </div>
+        </div>
+
+        <!-- CANCEL -->
+        <div id="cancel" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>✦ Bullet-cancel — turn danger into points</h2>
+            <p>
+                Cave's signature mechanic: when you defeat an enemy or end a spell card, every bullet on screen
+                <strong>cancels</strong> into a score item — the wall of death becomes a shower of points. Let the
+                spiral fill the screen, then press <span class="bh-key">Cancel</span> and watch the danger turn
+                gold. It's pooling in reverse: bullets despawn, items spawn.
+            </p>
+            <div class="diagram"><canvas id="bhCancelCanvas" class="bh-canvas" width="420" height="440"></canvas></div>
+            <div class="controls"><button id="bhCancelBtn">✦ Cancel the screen</button></div>
+            <div id="bhCancelHud" class="info-display" style="font-family:monospace;">let it fill, then cancel…</div>
+
+            <details>
+                <summary>📝 Click to see: bullets → items</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">function cancel() {
+  for (const b of enemy.bullets)
+    items.push({ x: b.pos.x, y: b.pos.y, vy: -120 - Math.random()*90, age: 0, life: 0.9 });
+  score += enemy.count * 50;     // every cancelled bullet is points
+  enemy.clear();                 // the screen-clear — danger gone, reward shown
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface Item { x: number; y: number; vy: number; age: number; life: number; }
+function cancel(): void { /* bullets → rising items; score += count * 50; enemy.clear(); */ }</code></pre>
+                </div>
+            </details>
+            <div class="key-point">
+                <strong>Risk becomes reward.</strong> Bullet-cancel is why expert players fly <em>into</em> danger
+                in Cave shooters: a denser screen at the cancel moment is a bigger payout. The same mechanic
+                rewards a no-bomb spell-card capture — which the capstone uses next.
+            </div>
+        </div>
+
+        <!-- MINI PROJECT -->
+        <div id="mini-project" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>🏆 Grand Capstone: "Danmaku"</h2>
+            <p>
+                Everything, at once. A seeded, deterministic <strong>two-phase boss rush</strong>: spell-card
+                attacks (Advanced) from a moving boss, the full player kit — move, focus,
+                <span class="bh-key">Z</span> shoot, <span class="bh-key">X</span> bomb (3 lives, 2 bombs) —
+                graze and capture scoring, bullet-cancel on every phase change, and hitstop/shake/particle juice
+                on every impact. Beat both phases to win. Then press <span class="bh-key">▶ Replay</span> and watch
+                your entire run reconstruct from the seed + your recorded inputs.
+            </p>
+            <div class="diagram"><canvas id="bhDanmakuCanvas" class="bh-canvas" width="420" height="480"></canvas></div>
+            <div class="controls">
+                <button id="bhDanmakuReset">↻ New run</button>
+                <button id="bhDanmakuReplay">▶ Replay last run</button>
+            </div>
+            <div id="bhDanmakuHud" class="info-display" style="font-family:monospace;">click the playfield to begin…</div>
+
+            <details>
+                <summary>📝 Click to see: the fight is a function of (seed, inputs)</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// every system, composed — and all of it deterministic:
+update(dt) {
+  if (freeze &gt; 0) { freeze -= dt; return; }            // hitstop never desyncs the replay
+  const inp = (mode === 'replay') ? inputs[ip++] : readAndRecord();
+  boss.move(dt, bounds);
+  if (boss.hp &lt;= boss.maxHp/2 &amp;&amp; phase === 0) {            // phase change
+    clearPhaseBonus(); cancelToItems(); phase = 1; juice();
+  }
+  cards[phase].step(dt, em, enemy); em.step(dt, enemy);  // spell card → emitter (seeded jitter)
+  applyMove(player, inp); tickShots(inp.shoot); resolveShotsVsBoss(boss);
+  for (const b of enemy.bullets) { if (hit(b)) onHit(); else if (graze(b)) score += 100; }
+  if (inp.bomb) bomb();                                  // clear + i-frames + forfeit capture
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">// Replay = reset(seed) + feed recorded inputs. Spell-card jitter uses the seeded
+// rng; cosmetics (particles, shake) use Math.random — so they don't affect the
+// reproducible sim state (boss HP, player, bullets, score).</code></pre>
+                </div>
+            </details>
+
+            <div class="example-box">
+                <h4>🚀 Where to take it</h4>
+                <ul>
+                    <li>Author a third phase in the pattern editor and paste its JSON into a new spell card.</li>
+                    <li>Serialize the replay (seed + inputs) to a string and load it back — a real replay file.</li>
+                    <li>Run the capstone's bullets through the Expert SoA store to push the boss to bullet-hell density.</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- RECAP / TRACK COMPLETE -->
+        <div class="section">
+            <h2>🎉 Track complete</h2>
+            <p>
+                From one ship dodging one bullet to a complete, deterministic, replayable danmaku with a scripted
+                multi-phase boss and the engineering to run thousands of bullets — you built the whole genre:
+            </p>
+            <ul>
+                <li><a href="beginner.html"><strong>Beginner</strong></a> — the loop, precise movement, and the hitbox/graze-box.</li>
+                <li><a href="intermediate.html"><strong>Intermediate</strong></a> — patterns as polar equations (rings, spirals, rose curves).</li>
+                <li><a href="advanced.html"><strong>Advanced</strong></a> — a boss with spell-card phases, sub-emitters, and bombs.</li>
+                <li><a href="expert.html"><strong>Expert</strong></a> — pooling, Struct-of-Arrays, spatial hashing: 10k bullets at 60 fps.</li>
+                <li><strong>Simulations</strong> — determinism, replay, a pattern editor, juice, and the capstone.</li>
+            </ul>
+            <div class="key-point">
+                <strong>The engine you grew:</strong> <code>loop.js</code> (fixed timestep + input),
+                <code>render.js</code> (palette + draw), <code>field.js</code> (bullets),
+                <code>emitter.js</code> (patterns), <code>boss.js</code> (boss + spell cards) — each module
+                promoted only when a second tier needed it. Head back to the
+                <a href="index.html">track index</a> to replay any tier.
+            </div>
+        </div>
+    </div>
+
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <!-- Dependencies + the full engine (this finale uses all of it). -->
+    <script src="../shared/utils.js"></script>
+    <script src="../shared/code-tabs.js"></script>
+    <script src="engine/loop.js"></script>
+    <script src="engine/render.js"></script>
+    <script src="engine/field.js"></script>
+    <script src="engine/emitter.js"></script>
+    <script src="engine/boss.js"></script>
+    <script src="simulations-demos.js"></script>
+
+    <script>
+        const scrollToTopBtn = document.getElementById('scrollToTop');
+        scrollToTopBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+        window.addEventListener('scroll', () => { scrollToTopBtn.style.opacity = window.pageYOffset > 300 ? '1' : '0'; });
+        scrollToTopBtn.style.opacity = '0';
+        scrollToTopBtn.style.transition = 'opacity 0.3s';
+    </script>
+</body>
+</html>

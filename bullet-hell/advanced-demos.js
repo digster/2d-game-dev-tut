@@ -73,62 +73,12 @@ function bhResolveShotsVsBoss(shots, boss, dmg) {
 }
 
 // =============================================================================
-// THE TIER'S CORE LESSON — the boss entity + the spell-card runtime.
+// THE TIER'S CORE LESSON — BHBoss + BHSpellCard — now live in engine/boss.js
+// (PROMOTED when the Simulations boss-rush became their 2nd consumer). This page
+// loads engine/boss.js, so they're available here as globals and are NOT
+// re-declared (two top-level `class BHBoss` on one page would throw). The
+// collapsible code blocks above still teach the source.
 // =============================================================================
-
-// A BHBoss: a position that sweeps the top of the field (a Lissajous figure),
-// plus HP. Its emitter is wired separately so the same boss can run any pattern.
-class BHBoss {
-    constructor(x, y, opts = {}) {
-        this.pos = new Vector2D(x, y);
-        this.radius = opts.radius ?? 22;
-        this.maxHp = opts.maxHp ?? 800;
-        this.hp = this.maxHp;
-        this.name = opts.name ?? 'BOSS';
-        this.sway = opts.sway ?? 0.30;   // horizontal sweep, as a fraction of width
-        this.t = 0;
-    }
-    move(dt, bounds) {
-        this.t += dt;
-        const cx = bounds.x + bounds.w / 2;
-        this.pos.x = cx + Math.sin(this.t * 0.8) * (bounds.w * this.sway);
-        this.pos.y = bounds.y + 74 + Math.sin(this.t * 1.6) * 20;
-    }
-    get alive() { return this.hp > 0; }
-    get hpFrac() { return Math.max(0, this.hp) / this.maxHp; }
-}
-
-// A BHSpellCard: an attack as DATA. `steps` is a list of timed instructions —
-// each fires once when the card's clock passes its `at`. A step can `set` the
-// emitter's knobs (interval / spin / angle / fire) and/or fire a one-shot
-// `burst`. This is the seed that becomes the Simulations pattern editor's output.
-class BHSpellCard {
-    constructor(def) {
-        this.name = def.name || 'Spell Card';
-        this.duration = def.duration ?? Infinity;
-        this.steps = def.steps || [];
-        this.label = '';
-        this.reset();
-    }
-    reset() { this.t = 0; this.idx = 0; }
-    // Apply every step that is now due; returns true once the duration elapses.
-    step(dt, em, field) {
-        this.t += dt;
-        while (this.idx < this.steps.length && this.t >= this.steps[this.idx].at) {
-            const s = this.steps[this.idx++];
-            if (s.label !== undefined) this.label = s.label;
-            if (s.set) {
-                const st = s.set;
-                if ('interval' in st) em.interval = st.interval;
-                if ('spin' in st) em.spin = st.spin;
-                if ('angle' in st) em.angle = st.angle;
-                if ('fire' in st) { em.fire = st.fire; em.timer = 0; }
-            }
-            if (s.burst) s.burst(em, field);
-        }
-        return this.t >= this.duration;
-    }
-}
 
 // =============================================================================
 // 1) bossDemo — the boss entity (HP, movement, health bar)

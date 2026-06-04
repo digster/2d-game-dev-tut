@@ -1452,3 +1452,13 @@ Clarifications answered during planning:
 Plan approved (plan file ~/.claude/plans/this-is-one-dynamic-snowglobe.md); delivery is iterative,
 one tier per pass. Pass 1 (scaffold: bullet-hell/engine/ 3 modules + track-index self-check + root
 index/README/ARCHITECTURE wiring) shipped and verified this session — see memory/2026-06-03.md pt.3.
+
+Passes 2–6 each driven by the prompt "Okay, work on the next iteration." (one tier per pass,
+verified in-browser with a commit message at the end of each):
+- Pass 2 — Beginner ("One Ship, One Bullet", 6 demos). memory pt.4.
+- Pass 3 — Intermediate ("Patterns Are Polar Equations", 7 demos). memory pt.5.
+- Pass 4 — Advanced ("The Boss Fight", 6 demos; BHEmitter → engine/emitter.js). memory pt.6.
+- Pass 5 — Expert ("Ten Thousand Bullets", 6 demos; SoA/pool/hash taught inline, not in the engine).
+  memory pt.7.
+- Pass 6 — Simulations FINALE ("Danmaku", 6 demos; BHBoss+BHSpellCard → engine/boss.js). memory pt.8.
+🎉 TRACK COMPLETE — 5 tiers, 31 demos, 5 engine modules (loop/render/field/emitter/boss).

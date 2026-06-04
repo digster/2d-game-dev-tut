@@ -559,7 +559,7 @@ per-tier file structure mirroring the Fundamentals layout.
   pointer/canvas-driven so (like platformer/roguelike) they omit `data-demo-id` to opt out of
   the Export button.
 
-- `bullet-hell/` — **scaffolded; tiers land iteratively (Beginner next).** Build a
+- `bullet-hell/` — **fully shipped — all 5 tiers, 31 demos, 5 engine modules.** Build a
   Touhou/Cave-style **danmaku** (bullet-hell) shooter — the repo's answer to having *zero
   projectile management at scale* — from one ship dodging one bullet up to a complete,
   deterministic, replayable stage with a pooled 10,000-bullet field and a scripted multi-phase
@@ -590,7 +590,17 @@ per-tier file structure mirroring the Fundamentals layout.
   The track index's **scaffold self-check** proves integration, off-screen culling, and
   bit-for-bit **determinism** (the guarantee the replay tier rests on). Demos are
   keyboard/pointer-driven so (like platformer/roguelike/physics-puzzle) they omit `data-demo-id`
-  to opt out of the Export button.
+  to opt out of the Export button. **Engine grew to 5 modules** as tiers found their 2nd consumer:
+  `emitter.js` (`BHEmitter` + `bhFireRing`/`bhFireFan`) moved out of Intermediate when Advanced
+  reused it; `boss.js` (`BHBoss` + `BHSpellCard`) moved out of Advanced when the Simulations
+  boss-rush reused it; `render.js` gained `bhDrawBoss`/`bhDrawHpBar`. The **Expert** tier
+  deliberately did NOT rewrite the engine's object-based `BHField` to Struct-of-Arrays (that would
+  break the object API Beginner→Advanced teach against); instead it teaches the production stores
+  (`BHBulletPool`, `BHSoaBullets` with O(1) swap-remove, `BHSpatialHash`, batched rendering)
+  **inline** with a live work-ms meter — 10k+ bullets at 60 fps. The **Simulations** finale adds the
+  tooling (`BHRng` seeded determinism + bit-exact input replay, a visual pattern editor emitting
+  spell-card JSON, hitstop/trauma-shake/particle juice, Cave-style bullet-cancel) and the grand
+  capstone **"Danmaku"** — a deterministic, replayable two-phase boss rush composing every system.
 
 ## Shared assets
 
