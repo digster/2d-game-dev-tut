@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beginner — Bullet Hell / Danmaku Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <!-- Prism.js Syntax Highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+
+    <!-- Tier-local styles. The play canvases are keyboard-driven and focusable,
+         so we give a focused canvas a clear cyan ring (the engine clears the
+         default outline). Everything else reuses shared/styles.css. -->
+    <style>
+        canvas.bh-canvas { outline: none; background: #070a1c; border-radius: 8px; display: block; margin: 0 auto; touch-action: none; }
+        canvas.bh-canvas:focus { box-shadow: 0 0 0 2px #4fc3f7; }
+        .bh-slider { display: inline-flex; align-items: center; gap: 8px; color: #c9d1d9; font-size: 0.92em; }
+        .bh-slider input[type="range"] { width: 130px; }
+        .bh-slider .val { color: #4fc3f7; font-family: monospace; min-width: 2.8em; display: inline-block; }
+        .bh-key { font-family: monospace; background: #0d1117; border: 1px solid #2d3354; border-radius: 4px; padding: 1px 6px; color: #7CF2C8; }
+        /* The hitbox/graze geometry diagram. */
+        .bh-diagram-svg { display: block; margin: 0 auto; background: #0c1024; border: 1px solid #2b3566; border-radius: 8px; }
+        .bh-diagram-svg text { fill: #c9d1d9; font: 12px monospace; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌸 Beginner — One Ship, One Bullet</h1>
+        <p class="subtitle">A danmaku in miniature. We light up the playfield, fly a ship around it with precise movement, fire a single bullet and watch it die at the edge, then build the genre's beating heart — a tiny hitbox versus a larger graze-box — and finish by surviving a barrage.</p>
+
+        <!-- Navigation -->
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="beginner.html" class="nav-button active">Beginner</a>
+        </div>
+
+        <!-- Table of Contents -->
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#intro">What a danmaku really is (a player + bullets + one tiny test)</a></li>
+                <li><a href="#loop">The playfield &amp; the fixed loop — fly a ship</a></li>
+                <li><a href="#move">Precise movement — normalized diagonals &amp; focus mode</a></li>
+                <li><a href="#shot">The bullet as a moving point — spawn, integrate, cull</a></li>
+                <li><a href="#hit">Hitbox vs. graze-box — the genre's whole identity</a></li>
+                <li><a href="#stream">A stream of bullets — a cooldown is a fire-rate</a></li>
+                <li><a href="#mini-project">Mini-Project: "First Dodge"</a></li>
+            </ul>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- INTRO -->
+        <!-- ============================================ -->
+        <div id="intro" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🧱 What a danmaku really is</h2>
+            <p>
+                "Danmaku" means <em>barrage</em> — a screen so full of enemy fire it looks impossible, until
+                you realize the gaps are wide and the whole thing is a moving puzzle. Strip away the art and a
+                bullet-hell game is three pieces, sixty times a second:
+            </p>
+            <ul>
+                <li><strong>A player</strong> you move with surgical precision — because the part of you that
+                    can be <em>hit</em> is a single pixel-sized dot, not the whole ship.</li>
+                <li><strong>Bullets</strong> — each just a position and a velocity, spawned, moved, and thrown
+                    away when it leaves the screen. Our <code>BHField</code> does exactly that and nothing more.</li>
+                <li><strong>One tiny test</strong> — did a bullet touch the dot (you die) or merely skim it (you
+                    <em>graze</em>, and score)? This is the <em>lesson</em>, so we write it ourselves, on top of
+                    the field.</li>
+            </ul>
+            <p>
+                That's the whole skeleton. Spirals, spell-card bosses, ten thousand bullets at once —
+                everything later in this track is <em>more bullets</em> and <em>cleverer ways to spawn them</em>
+                on this same field. So we build the player and the bullet first, then the hit/graze test, each
+                demo adding exactly one idea.
+            </p>
+
+            <div class="key-point">
+                <strong>💡 Why a <em>fixed</em> timestep?</strong> If bullets moved by
+                <code>velocity × (time since last frame)</code>, a pattern would look different on a 30 Hz
+                laptop than a 240 Hz monitor, and a frame hitch could teleport a bullet through your hitbox.
+                Instead we advance the sim in fixed 1/60-second steps and render whenever we can. The engine's
+                <code>bhLoop</code> already does this — and it's <em>why</em> a recorded run can be replayed
+                bit-for-bit later (the Simulations tier's replay feature).
+            </div>
+
+            <div class="concept-box">
+                <h4>🧰 The engine, loaded on every page in this track</h4>
+                <ul>
+                    <li><code>BHField</code> + <code>BHBullet</code> — the bullet store and integrator (spawn,
+                        move, cull; no collision — that's our job below).</li>
+                    <li><code>bhLoop</code> — the fixed-timestep loop. <code>bhInstallKeys</code> —
+                        canvas-scoped player input (move / focus / shoot / bomb).</li>
+                    <li><code>BH</code> + <code>bhDrawField</code> / <code>bhDrawPlayer</code> /
+                        <code>bhDrawBullet</code> — the shared palette and asset-free drawing.</li>
+                </ul>
+                <p>Open the <a href="index.html">track index</a> and scroll to the Scaffold Self-Check to see
+                    the field proven — a bullet integrates a known distance, gets culled, and two seeded runs
+                    match bit-for-bit.</p>
+            </div>
+
+            <div class="key-point" style="border-left-color:#ffa726;">
+                <strong>⚠️ Two traps worth knowing up front:</strong> (1) our <code>Vector2D</code> (from the
+                shared utils) <em>mutates in place</em> — <code>v.add(...)</code>, <code>v.multiply(...)</code>
+                change <code>v</code>; only <code>v.subtract(...)</code> / <code>v.copy()</code> return new. A
+                bullet owns its own <code>vel</code>, so mutating that is fine, but never scale a
+                <em>shared</em> vector without <code>.copy()</code>. (2) Input is <strong>per-canvas</strong>:
+                <em>click a demo to focus it</em>, then the arrow keys drive it (and won't scroll the page).
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- LOOP / PLAYFIELD -->
+        <!-- ============================================ -->
+        <div id="loop" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🛰️ The playfield &amp; the fixed loop</h2>
+            <p>
+                Here's the stage: a tall, portrait <em>playfield</em> with a scrolling starfield for a sense of
+                motion. <strong>Click the canvas</strong> to give it focus, then fly with the arrow keys (or
+                WASD). The loop calls our <code>update(dt)</code> at a fixed 60 Hz and clamps the ship inside
+                the walls — that's all "the game running" means so far.
+            </p>
+            <div class="diagram">
+                <canvas id="bhLoopCanvas" class="bh-canvas" width="380" height="420"></canvas>
+            </div>
+            <div id="bhLoopHud" class="info-display" style="font-family:monospace;">click the playfield to start…</div>
+
+            <details>
+                <summary>📝 Click to see: the whole loop is move-then-clamp</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">const keys = bhInstallKeys(canvas);   // canvas-scoped: click to focus
+const player = { pos: new Vector2D(cx, cy), radius: 3, grazeR: 16 };
+
+function update(dt) {                  // dt is ALWAYS 1/60 — fixed
+  // moveDir() is a fresh, normalized vector — safe to mutate.
+  player.pos.add(keys.moveDir().multiply(SPEED * dt));
+  // keep the ship inside the playfield walls
+  player.pos.x = clamp(player.pos.x, bounds.x + PAD, bounds.x + bounds.w - PAD);
+  player.pos.y = clamp(player.pos.y, bounds.y + PAD, bounds.y + bounds.h - PAD);
+  keys.endFrame();                     // clear one-shot edges (shoot/bomb)
+}
+bhLoop(update, render).start();        // fixed-step update + per-frame render</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const keys = bhInstallKeys(canvas);
+const player = { pos: new Vector2D(cx, cy), radius: 3, grazeR: 16 };
+
+function update(dt: number): void {
+  player.pos.add(keys.moveDir().multiply(SPEED * dt));
+  player.pos.x = clamp(player.pos.x, bounds.x + PAD, bounds.x + bounds.w - PAD);
+  player.pos.y = clamp(player.pos.y, bounds.y + PAD, bounds.y + bounds.h - PAD);
+  keys.endFrame();
+}
+bhLoop(update, render).start();</code></pre>
+                </div>
+            </details>
+            <div class="key-point">
+                <strong>Why canvas-scoped input?</strong> A bullet-hell tier page stacks many keyboard demos on
+                one scroll. If every demo listened on the <em>window</em>, one press of the arrow key would move
+                <em>all</em> the ships at once and scroll the page. So each canvas is focusable, only swallows
+                the arrow/space keys <em>while focused</em>, and drops all held keys when focus leaves.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- PRECISE MOVEMENT -->
+        <!-- ============================================ -->
+        <div id="move" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🎯 Precise movement — diagonals &amp; focus mode</h2>
+            <p>
+                Danmaku lives or dies on movement precision, and two details matter. First, <strong>normalize
+                diagonals</strong>: pressing Up+Right gives the raw vector <code>(1, 1)</code>, whose length is
+                √2 ≈ 1.41 — so a diagonal would be 41% <em>faster</em> than a straight line. Turn the toggle off
+                and watch the speed read-out jump on diagonals. Second, <strong>focus mode</strong>: hold
+                <span class="bh-key">Shift</span> to slow down for threading tight gaps — which is also when the
+                game reveals your hitbox.
+            </p>
+            <div class="diagram">
+                <canvas id="bhMoveCanvas" class="bh-canvas" width="380" height="420"></canvas>
+            </div>
+            <div class="controls">
+                <label class="bh-slider"><input type="checkbox" id="bhMoveNorm" checked> normalize diagonals</label>
+            </div>
+            <div id="bhMoveHud" class="info-display" style="font-family:monospace;">click the playfield, then move…</div>
+
+            <details>
+                <summary>📝 Click to see: normalize the direction, then scale by speed</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">const a = keys.axis();                       // { x: -1..1, y: -1..1 }
+// BUG: raw diagonal (1,1) has length 1.41 -> 41% too fast.
+// FIX: normalize so every direction has length 1.
+const dir = new Vector2D(a.x, a.y).normalize();   // keys.moveDir() does this
+
+const speed = keys.focus ? FOCUS_SPEED : FULL_SPEED;  // Shift = slow
+player.focused = keys.focus;                  // reveals hitbox + graze ring
+player.pos.add(dir.multiply(speed * dt));</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const a = keys.axis();
+const dir = new Vector2D(a.x, a.y).normalize();
+const speed = keys.focus ? FOCUS_SPEED : FULL_SPEED;
+player.focused = keys.focus;
+player.pos.add(dir.multiply(speed * dt));</code></pre>
+                </div>
+            </details>
+            <div class="key-point">
+                <strong>Focus mode is a genre fundamental.</strong> Touhou and Cave both bind a "focus" key that
+                halves your speed and draws the otherwise-hidden hitbox, so you can <em>see</em> exactly the
+                pixels you're threading. We get it almost for free: a speed multiplier plus
+                <code>player.focused</code>, which <code>bhDrawPlayer</code> already uses to reveal the boxes.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- THE BULLET -->
+        <!-- ============================================ -->
+        <div id="shot" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>•➔ The bullet as a moving point</h2>
+            <p>
+                A bullet is the simplest object in the game: a position and a velocity. The interesting part is
+                how we <em>aim</em> it — a velocity is a <strong>polar coordinate</strong>, an angle plus a
+                speed, and <code>Vector2D.fromAngle(θ, speed)</code> turns that into <code>(vx, vy)</code>.
+                Set the angle and speed, then press <span class="bh-key">Z</span> (after clicking the canvas) or
+                the Fire button. Each bullet flies straight and is <strong>culled</strong> the instant it leaves
+                the field — watch the live count.
+            </p>
+            <div class="diagram">
+                <canvas id="bhShotCanvas" class="bh-canvas" width="380" height="420"></canvas>
+            </div>
+            <div class="controls">
+                <span class="bh-slider">angle
+                    <input type="range" id="bhShotAngle" min="0" max="360" step="1" value="90">
+                    <span class="val" id="bhShotAngleVal">90°</span>
+                </span>
+                <span class="bh-slider">speed
+                    <input type="range" id="bhShotSpeed" min="80" max="420" step="10" value="220">
+                    <span class="val" id="bhShotSpeedVal">220</span>
+                </span>
+                <button id="bhShotFire">▸ Fire (Z)</button>
+            </div>
+            <div id="bhShotHud" class="info-display" style="font-family:monospace;">set an angle &amp; speed, then fire…</div>
+
+            <details>
+                <summary>📝 Click to see: a velocity is just (angle, speed)</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">function fire(angleDeg, speed) {
+  // θ in radians; on a canvas, +y points DOWN, so θ = 90° aims downward.
+  const v = Vector2D.fromAngle(angleDeg * Math.PI / 180, speed);
+  field.spawn(emitter.x, emitter.y, v.x, v.y, { radius: 5, color: BH.bullet });
+}
+
+// In update(): advance + cull everything in one call.
+field.step(dt);   // each bullet: pos += vel·dt, then drop it if it left the field</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function fire(angleDeg: number, speed: number): void {
+  const v = Vector2D.fromAngle(angleDeg * Math.PI / 180, speed);
+  field.spawn(emitter.x, emitter.y, v.x, v.y, { radius: 5, color: BH.bullet });
+}
+field.step(dt);   // pos += vel·dt for each bullet, cull off-screen</code></pre>
+                </div>
+            </details>
+            <div class="key-point">
+                <strong>This one line is the seed of every pattern.</strong> Fire a whole circle of bullets and
+                you have a "ring"; rotate the angle a little each shot and you have a "spiral". That's the entire
+                Intermediate tier — <em>patterns are polar equations</em> — and it all grows from
+                <code>fromAngle(θ, speed)</code>.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- HITBOX VS GRAZE -->
+        <!-- ============================================ -->
+        <div id="hit" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>💠 Hitbox vs. graze-box — the genre's whole identity</h2>
+            <p>
+                Here's the trick that defines bullet-hell. Your ship <em>looks</em> big, but only a tiny dot at
+                its centre — the <strong>hitbox</strong> — can actually be killed. A larger ring around it — the
+                <strong>graze-box</strong> — rewards you for skimming bullets as close as possible without dying.
+                Both are just circles, and "did they touch?" is a squared-distance comparison.
+            </p>
+
+            <!-- Geometry diagram: the three radii, to scale. -->
+            <svg class="bh-diagram-svg" width="420" height="180" viewBox="0 0 420 180" role="img" aria-label="Diagram of the ship hull, graze ring and hitbox dot">
+                <!-- hull -->
+                <circle cx="120" cy="90" r="40" fill="none" stroke="#2b85b3" stroke-width="2" stroke-dasharray="4 4"/>
+                <!-- graze ring -->
+                <circle cx="120" cy="90" r="26" fill="rgba(124,242,200,0.10)" stroke="#7CF2C8" stroke-width="1.5"/>
+                <!-- hitbox -->
+                <circle cx="120" cy="90" r="5" fill="#ff4d6d"/>
+                <circle cx="120" cy="90" r="2.5" fill="#fff"/>
+                <!-- a grazing bullet -->
+                <circle cx="146" cy="78" r="6" fill="#ff5d8f"/><circle cx="146" cy="78" r="2.7" fill="#fff"/>
+                <!-- labels -->
+                <line x1="120" y1="90" x2="120" y2="50" stroke="#2b85b3" stroke-width="1"/>
+                <text x="126" y="46">hull (visual only)</text>
+                <line x1="120" y1="90" x2="146" y2="90" stroke="#7CF2C8" stroke-width="1"/>
+                <text x="150" y="112">graze ring → +score</text>
+                <text x="150" y="150">hitbox dot → you die</text>
+                <line x1="124" y1="90" x2="150" y2="146" stroke="#ff4d6d" stroke-width="1"/>
+                <text x="250" y="78" style="fill:#ffd166;">this bullet is grazing ✦</text>
+            </svg>
+
+            <p>
+                Fly into the slow blue rain below. Hold <span class="bh-key">Shift</span> to focus and reveal
+                your boxes, then thread bullets right past the dot — each one you skim turns gold and ticks the
+                graze counter. Touch the dot and you'd be dead.
+            </p>
+            <div class="diagram">
+                <canvas id="bhHitCanvas" class="bh-canvas" width="380" height="420"></canvas>
+            </div>
+            <div id="bhHitHud" class="info-display" style="font-family:monospace;">click the playfield, hold Shift, and skim some bullets…</div>
+
+            <details>
+                <summary>📝 Click to see: hit &amp; graze are two squared-distance tests</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Squared distance — no Math.sqrt, because we only compare to a squared radius.
+// At 10k bullets (Expert tier) skipping the sqrt is the whole performance game.
+function bhDist2(a, b) { const dx = a.x - b.x, dy = a.y - b.y; return dx*dx + dy*dy; }
+
+function bhHitTest(player, bullet) {                 // touched the dot -> dead
+  const r = player.radius + bullet.radius;
+  return bhDist2(player.pos, bullet.pos) &lt;= r * r;
+}
+function bhGrazeTest(player, bullet) {               // in the ring, not the dot
+  const d2 = bhDist2(player.pos, bullet.pos);
+  const hit = player.radius + bullet.radius;
+  const graze = player.grazeR + bullet.radius;
+  return d2 &gt; hit * hit &amp;&amp; d2 &lt;= graze * graze;
+}
+
+// Each bullet grazes ONCE — a one-shot flag, or it would score 60×/second.
+if (!b.grazed &amp;&amp; bhGrazeTest(player, b)) { b.grazed = true; grazes++; }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function bhDist2(a: Vector2D, b: Vector2D): number {
+  const dx = a.x - b.x, dy = a.y - b.y; return dx*dx + dy*dy;
+}
+function bhHitTest(player, bullet): boolean {
+  const r = player.radius + bullet.radius;
+  return bhDist2(player.pos, bullet.pos) &lt;= r * r;
+}
+function bhGrazeTest(player, bullet): boolean {
+  const d2 = bhDist2(player.pos, bullet.pos);
+  const hit = player.radius + bullet.radius;
+  const graze = player.grazeR + bullet.radius;
+  return d2 &gt; hit * hit &amp;&amp; d2 &lt;= graze * graze;
+}</code></pre>
+                </div>
+            </details>
+            <div class="key-point">
+                <strong>The hitbox is a design knob, not a constant.</strong> A 2–3px hitbox under a 24px sprite
+                is what makes a wall of bullets <em>fair</em>: your eye reads the big ship, but the game judges
+                the tiny dot. Shrink it and the game gets cruel; grow it and the danmaku stops feeling like
+                danmaku. This single number is most of a bullet-hell game's difficulty.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- STREAM -->
+        <!-- ============================================ -->
+        <div id="stream" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🌧️ A stream of bullets — a cooldown is a fire-rate</h2>
+            <p>
+                A single bullet isn't a barrage. A <em>stream</em> is just: spawn one bullet every
+                <code>interval</code> seconds. That interval <strong>is</strong> the fire-rate — drag it down and
+                the rain thickens. We sweep the aim with a sine so it paints a readable ribbon instead of a
+                single column. Weave through it; skimmed bullets turn gold.
+            </p>
+            <div class="diagram">
+                <canvas id="bhStreamCanvas" class="bh-canvas" width="380" height="420"></canvas>
+            </div>
+            <div class="controls">
+                <span class="bh-slider">fire every
+                    <input type="range" id="bhStreamRate" min="40" max="300" step="10" value="120">
+                    <span class="val" id="bhStreamRateVal">120</span> ms
+                </span>
+            </div>
+            <div id="bhStreamHud" class="info-display" style="font-family:monospace;">click the playfield and weave…</div>
+
+            <details>
+                <summary>📝 Click to see: a timer that fires when it runs out</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">let fireTimer = 0, t = 0;
+
+function update(dt) {
+  t += dt;
+  fireTimer -= dt;
+  // `while`, not `if`: at a tiny interval we may owe MORE than one bullet this
+  // step — spawn them all, and carry the remainder so timing never drifts.
+  while (fireTimer &lt;= 0) {
+    fireTimer += interval;
+    const sweep = Math.sin(t * 2.2) * 0.5;              // ± rad off straight-down
+    const v = Vector2D.fromAngle(Math.PI / 2 + sweep, 210);
+    field.spawn(enemy.x, enemy.y, v.x, v.y, { radius: 5, color: BH.bullet });
+  }
+  field.step(dt);
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">let fireTimer = 0, t = 0;
+function update(dt: number): void {
+  t += dt; fireTimer -= dt;
+  while (fireTimer &lt;= 0) {
+    fireTimer += interval;
+    const sweep = Math.sin(t * 2.2) * 0.5;
+    const v = Vector2D.fromAngle(Math.PI / 2 + sweep, 210);
+    field.spawn(enemy.x, enemy.y, v.x, v.y, { radius: 5, color: BH.bullet });
+  }
+  field.step(dt);
+}</code></pre>
+                </div>
+            </details>
+            <div class="key-point">
+                <strong>Why <code>while</code> and not <code>if</code>?</strong> At a 40 ms interval and a
+                16.6 ms step you sometimes owe more than one bullet per step. The <code>while</code> loop with a
+                carried remainder (<code>fireTimer += interval</code>, not <code>= interval</code>) keeps the
+                fire-rate exact regardless of timestep — the same accumulator idea as the game loop itself. In
+                the next tier this timer graduates into a reusable <strong>emitter</strong>.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- MINI PROJECT -->
+        <!-- ============================================ -->
+        <div id="mini-project" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🏆 Mini-Project: "First Dodge"</h2>
+            <p>
+                Everything on one playfield. An enemy fires a 3-shot fan that tightens as the clock runs;
+                <strong>survive 20 seconds</strong> on three lives. Getting hit costs a life, grants a moment of
+                mercy invulnerability, and clears the screen; every bullet you <em>graze</em> is +100. This is a
+                real (tiny) bullet-hell game — movement, focus, the hitbox/graze test, timed spawning and a
+                win/lose loop, composed.
+            </p>
+            <div class="diagram">
+                <canvas id="bhDodgeCanvas" class="bh-canvas" width="380" height="420"></canvas>
+            </div>
+            <div class="controls">
+                <button id="bhDodgeReset">↻ New run</button>
+            </div>
+            <div id="bhDodgeHud" class="info-display" style="font-family:monospace;">click the playfield to begin…</div>
+
+            <details>
+                <summary>📝 Click to see: the whole game is the pieces above, combined</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">if (t >= SURVIVE) { state = 'win'; return; }   // beat the clock
+
+// fan fires faster over time: interval lerps 0.14s -> 0.07s
+const interval = lerp(0.14, 0.07, t / SURVIVE);
+// ... spawn a 3-shot fan on the cooldown (as in the stream demo) ...
+
+field.step(dt);
+invuln = Math.max(0, invuln - dt);
+for (let i = field.bullets.length - 1; i >= 0; i--) {
+  const b = field.bullets[i];
+  if (invuln &lt;= 0 &amp;&amp; bhHitTest(player, b)) {
+    lives--; invuln = 1.2; field.clear();      // death-clear + mercy i-frames
+    if (lives &lt;= 0) state = 'lose';
+    break;
+  }
+  if (!b.grazed &amp;&amp; bhGrazeTest(player, b)) { b.grazed = true; score += 100; }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">if (t >= SURVIVE) { state = 'win'; return; }
+const interval = lerp(0.14, 0.07, t / SURVIVE);
+// ... spawn the fan on the cooldown ...
+field.step(dt);
+invuln = Math.max(0, invuln - dt);
+for (let i = field.bullets.length - 1; i >= 0; i--) {
+  const b = field.bullets[i];
+  if (invuln &lt;= 0 &amp;&amp; bhHitTest(player, b)) {
+    lives--; invuln = 1.2; field.clear();
+    if (lives &lt;= 0) state = 'lose';
+    break;
+  }
+  if (!b.grazed &amp;&amp; bhGrazeTest(player, b)) { b.grazed = true; score += 100; }
+}</code></pre>
+                </div>
+            </details>
+
+            <div class="example-box">
+                <h4>🚀 Make it yours</h4>
+                <ul>
+                    <li>Reward <em>risk</em>: make graze worth more the closer the bullet is to the dot.</li>
+                    <li>Add a second enemy firing from a corner so safe spots keep moving.</li>
+                    <li>Give the player a bomb on <span class="bh-key">X</span> that clears the screen (a
+                        preview of the Advanced tier's defensive bomb).</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- RECAP -->
+        <!-- ============================================ -->
+        <div class="section">
+            <h2>✅ Recap &amp; what's next</h2>
+            <p>You built the foundation of a danmaku game from scratch:</p>
+            <ul>
+                <li><strong>The fixed loop &amp; playfield</strong> — a deterministic 60 Hz heartbeat, a ship
+                    clamped to the field.</li>
+                <li><strong>Precise movement</strong> — normalized diagonals (no √2 speed bug) and focus mode.</li>
+                <li><strong>The bullet</strong> — a position + a polar velocity (<code>fromAngle</code>),
+                    spawned, integrated and culled by <code>BHField</code>.</li>
+                <li><strong>Hitbox vs. graze-box</strong> — the genre's identity, two squared-distance tests.</li>
+                <li><strong>Streams</strong> — a cooldown <em>is</em> a fire-rate (the seed of an emitter).</li>
+            </ul>
+            <div class="key-point">
+                <strong>Next — <a href="intermediate.html">Intermediate: Patterns Are Polar Equations</a>.</strong>
+                We promote that fire-timer into a reusable <strong>emitter</strong> and turn polar math into
+                rings, fans, spinning spirals, player-aimed shots, rose curves and curved bullet paths — the part
+                where every trig identity becomes something beautiful on screen.
+                <em>(Lands in the next iteration.)</em>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scroll to Top Button -->
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <!-- Dependencies, then the engine, then this tier's demos. Order matters. -->
+    <script src="../shared/utils.js"></script>
+    <script src="../shared/code-tabs.js"></script>
+    <script src="engine/loop.js"></script>
+    <script src="engine/render.js"></script>
+    <script src="engine/field.js"></script>
+    <script src="beginner-demos.js"></script>
+
+    <script>
+        // Scroll-to-top behavior — identical to every other tier page.
+        const scrollToTopBtn = document.getElementById('scrollToTop');
+        scrollToTopBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+        window.addEventListener('scroll', () => {
+            scrollToTopBtn.style.opacity = window.pageYOffset > 300 ? '1' : '0';
+        });
+        scrollToTopBtn.style.opacity = '0';
+        scrollToTopBtn.style.transition = 'opacity 0.3s';
+    </script>
+</body>
+</html>
