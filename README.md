@@ -602,6 +602,42 @@ per-tier file structure mirroring the Fundamentals layout.
   spell-card JSON, hitstop/trauma-shake/particle juice, Cave-style bullet-cancel) and the grand
   capstone **"Danmaku"** — a deterministic, replayable two-phase boss rush composing every system.
 
+- `tower-defense/` — **scaffolded — engine core + landing page live; the 5 tiers land
+  iteratively.** Build a Kingdom Rush / Bloons-style tower defense, from one lane and one
+  tower up to a balanced, multi-wave game. This is the **applied home for the Fundamentals'
+  flow fields and A*** (`advanced.html#flow-fields` / `#pathfinding`), which today are only
+  isolated demos — a TD makes them *gameplay-critical*: a flow field routes a crowd, A*
+  re-routes it the instant you drop a tower, a raycast tells a tower it can't fire through a
+  wall, and trig leads a shot to where a creep *will be*. The track covers **both** classic
+  styles — Kingdom Rush fixed lanes (Beginner/Intermediate) and Bloons-style open-field /
+  maze play with A* re-routing + flow-field crowds (Advanced). Reference screenshots are
+  inspiration only; tiers are remapped into the repo's strict difficulty order. **Tier arc:**
+  Beginner (The Path & The Tower — the grid, the fixed loop, a waypoint lane, a spawner, a
+  tower that targets + fires a projectile, lives lost to leaks), Intermediate (Tower Types &
+  Targeting — data-driven tower specs, first/last/closest/strongest targeting modes,
+  lead-the-target intercept trig, splash + slow towers, smooth Catmull-Rom spline lanes),
+  Advanced (Mazing, Flow Fields & Sight — A* on the grid, towers-as-obstacles re-routing with
+  a BFS connectivity guard, flow fields for open-field crowds, line-of-sight towers),
+  Expert (Ten Thousand Creeps — object pooling, Struct-of-Arrays, a spatial hash for range
+  queries + projectile hits, shared flow-field steering, render batching), Simulations (The
+  Whole Game & Balancing — wave generator + difficulty curves, economy, upgrades & synergies,
+  DPS-per-cost / time-to-kill / threat-heatmap dashboards, seeded determinism, and the grand
+  capstone **"The Last Stand"**). The **scaffold** ships three engine-core modules in
+  `tower-defense/engine/` (names on `window`, `td`/`TD`-prefixed, pre-checked vs
+  `shared/utils.js`, reusing its `Vector2D`): `loop.js` (`tdLoop` fixed-timestep accumulator
+  with a fast-forward `speed` knob, `tdInstallPointer` tower-placement input, `tdInstallKeys`
+  hotkeys), `render.js` (the `TD` palette + asset-free `tdDrawGround`/`tdDrawGrid`/`tdDrawPath`/
+  `tdDrawRange`/`tdDrawTower`/`tdDrawEnemy`/`tdDrawProjectile`/`tdDrawHUD`), and `world.js` —
+  the **map substrate**: `TDGrid` (tile grid + buildability/occupancy + lane-blocking) and
+  `TDPath` (waypoint or Catmull-Rom-smoothed route, arc-length parameterized so a creep follows
+  it by advancing one scalar). Pathfinding, targeting and combat are taught **on top** in the
+  tiers (the `PZWorld`/`BHField` rule), promoted to the engine only on their 2nd consumer
+  (entities at Intermediate, A*/flow-field/LOS `nav.js` at Expert). The track index carries a
+  **scaffold self-check** proving the globals load, the path is arc-length-correct, buildability
+  rejects the lane + occupied tiles, and two seeded mini-waves match bit-for-bit (the
+  determinism the Simulations balancing tier rests on). Demo IDs reserve the `td_` namespace;
+  demos are pointer/keyboard-driven so they omit `data-demo-id` (opt out of the Export button).
+
 ## Shared assets
 
 All pages load CSS and JS from `shared/`:

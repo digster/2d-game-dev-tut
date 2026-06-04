@@ -215,6 +215,43 @@ the sim touches `BHRng`; cosmetics use `Math.random`, so shake/particles never b
 `BHRng`/`BHParticles` stay inline — the finale is their terminal consumer.) **Status: the Bullet Hell
 track is COMPLETE — 5 tiers, 31 demos, 5 engine modules (loop, render, field, emitter, boss).**
 
+`tower-defense/engine/` is the **sixth** instance of the per-track helper-folder pattern (names on
+`window`, `td`/`TD`-prefixed, pre-checked vs `shared/utils.js`, reusing utils' `Vector2D`). It is a
+**Kingdom Rush / Bloons-style tower defense** track and the deliberate *applied home* for the
+Fundamentals' flow-field + A* demos (`advanced.html#flow-fields`/`#pathfinding`), which exist today only
+as isolated visualisers — a TD makes them gameplay-critical (a flow field routes a crowd, A* re-routes it
+when a tower is dropped). It covers **both** genre styles: Kingdom Rush fixed lanes (Beginner/Intermediate)
+and Bloons-style open-field / maze play (Advanced). The **scaffold ships three modules**, split by the
+same "one shared substrate, lessons on top" principle the physics-puzzle and bullet-hell scaffolds use:
+`loop.js` (`tdLoop`, a fixed-timestep accumulator that is a near-verbatim sibling of `bhLoop`/`pzLoop`/
+`pfLoop` — a TD sim must be `dt`-constant so a *balanced* run and a *replayed* run reproduce exactly — plus
+a fast-forward `speed` knob the TD genre needs; `tdInstallPointer` for the primary "click a tile to place a
+tower" verb; and a light `tdInstallKeys` for hotkeys); `render.js` (the `TD` palette + asset-free
+`tdDrawGround`/`tdDrawGrid`/`tdDrawPath`/`tdDrawRange`/`tdDrawTower`/`tdDrawEnemy`/`tdDrawProjectile`/
+`tdDrawHUD`); and `world.js`, the **map substrate** every tier builds on: `TDGrid` (tile↔world conversion,
+a `blocked` lane mask + an `occupied` tower mask, and the one question placement asks — `isBuildable`) and
+`TDPath` (a waypoint route, optionally Catmull-Rom-smoothed into a curved lane, then **arc-length
+parameterized** — it precomputes a dense polyline + a cumulative-distance table so a creep follows the lane
+by advancing a single scalar `dist += speed*dt` and asking `pointAt(dist)`, cleanly separating
+frame-rate-independent *speed* from lane *geometry*). The deliberate omission mirrors `PZWorld`/`BHField`
+being pure: **pathfinding, targeting and combat are NOT in the engine** — they're each a tier's *lesson*,
+taught inline and promoted only on the genuine 2nd consumer. Planned promotions (on the 2nd consumer, never
+on a guess): the Beginner tier's `TDTower`/`TDEnemy`/`TDProjectile` entity model → `engine/entities.js` when
+Intermediate reuses it; the Advanced tier's top-level (console-testable) `tdAStar`/`tdFlowField`/
+`tdLineOfSight` → `engine/nav.js` when the Expert scale tier reuses them — ending at **5 modules** (loop,
+render, world, entities, nav), the same family size as the bullet-hell/physics-puzzle/platformer engines.
+One footgun is load-bearing: `TDPath` hands out **plain `{x,y}`** from `pointAt`/`tangentAt` (not
+`Vector2D`) precisely because `Vector2D` mutates in place — returning a vector would invite a demo to
+mutate the cached polyline. A scaffold-stage bug the self-check caught and fixed: `TDGrid.blockAlongPath`
+originally stamped only the path's polyline *vertices*, which leaves the cells along a raw waypoint
+segment un-blocked (a sparse path only has points at its corners) — it now **marches each segment in
+sub-tile steps** so every crossed cell is blocked (a Bresenham-style line walk). The track index carries a
+**scaffold self-check** (globals present, arc-length correctness, a creep walking a known distance,
+buildability rejecting the lane + occupied tiles, and two seeded mini-waves matching bit-for-bit — the
+determinism the Simulations balancing tier rests on). Demos will be pointer/keyboard-driven so (like
+platformer/roguelike/physics-puzzle/bullet-hell) they omit `data-demo-id`. **Status: SCAFFOLDED — engine
+core (loop, render, world) + landing page live; the 5 tiers land iteratively.**
+
 **Why tiers are separate files:** content is split beginner → intermediate →
 expert → raymarching → stylization → distortion → advanced → simulations so each
 file stays editable without hitting length limits, and the per-track

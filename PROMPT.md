@@ -1462,3 +1462,29 @@ verified in-browser with a commit message at the end of each):
   memory pt.7.
 - Pass 6 — Simulations FINALE ("Danmaku", 6 demos; BHBoss+BHSpellCard → engine/boss.js). memory pt.8.
 🎉 TRACK COMPLETE — 5 tiers, 31 demos, 5 engine modules (loop/render/field/emitter/boss).
+
+---
+
+## Tower Defense track (Kingdom Rush / Bloons style)
+
+Prompt: a prior-session screenshot sketch of a "Tower Defense Track" (Kingdom Rush /
+Bloons style) — "Use it as an inspiration to create a plan, but do not copy it as is.
+Add and change whatever is required to make it comprehensive and complete." The genre
+is the applied home for the Fundamentals' flow fields + A* (today only demos).
+
+Confirmed with user: cover **both** styles (Kingdom Rush fixed lanes + Bloons open-field/
+maze); build **scaffold-first, then one tier per commit**. Tiers remapped into the repo's
+strict B→I→A→E→S order (hard pathfinding → Advanced, scale → Expert, whole game + balancing
+dashboards → Simulations). Plan file: `~/.claude/plans/this-is-a-soft-sundae.md`.
+
+Build passes (each verified in-browser, console clean, with a commit message at the end):
+- Pass 1 — SCAFFOLD: `tower-defense/engine/{loop,render,world}.js` (`tdLoop`/`tdInstall*`;
+  `TD` palette + `tdDraw*`; `TDGrid` buildability + `TDPath` arc-length route), the track
+  `index.html` landing page + scaffold self-check, and root `index.html` nav-button + TOC.
+  Self-check caught & fixed a `blockAlongPath` rasterization bug (stamp the cells a segment
+  crosses, not just its vertices). memory 2026-06-04.
+- Pass 2 — Beginner ("The Path & The Tower", ~6 demos; TDTower/TDEnemy/TDProjectile inline). [next]
+- Pass 3 — Intermediate ("Tower Types & Targeting"; entities → engine/entities.js).
+- Pass 4 — Advanced ("Mazing, Flow Fields & Sight"; A*/flow-field/LOS inline, console-testable).
+- Pass 5 — Expert ("Ten Thousand Creeps"; nav → engine/nav.js; pool/SoA/hash inline).
+- Pass 6 — Simulations FINALE ("The Last Stand"; waves/economy/upgrades + balancing dashboards).
