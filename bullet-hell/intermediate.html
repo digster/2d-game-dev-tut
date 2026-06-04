@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Intermediate — Bullet Hell / Danmaku Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <!-- Prism.js Syntax Highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+
+    <style>
+        canvas.bh-canvas { outline: none; background: #070a1c; border-radius: 8px; display: block; margin: 0 auto; touch-action: none; }
+        canvas.bh-canvas:focus { box-shadow: 0 0 0 2px #4fc3f7; }
+        .bh-slider { display: inline-flex; align-items: center; gap: 8px; color: #c9d1d9; font-size: 0.92em; }
+        .bh-slider input[type="range"] { width: 130px; }
+        .bh-slider .val { color: #4fc3f7; font-family: monospace; min-width: 3.4em; display: inline-block; }
+        .bh-key { font-family: monospace; background: #0d1117; border: 1px solid #2d3354; border-radius: 4px; padding: 1px 6px; color: #7CF2C8; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌸 Intermediate — Patterns Are Polar Equations</h1>
+        <p class="subtitle">The math-beautiful tier. We build a reusable <em>emitter</em>, then turn one idea — a velocity is an angle plus a speed — into rings, fans, spinning spirals, shots that hunt you, rose-curve petals, and bullets that bend. By the end an enemy cycles through real patterns on a timeline.</p>
+
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="beginner.html" class="nav-button">← Beginner</a>
+            <a href="intermediate.html" class="nav-button active">Intermediate</a>
+        </div>
+
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#intro">The big idea — a velocity is a polar coordinate</a></li>
+                <li><a href="#emitter">The emitter — separate <em>what</em> fires from <em>when</em></a></li>
+                <li><a href="#rings">Rings &amp; n-way fans</a></li>
+                <li><a href="#spiral">The spiral — spin the base angle</a></li>
+                <li><a href="#aimed">Aimed shots — a fan that hunts you</a></li>
+                <li><a href="#rose">Rose curves — r = cos(kθ)</a></li>
+                <li><a href="#curve">Curved paths — bullets that turn &amp; accelerate</a></li>
+                <li><a href="#mini-project">Mini-Project: "Pattern Stage"</a></li>
+            </ul>
+        </div>
+
+        <!-- INTRO -->
+        <div id="intro" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🧮 The big idea — a velocity is a polar coordinate</h2>
+            <p>
+                In the Beginner tier a bullet's velocity was <code>fromAngle(θ, speed)</code> — an
+                <strong>angle</strong> and a <strong>speed</strong>. That's a <em>polar coordinate</em>, and it
+                turns out <em>every</em> bullet pattern is just a rule for choosing θ (and sometimes speed) for a
+                batch of bullets:
+            </p>
+            <ul>
+                <li>Pick θ evenly around the circle → a <strong>ring</strong>.</li>
+                <li>Pick θ across a small arc → a <strong>fan</strong>.</li>
+                <li>Rotate that arc's center a little each volley → a <strong>spiral</strong>.</li>
+                <li>Center the arc on <code>atan2(player − emitter)</code> → an <strong>aimed</strong> shot.</li>
+                <li>Modulate <em>speed</em> by <code>cos(kθ)</code> → a <strong>rose curve</strong>.</li>
+            </ul>
+            <p>
+                So we write the firing machinery <em>once</em> — an <strong>emitter</strong> — and then every
+                pattern is a few lines of trig handed to it. This is why people call danmaku "the most
+                math-beautiful genre": you are literally watching polar equations animate.
+            </p>
+            <div class="key-point">
+                <strong>💡 Angle convention.</strong> On a canvas, <code>+y</code> points <em>down</em>, so
+                <code>θ = 0</code> aims right, <code>θ = π/2 (90°)</code> aims <em>down</em> (toward the player),
+                and angles increase clockwise. <code>Vector2D.fromAngle(θ, speed)</code> returns
+                <code>(cos θ · speed, sin θ · speed)</code> — a brand-new vector each call, so it's always safe
+                to read its <code>.x/.y</code>.
+            </div>
+        </div>
+
+        <!-- EMITTER -->
+        <div id="emitter" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>⚙️ The emitter — what vs. when</h2>
+            <p>
+                An <code>BHEmitter</code> holds a <strong>pattern</strong> (a <code>fire</code> callback) and a
+                <strong>cadence</strong> (an <code>interval</code>), plus a base <code>angle</code> it can
+                <code>spin</code> over time. Decoupling those two is the whole trick: change <em>what</em> fires
+                without touching <em>when</em>, and vice-versa. Below, the pattern is a fixed ring — drag the
+                interval and bullet count, and pause it.
+            </p>
+            <div class="diagram">
+                <canvas id="bhEmitCanvas" class="bh-canvas" width="420" height="440"></canvas>
+            </div>
+            <div class="controls">
+                <span class="bh-slider">interval
+                    <input type="range" id="bhEmitInterval" min="100" max="1000" step="20" value="400">
+                    <span class="val" id="bhEmitIntervalVal">400</span> ms
+                </span>
+                <span class="bh-slider">bullets
+                    <input type="range" id="bhEmitN" min="1" max="24" step="1" value="12">
+                    <span class="val" id="bhEmitNVal">12</span>
+                </span>
+                <button id="bhEmitToggle">⏸ Pause</button>
+            </div>
+            <div id="bhEmitHud" class="info-display" style="font-family:monospace;">firing…</div>
+
+            <details>
+                <summary>📝 Click to see: the whole emitter</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class BHEmitter {
+  constructor(x, y, opts = {}) {
+    this.pos = new Vector2D(x, y);
+    this.interval = opts.interval ?? 0.25;  // seconds between volleys
+    this.angle = opts.angle ?? 0;           // base aim
+    this.spin = opts.spin ?? 0;             // rad/s added to angle (spirals)
+    this.fire = opts.fire || (() =&gt; {});    // (emitter, field) =&gt; void
+    this.timer = 0;
+  }
+  step(dt, field) {
+    this.angle += this.spin * dt;           // rotate the base aim
+    const iv = Math.max(0.001, this.interval);
+    this.timer -= dt;
+    while (this.timer &lt;= 0) {                // fire everything we owe this step
+      this.timer += iv;                      // carry remainder → exact cadence
+      this.fire(this, field);
+    }
+  }
+}
+
+// usage: a pattern is just a `fire` callback handed to the emitter
+const em = new BHEmitter(cx, cy, { interval: 0.4, fire: (e, f) =&gt; ring(f, e, 12, 130) });</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">type Fire = (em: BHEmitter, field: BHField) =&gt; void;
+class BHEmitter {
+  pos: Vector2D; interval: number; angle: number; spin: number; fire: Fire; timer = 0;
+  constructor(x: number, y: number, opts: Partial&lt;BHEmitter&gt; = {}) { /* …as JS… */ }
+  step(dt: number, field: BHField): void {
+    this.angle += this.spin * dt;
+    const iv = Math.max(0.001, this.interval);
+    this.timer -= dt;
+    while (this.timer &lt;= 0) { this.timer += iv; this.fire(this, field); }
+  }
+}</code></pre>
+                </div>
+            </details>
+            <div class="key-point">
+                <strong>One machine, every pattern.</strong> Everything below is the same emitter with a
+                different <code>fire</code> callback (and maybe a non-zero <code>spin</code>). When the Advanced
+                tier builds a boss, this exact class — promoted into the engine — runs its attacks.
+            </div>
+        </div>
+
+        <!-- RINGS & FANS -->
+        <div id="rings" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>⭕ Rings &amp; n-way fans</h2>
+            <p>
+                A <strong>ring</strong> spaces <code>n</code> bullets evenly around the full circle:
+                <code>θ = i/n · 2π</code>. A <strong>fan</strong> spreads them across a smaller <code>arc</code>,
+                centered on the aim. Drag the arc from a tight fan all the way up to <em>full ring</em>, and
+                change the count.
+            </p>
+            <div class="diagram">
+                <canvas id="bhRingCanvas" class="bh-canvas" width="420" height="440"></canvas>
+            </div>
+            <div class="controls">
+                <span class="bh-slider">bullets
+                    <input type="range" id="bhRingN" min="1" max="48" step="1" value="16">
+                    <span class="val" id="bhRingNVal">16</span>
+                </span>
+                <span class="bh-slider">arc
+                    <input type="range" id="bhRingArc" min="20" max="360" step="10" value="360">
+                    <span class="val" id="bhRingArcVal">full ring</span>
+                </span>
+                <span class="bh-slider">speed
+                    <input type="range" id="bhRingSpeed" min="80" max="260" step="10" value="150">
+                </span>
+            </div>
+            <div id="bhRingHud" class="info-display" style="font-family:monospace;">a ring is θ = i/n · 2π…</div>
+
+            <details>
+                <summary>📝 Click to see: ring vs. fan, side by side</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// RING — evenly around the circle. i/n (not i/(n-1)) so 0 and 2π aren't doubled.
+function ring(field, em, n, speed) {
+  for (let i = 0; i &lt; n; i++) {
+    const a = em.angle + (i / n) * Math.PI * 2;
+    const v = Vector2D.fromAngle(a, speed);
+    field.spawn(em.pos.x, em.pos.y, v.x, v.y, { radius: 4 });
+  }
+}
+
+// FAN — spread across `arc` radians, centered on `center`. i/(n-1) so the
+// bullets reach BOTH ends of the arc.
+function fan(field, em, n, arc, center, speed) {
+  for (let i = 0; i &lt; n; i++) {
+    const t = n === 1 ? 0.5 : i / (n - 1);
+    const a = center + (t - 0.5) * arc;
+    const v = Vector2D.fromAngle(a, speed);
+    field.spawn(em.pos.x, em.pos.y, v.x, v.y, { radius: 4 });
+  }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function ring(field: BHField, em: BHEmitter, n: number, speed: number): void {
+  for (let i = 0; i &lt; n; i++) {
+    const v = Vector2D.fromAngle(em.angle + (i / n) * Math.PI * 2, speed);
+    field.spawn(em.pos.x, em.pos.y, v.x, v.y, { radius: 4 });
+  }
+}
+function fan(field: BHField, em: BHEmitter, n: number, arc: number, center: number, speed: number): void {
+  for (let i = 0; i &lt; n; i++) {
+    const t = n === 1 ? 0.5 : i / (n - 1);
+    const v = Vector2D.fromAngle(center + (t - 0.5) * arc, speed);
+    field.spawn(em.pos.x, em.pos.y, v.x, v.y, { radius: 4 });
+  }
+}</code></pre>
+                </div>
+            </details>
+            <div class="key-point">
+                <strong>The off-by-one that matters.</strong> Rings use <code>i/n</code> (so the bullet at
+                <code>θ=0</code> and the one at <code>θ=2π</code> don't land on top of each other); fans use
+                <code>i/(n-1)</code> (so a bullet sits at <em>both</em> ends of the arc). Mixing them up is the
+                classic "why is my ring lopsided?" bug.
+            </div>
+        </div>
+
+        <!-- SPIRAL -->
+        <div id="spiral" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🌀 The spiral — spin the base angle</h2>
+            <p>
+                Here's the magic trick: fire the same ring every volley, but <strong>rotate the base angle a
+                little each step</strong> (<code>spin</code>). Because consecutive volleys are slightly turned,
+                the bullets trace smooth spiral <em>arms</em>. More arms make flowers; faster spin tightens the
+                coil. Flip the spin negative to reverse it.
+            </p>
+            <div class="diagram">
+                <canvas id="bhSpiralCanvas" class="bh-canvas" width="420" height="440"></canvas>
+            </div>
+            <div class="controls">
+                <span class="bh-slider">arms
+                    <input type="range" id="bhSpiralArms" min="1" max="6" step="1" value="3">
+                    <span class="val" id="bhSpiralArmsVal">3</span>
+                </span>
+                <span class="bh-slider">spin
+                    <input type="range" id="bhSpiralSpin" min="-300" max="300" step="10" value="90">
+                    <span class="val" id="bhSpiralSpinVal">90°/s</span>
+                </span>
+            </div>
+            <div id="bhSpiralHud" class="info-display" style="font-family:monospace;">a spiral is a ring that rotates…</div>
+
+            <details>
+                <summary>📝 Click to see: spin + a multi-arm ring</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">const em = new BHEmitter(cx, cy, {
+  interval: 0.05,                         // fast → a continuous coil
+  spin: 90 * Math.PI / 180,               // rad/s; BHEmitter.step adds spin·dt to angle
+  fire: (e, f) =&gt; {
+    const arms = 3;
+    for (let k = 0; k &lt; arms; k++) {       // `arms` evenly spaced spiral starts
+      const a = e.angle + (k / arms) * Math.PI * 2;
+      const v = Vector2D.fromAngle(a, 140);
+      f.spawn(e.pos.x, e.pos.y, v.x, v.y, { radius: 4 });
+    }
+  },
+});</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const em = new BHEmitter(cx, cy, {
+  interval: 0.05,
+  spin: 90 * Math.PI / 180,
+  fire: (e: BHEmitter, f: BHField): void =&gt; {
+    const arms = 3;
+    for (let k = 0; k &lt; arms; k++) {
+      const v = Vector2D.fromAngle(e.angle + (k / arms) * Math.PI * 2, 140);
+      f.spawn(e.pos.x, e.pos.y, v.x, v.y, { radius: 4 });
+    }
+  },
+});</code></pre>
+                </div>
+            </details>
+            <div class="key-point">
+                <strong>Spin lives on the emitter, not the bullet.</strong> The bullets still fly dead straight —
+                it's the <em>emission angle</em> that rotates between volleys. That separation (a slowly turning
+                source firing straight shots) is what produces the hypnotic, readable spiral instead of a mess.
+            </div>
+        </div>
+
+        <!-- AIMED -->
+        <div id="aimed" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🎯 Aimed shots — a fan that hunts you</h2>
+            <p>
+                Until now patterns ignored you. An <strong>aimed</strong> shot points at the player: the angle
+                from the emitter to your ship is <code>atan2(player.y − emitter.y, player.x − emitter.x)</code>.
+                Center a fan on that and the barrage follows you around. <strong>Click the canvas</strong> and
+                move — notice you can't just sit still anymore.
+            </p>
+            <div class="diagram">
+                <canvas id="bhAimedCanvas" class="bh-canvas" width="420" height="440"></canvas>
+            </div>
+            <div class="controls">
+                <span class="bh-slider">bullets
+                    <input type="range" id="bhAimedN" min="1" max="13" step="1" value="5">
+                    <span class="val" id="bhAimedNVal">5</span>
+                </span>
+                <span class="bh-slider">spread
+                    <input type="range" id="bhAimedArc" min="0" max="120" step="5" value="40">
+                    <span class="val" id="bhAimedArcVal">40°</span>
+                </span>
+            </div>
+            <div id="bhAimedHud" class="info-display" style="font-family:monospace;">click the playfield and move…</div>
+
+            <details>
+                <summary>📝 Click to see: aim with atan2</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">const em = new BHEmitter(cx, topY, {
+  interval: 0.3,
+  fire: (e, f) =&gt; {
+    // the angle pointing straight at the player, right now
+    const aim = Math.atan2(player.pos.y - e.pos.y, player.pos.x - e.pos.x);
+    fan(f, e, 5, 40 * Math.PI / 180, aim, 175);   // a 5-shot fan, centered on the aim
+  },
+});</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const em = new BHEmitter(cx, topY, {
+  interval: 0.3,
+  fire: (e: BHEmitter, f: BHField): void =&gt; {
+    const aim = Math.atan2(player.pos.y - e.pos.y, player.pos.x - e.pos.x);
+    fan(f, e, 5, 40 * Math.PI / 180, aim, 175);
+  },
+});</code></pre>
+                </div>
+            </details>
+            <div class="key-point">
+                <strong><code>atan2</code>, not <code>atan</code>.</strong> <code>atan2(dy, dx)</code> takes the
+                two components separately, so it returns the correct angle in <em>all four</em> quadrants (a
+                plain <code>atan(dy/dx)</code> can't tell left from right and divides by zero straight up). It is
+                the single most-used function in enemy AI and aiming.
+            </div>
+        </div>
+
+        <!-- ROSE -->
+        <div id="rose" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🌹 Rose curves — r = cos(kθ)</h2>
+            <p>
+                The rose curve <code>r = cos(kθ)</code> is a classic polar equation that draws flower petals. We
+                borrow it as a <em>speed</em> rule: fire a full ring, but set each bullet's speed from
+                <code>|cos(kθ)|</code>. Slow bullets bunch up where the curve pinches to zero, fast ones race
+                out where it peaks — so the expanding ring blooms into petals. Change <code>k</code>; toggle a
+                second counter-rotating layer for interference.
+            </p>
+            <div class="diagram">
+                <canvas id="bhRoseCanvas" class="bh-canvas" width="420" height="440"></canvas>
+            </div>
+            <div class="controls">
+                <span class="bh-slider">k (petal param)
+                    <input type="range" id="bhRoseK" min="2" max="8" step="1" value="3">
+                    <span class="val" id="bhRoseKVal">3</span>
+                </span>
+                <label class="bh-slider"><input type="checkbox" id="bhRoseLayer"> add 2nd layer (interference)</label>
+            </div>
+            <div id="bhRoseHud" class="info-display" style="font-family:monospace;">r = |cos(k·θ)|…</div>
+
+            <details>
+                <summary>📝 Click to see: a ring with speed = |cos(kθ)|</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">const N = 44;
+fire: (e, f) =&gt; {
+  for (let i = 0; i &lt; N; i++) {
+    const a = e.angle + (i / N) * Math.PI * 2;
+    const r = Math.abs(Math.cos(k * a));     // the rose-curve radius at this angle
+    const speed = 50 + 170 * r;              // map r → speed: pinch = slow, peak = fast
+    const v = Vector2D.fromAngle(a, speed);
+    f.spawn(e.pos.x, e.pos.y, v.x, v.y, { radius: 3.5 });
+  }
+}
+// odd k → k petals; even k → 2k petals (the same rule a pencil-drawn rose follows).</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const N = 44;
+fire: (e: BHEmitter, f: BHField): void =&gt; {
+  for (let i = 0; i &lt; N; i++) {
+    const a = e.angle + (i / N) * Math.PI * 2;
+    const speed = 50 + 170 * Math.abs(Math.cos(k * a));
+    const v = Vector2D.fromAngle(a, speed);
+    f.spawn(e.pos.x, e.pos.y, v.x, v.y, { radius: 3.5 });
+  }
+}</code></pre>
+                </div>
+            </details>
+            <div class="key-point">
+                <strong>Patterns are equations you can read.</strong> Swap <code>cos(kθ)</code> for
+                <code>0.5 + 0.5·sin(kθ)</code>, or feed θ through a noise function, and you've invented a new
+                attack. Once you see a pattern as "a function from angle to (speed, radius, colour)", authoring
+                danmaku becomes playing with equations.
+            </div>
+        </div>
+
+        <!-- CURVED PATHS -->
+        <div id="curve" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>↪️ Curved paths — bullets that turn &amp; accelerate</h2>
+            <p>
+                So far every bullet flew straight. But back in the engine, <code>BHBullet</code> has two knobs
+                that have been sitting at zero this whole time: <code>turn</code> (spin the heading, rad/s) and
+                <code>accel</code> (change speed along it, px/s²). Switch them on and a straight stream bends
+                into whips and arcs. <strong>Click and dodge.</strong>
+            </p>
+            <div class="diagram">
+                <canvas id="bhCurveCanvas" class="bh-canvas" width="420" height="440"></canvas>
+            </div>
+            <div class="controls">
+                <span class="bh-slider">turn
+                    <input type="range" id="bhCurveTurn" min="-180" max="180" step="10" value="60">
+                    <span class="val" id="bhCurveTurnVal">60°/s</span>
+                </span>
+                <span class="bh-slider">accel
+                    <input type="range" id="bhCurveAccel" min="-200" max="200" step="10" value="0">
+                    <span class="val" id="bhCurveAccelVal">0</span>
+                </span>
+            </div>
+            <div id="bhCurveHud" class="info-display" style="font-family:monospace;">click the playfield and dodge…</div>
+
+            <details>
+                <summary>📝 Click to see: the knobs were already in the engine</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// Just spawn with non-zero turn / accel — BHField.step does the rest:
+const v = Vector2D.fromAngle(em.angle, 150);
+field.spawn(em.pos.x, em.pos.y, v.x, v.y, {
+  turn:  60 * Math.PI / 180,   // rad/s: rotate the heading every step
+  accel: 0,                    // px/s²: change speed along the heading
+});
+
+// …inside engine/field.js, per bullet, per step:
+//   if (b.turn)  b.vel.rotate(b.turn * dt);
+//   if (b.accel) b.vel.multiply((speed + b.accel*dt) / speed);
+//   b.pos.add(b.vel.copy().multiply(dt));</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const v = Vector2D.fromAngle(em.angle, 150);
+field.spawn(em.pos.x, em.pos.y, v.x, v.y, {
+  turn:  60 * Math.PI / 180,
+  accel: 0,
+});
+// BHField.step applies turn (rotate vel) then accel (rescale vel) before moving.</code></pre>
+                </div>
+            </details>
+            <div class="key-point">
+                <strong>Design seams pay off later.</strong> Those knobs were added to <code>BHBullet</code> in
+                the very first scaffold and left inert — exactly so this lesson could switch them on without
+                touching the engine. A small, well-placed extension point turns a "rewrite" into a one-line
+                opt-in. (Full scripted Bézier paths are an Advanced-tier follow-up.)
+            </div>
+        </div>
+
+        <!-- MINI PROJECT -->
+        <div id="mini-project" class="section">
+            <span class="level-indicator level-intermediate">INTERMEDIATE</span>
+            <h2>🏆 Mini-Project: "Pattern Stage"</h2>
+            <p>
+                One enemy, three patterns, on a loop: a <strong>ring burst</strong>, then an <strong>aimed
+                fan</strong> that chases you, then a <strong>twin spiral</strong> — each for a few seconds, with
+                a screen-clear between them. <strong>Click and survive</strong>; graze for +100, eat a bullet
+                for −300. This little timeline — "play pattern A, then B, then C" — is precisely what the next
+                tier turns into a boss's <em>spell card</em>.
+            </p>
+            <div class="diagram">
+                <canvas id="bhStageCanvas" class="bh-canvas" width="420" height="440"></canvas>
+            </div>
+            <div class="controls">
+                <button id="bhStageReset">↻ Restart</button>
+            </div>
+            <div id="bhStageHud" class="info-display" style="font-family:monospace;">click the playfield to begin…</div>
+
+            <details>
+                <summary>📝 Click to see: a pattern timeline (the seed of a spell card)</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">const PHASES = [
+  { name: 'Ring Burst', dur: 4,   interval: 0.5,  spin: 0,   fire: (e,f) =&gt; ring(f, e, 20, 115) },
+  { name: 'Aimed Fan',  dur: 4.5, interval: 0.24, spin: 0,   fire: (e,f) =&gt; {
+      const aim = Math.atan2(player.pos.y - e.pos.y, player.pos.x - e.pos.x);
+      fan(f, e, 7, 0.7, aim, 165);
+  } },
+  { name: 'Twin Spiral',dur: 5,   interval: 0.05, spin: 2.3, fire: (e,f) =&gt; { /* 2-arm ring */ } },
+];
+
+// advance the timeline, applying each phase to the emitter:
+phaseTime += dt;
+if (phaseTime &gt;= PHASES[i].dur) { phaseTime = 0; i = (i + 1) % PHASES.length; applyPhase(i); }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface Phase { name: string; dur: number; interval: number; spin: number; fire: Fire; }
+const PHASES: Phase[] = [ /* …ring, aimed fan, twin spiral… */ ];
+phaseTime += dt;
+if (phaseTime &gt;= PHASES[i].dur) { phaseTime = 0; i = (i + 1) % PHASES.length; applyPhase(i); }</code></pre>
+                </div>
+            </details>
+
+            <div class="example-box">
+                <h4>🚀 Make it yours</h4>
+                <ul>
+                    <li>Add a fourth phase using your rose curve from above.</li>
+                    <li>Make the spiral's <code>spin</code> ramp up over its duration (<code>lerp</code>).</li>
+                    <li>Give bullets a <code>turn</code> so the aimed fan becomes a homing-ish whip.</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- RECAP -->
+        <div class="section">
+            <h2>✅ Recap &amp; what's next</h2>
+            <ul>
+                <li><strong>The emitter</strong> — separate the pattern (<code>fire</code>) from the cadence
+                    (<code>interval</code>) and base <code>angle</code>/<code>spin</code>.</li>
+                <li><strong>Rings &amp; fans</strong> — <code>θ = i/n · 2π</code> vs. a spread across an arc.</li>
+                <li><strong>Spirals</strong> — a ring whose base angle rotates between volleys.</li>
+                <li><strong>Aimed shots</strong> — center a fan on <code>atan2(player − emitter)</code>.</li>
+                <li><strong>Rose curves</strong> — modulate speed by <code>cos(kθ)</code> → petals.</li>
+                <li><strong>Curved paths</strong> — the engine's <code>turn</code>/<code>accel</code> knobs.</li>
+            </ul>
+            <div class="key-point">
+                <strong>Next — <a href="advanced.html">Advanced: The Boss Fight</a>.</strong> We give an enemy
+                HP and turn that pattern timeline into <em>spell cards</em> — data-driven attack scripts with
+                phases, sub-emitters and screen-clears — and arm the player with a defensive bomb. The
+                <code>BHEmitter</code> you built here graduates into the engine to run it all.
+                <em>(Lands in the next iteration.)</em>
+            </div>
+        </div>
+    </div>
+
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <!-- Dependencies, then the engine, then this tier's demos. Order matters. -->
+    <script src="../shared/utils.js"></script>
+    <script src="../shared/code-tabs.js"></script>
+    <script src="engine/loop.js"></script>
+    <script src="engine/render.js"></script>
+    <script src="engine/field.js"></script>
+    <script src="intermediate-demos.js"></script>
+
+    <script>
+        const scrollToTopBtn = document.getElementById('scrollToTop');
+        scrollToTopBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+        window.addEventListener('scroll', () => { scrollToTopBtn.style.opacity = window.pageYOffset > 300 ? '1' : '0'; });
+        scrollToTopBtn.style.opacity = '0';
+        scrollToTopBtn.style.transition = 'opacity 0.3s';
+    </script>
+</body>
+</html>
