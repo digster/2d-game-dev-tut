@@ -602,8 +602,8 @@ per-tier file structure mirroring the Fundamentals layout.
   spell-card JSON, hitstop/trauma-shake/particle juice, Cave-style bullet-cancel) and the grand
   capstone **"Danmaku"** — a deterministic, replayable two-phase boss rush composing every system.
 
-- `tower-defense/` — **scaffolded — engine core + landing page live; the 5 tiers land
-  iteratively.** Build a Kingdom Rush / Bloons-style tower defense, from one lane and one
+- `tower-defense/` — **Beginner tier live (engine core + landing page + Beginner's 6 demos);
+  Intermediate→Simulations land iteratively.** Build a Kingdom Rush / Bloons-style tower defense, from one lane and one
   tower up to a balanced, multi-wave game. This is the **applied home for the Fundamentals'
   flow fields and A*** (`advanced.html#flow-fields` / `#pathfinding`), which today are only
   isolated demos — a TD makes them *gameplay-critical*: a flow field routes a crowd, A*
@@ -635,7 +635,17 @@ per-tier file structure mirroring the Fundamentals layout.
   (entities at Intermediate, A*/flow-field/LOS `nav.js` at Expert). The track index carries a
   **scaffold self-check** proving the globals load, the path is arc-length-correct, buildability
   rejects the lane + occupied tiles, and two seeded mini-waves match bit-for-bit (the
-  determinism the Simulations balancing tier rests on). Demo IDs reserve the `td_` namespace;
+  determinism the Simulations balancing tier rests on). **Beginner tier ("The Path & The
+  Tower", 6 demos)** builds the core loop on a fixed lane and introduces the inline entity
+  model (`TDEnemy`/`TDTower`/`TDProjectile` + the top-level, console-testable `tdPickTarget`,
+  all awaiting promotion to `engine/entities.js` at Intermediate): a hover-to-build map demo
+  (with a straight↔smooth lane toggle), a creep that follows the lane by advancing one scalar
+  (`dist += speed·dt` → `path.pointAt`), a spawner (a wave = a countdown emitting on a cadence),
+  a hitscan tower (squared-distance range check, "first" = furthest-along targeting, fire-rate
+  as a `1/fireRate` cooldown, click-to-relocate), a projectile tower (the shot travels and can
+  be outrun by fast creeps — motivating the Intermediate lead-the-target lesson — and fizzles
+  on overkill), and the capstone **"First Line of Defense"** (place towers on a 120-gold budget,
+  survive a wave, kills pay gold and leaks cost lives). Demo IDs reserve the `td_` namespace;
   demos are pointer/keyboard-driven so they omit `data-demo-id` (opt out of the Export button).
 
 ## Shared assets

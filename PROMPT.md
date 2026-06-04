@@ -1483,8 +1483,9 @@ Build passes (each verified in-browser, console clean, with a commit message at 
   `index.html` landing page + scaffold self-check, and root `index.html` nav-button + TOC.
   Self-check caught & fixed a `blockAlongPath` rasterization bug (stamp the cells a segment
   crosses, not just its vertices). memory 2026-06-04.
-- Pass 2 — Beginner ("The Path & The Tower", ~6 demos; TDTower/TDEnemy/TDProjectile inline). [next]
-- Pass 3 — Intermediate ("Tower Types & Targeting"; entities → engine/entities.js).
+- Pass 2 — Beginner ("The Path & The Tower", 6 demos; TDTower/TDEnemy/TDProjectile +
+  tdPickTarget inline, console-tested; capstone "First Line of Defense"). memory 2026-06-04 pass 2.
+- Pass 3 — Intermediate ("Tower Types & Targeting"; entities → engine/entities.js). [next]
 - Pass 4 — Advanced ("Mazing, Flow Fields & Sight"; A*/flow-field/LOS inline, console-testable).
 - Pass 5 — Expert ("Ten Thousand Creeps"; nav → engine/nav.js; pool/SoA/hash inline).
 - Pass 6 — Simulations FINALE ("The Last Stand"; waves/economy/upgrades + balancing dashboards).

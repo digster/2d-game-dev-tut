@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beginner — Tower Defense Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <!-- Prism.js Syntax Highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+
+    <!-- Tier-local styles. The play canvases are pointer-driven (click to place a
+         tower); everything else reuses shared/styles.css. -->
+    <style>
+        canvas.td-canvas { display: block; margin: 0 auto; max-width: 100%; background: #070a1c; border-radius: 8px; touch-action: none; cursor: crosshair; }
+        .td-slider { display: inline-flex; align-items: center; gap: 8px; color: #c9d1d9; font-size: 0.92em; }
+        .td-slider input[type="range"] { width: 150px; }
+        .td-slider .val { color: #4fc3f7; font-family: monospace; min-width: 4.4em; display: inline-block; }
+        /* The arc-length explainer diagram. */
+        .td-diagram-svg { display: block; margin: 0 auto; background: #0c1024; border: 1px solid #2b3566; border-radius: 8px; }
+        .td-diagram-svg text { fill: #c9d1d9; font: 12px monospace; }
+        .td-diagram-svg .lane { stroke: #7a6336; stroke-width: 16; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+        .td-diagram-svg .laneEdge { stroke: #a9894c; stroke-width: 20; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏰 Beginner — The Path &amp; The Tower</h1>
+        <p class="subtitle">A tower defense in miniature. We draw the map and its lane, send a creep walking down it, turn one creep into a wave, build a tower that finds a target and fires, give the shot a body that flies and hits — then put it all together and defend a budget against a wave.</p>
+
+        <!-- Navigation -->
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="beginner.html" class="nav-button active">Beginner</a>
+        </div>
+
+        <!-- Table of Contents -->
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#intro">What a tower defense really is (a map, a path, attackers &amp; defenders)</a></li>
+                <li><a href="#map">The map — a grid, a lane, and where you can build</a></li>
+                <li><a href="#creep">The creep — following a path is one moving number</a></li>
+                <li><a href="#spawn">The spawner — a wave is a countdown on a cadence</a></li>
+                <li><a href="#tower">The tower — range, target acquisition &amp; fire-rate</a></li>
+                <li><a href="#projectile">The projectile — giving the shot a body</a></li>
+                <li><a href="#mini-project">Mini-Project: "First Line of Defense"</a></li>
+            </ul>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- INTRO -->
+        <!-- ============================================ -->
+        <div id="intro" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🧱 What a tower defense really is</h2>
+            <p>
+                Strip away the art and a tower defense is a tug-of-war between two simple jobs, sixty
+                times a second:
+            </p>
+            <ul>
+                <li><strong>The attacker</strong> spawns creeps that walk a <em>path</em> from a spawn
+                    point to your goal. Each creep is just a position, some HP, and a speed.</li>
+                <li><strong>The defender</strong> (you) places <em>towers</em> on the map. A tower has a
+                    <em>range</em>, picks a target inside it, and fires on a <em>cooldown</em>.</li>
+                <li><strong>The stakes</strong> — a creep that reaches the goal costs you a <em>life</em>;
+                    a creep you kill pays <em>gold</em>; gold buys more towers.</li>
+            </ul>
+            <p>
+                That's the whole skeleton, and we build it one piece at a time on the engine the track
+                scaffold already gave us: <code>TDGrid</code> (the tiles), <code>TDPath</code> (the lane),
+                <code>tdLoop</code> (the fixed-timestep clock), and the <code>tdDraw*</code> helpers (the
+                look). Everything later in the track — many tower types, enemies that re-route around your
+                towers, thousands of creeps — is <em>more of this same loop</em> with cleverer rules.
+            </p>
+
+            <div class="key-point">
+                <strong>💡 Two questions run the whole genre.</strong> The defender asks <em>"what do I hit,
+                and where will it be?"</em> — target choice plus aiming. The attacker asks <em>"what's the
+                cheapest route to the goal?"</em> — which becomes A* and flow fields in the Advanced tier.
+                This Beginner tier answers the defender's first half (hit the creep furthest along) and the
+                attacker's simplest case (one fixed lane).
+            </div>
+
+            <div class="key-point" style="border-left-color:#ffa726;">
+                <strong>⚠️ One trap worth knowing up front:</strong> our <code>Vector2D</code> (from the
+                shared utils) <em>mutates in place</em> — <code>v.add(...)</code>, <code>v.multiply(...)</code>,
+                <code>v.normalize()</code> change <code>v</code>; only <code>v.subtract(...)</code> and
+                <code>v.copy()</code> return a new vector. An entity owns its own <code>pos</code>, so
+                mutating that is fine — but to get a "toward the target" direction we use
+                <code>target.pos.subtract(myPos)</code>, which returns a fresh vector and leaves the target's
+                position untouched.
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- MAP -->
+        <!-- ============================================ -->
+        <div id="map" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🗺️ The map — a grid, a lane, and where you can build</h2>
+            <p>
+                The map is a <strong>tile grid</strong> (<code>TDGrid</code>). Two things live on it: a
+                <strong>lane</strong> the creeps walk (drawn from a <code>TDPath</code>), and the
+                <strong>towers</strong> you place. A tower can go on any tile that is in-bounds, not on the
+                lane, and not already taken — that's the single question <code>grid.isBuildable(col, row)</code>
+                answers. Hover the map below: green tiles are buildable, the red corridor is the lane.
+            </p>
+            <p>
+                Toggle the lane between <em>straight</em> (the raw waypoints) and <em>smooth</em> — the same
+                <code>TDPath</code> can round its corners with a Catmull-Rom curve, a preview of the curved
+                lanes the Intermediate tier builds.
+            </p>
+
+            <div class="diagram">
+                <canvas id="tdMapCanvas" class="td-canvas" width="760" height="360"></canvas>
+            </div>
+            <div class="controls">
+                <button id="tdMapSmooth">Lane: Straight (waypoints)</button>
+            </div>
+
+            <details class="code-block">
+                <summary>📝 Show the code: the map &amp; buildability</summary>
+                <pre><code class="language-javascript">const grid = new TDGrid(19, 9, 40);        // 19×9 tiles of 40px each
+const path = new TDPath(waypoints);        // a lane through [{x,y}, …]
+grid.blockAlongPath(path);                 // stamp the lane as un-buildable
+
+// the one question tower placement asks:
+grid.isBuildable(col, row);   // in-bounds, not lane, not already occupied?
+
+// pixel → cell, and cell → its centre (where a tower sits)
+const cell = grid.worldToCell(mouseX, mouseY);
+const { x, y } = grid.cellCenter(cell.col, cell.row);</code></pre>
+            </details>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- CREEP -->
+        <!-- ============================================ -->
+        <div id="creep" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🐛 The creep — following a path is one moving number</h2>
+            <p>
+                Here's the trick that makes path-following trivial: a creep doesn't store a list of
+                waypoints to chase. It stores a <strong>single number</strong> — <code>dist</code>, how far
+                along the lane it has travelled — and each step does <code>dist += speed × dt</code>. The
+                lane is <em>arc-length parameterized</em>, so it can turn that one number back into an
+                <code>(x, y)</code> with <code>path.pointAt(dist)</code>.
+            </p>
+
+            <!-- Arc-length explainer diagram -->
+            <svg class="td-diagram-svg" width="560" height="150" viewBox="0 0 560 150" role="img" aria-label="A lane with distance markers at 0, half, and full length">
+                <path class="laneEdge" d="M 40 110 L 240 110 L 240 40 L 520 40" />
+                <path class="lane" d="M 40 110 L 240 110 L 240 40 L 520 40" />
+                <circle cx="40" cy="110" r="7" fill="#66bb6a" />
+                <text x="24" y="135">dist = 0</text>
+                <circle cx="240" cy="75" r="7" fill="#ff5d8f" />
+                <text x="250" y="80">dist = L⁄2 → pointAt() → (x, y)</text>
+                <circle cx="520" cy="40" r="7" fill="#ef5350" />
+                <text x="430" y="28">dist = L (goal)</text>
+            </svg>
+            <p style="text-align:center; color:#9e9e9e; font-size:0.9em;">
+                One scalar slides from 0 to the lane's length; <code>pointAt</code> maps it onto the curve.
+                Speed is in px/s, so the creep moves the same real distance whatever the frame rate.
+            </p>
+
+            <div class="diagram">
+                <canvas id="tdCreepCanvas" class="td-canvas" width="760" height="360"></canvas>
+            </div>
+            <div class="controls">
+                <label class="td-slider">Speed <input id="tdCreepSpeed" type="range" min="20" max="180" value="70"> <span class="val" id="tdCreepSpeedVal">70 px/s</span></label>
+            </div>
+
+            <details class="code-block">
+                <summary>📝 Show the code: TDEnemy.update</summary>
+                <pre><code class="language-javascript">class TDEnemy {
+  update(dt) {
+    this.dist += this.speed * dt;             // advance along the lane
+    const p = this.path.pointAt(this.dist);   // arc-length → (x, y)
+    this.pos.set(p.x, p.y);
+    if (this.dist &gt;= this.path.length) {      // reached the goal…
+      this.leaked = true;                     // …and "leaked" (costs a life)
+      this.alive = false;
+    }
+  }
+}</code></pre>
+            </details>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- SPAWN -->
+        <!-- ============================================ -->
+        <div id="spawn" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🌊 The spawner — a wave is a countdown on a cadence</h2>
+            <p>
+                One creep isn't a game; a <em>wave</em> is. And a spawner is the simplest possible machine:
+                a counter of how many are left, and a timer. While creeps remain, every <code>interval</code>
+                seconds it emits one and ticks the counter down. That's it — change the count and the
+                interval and you've changed the wave's size and density.
+            </p>
+
+            <div class="diagram">
+                <canvas id="tdSpawnCanvas" class="td-canvas" width="760" height="360"></canvas>
+            </div>
+            <div class="controls">
+                <button id="tdSpawnStart">▶ Start Wave</button>
+                <label class="td-slider">Count <input id="tdSpawnCount" type="range" min="3" max="25" value="10"> <span class="val" id="tdSpawnCountVal">10</span></label>
+                <label class="td-slider">Interval <input id="tdSpawnInterval" type="range" min="0.2" max="1.5" step="0.05" value="0.7"> <span class="val" id="tdSpawnIntervalVal">0.70 s</span></label>
+            </div>
+
+            <details class="code-block">
+                <summary>📝 Show the code: the spawner</summary>
+                <pre><code class="language-javascript">// a wave is just a countdown that emits on a cadence
+if (spawner.remaining &gt; 0) {
+  spawner.timer -= dt;
+  if (spawner.timer &lt;= 0) {
+    spawner.timer = spawner.interval;          // reset the cadence
+    spawner.remaining--;
+    creeps.push(new TDEnemy(path, { speed }));
+  }
+}</code></pre>
+            </details>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- TOWER -->
+        <!-- ============================================ -->
+        <div id="tower" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🔫 The tower — range, target acquisition &amp; fire-rate</h2>
+            <p>
+                A tower does three things every step: keep or find a <strong>target</strong>, <strong>aim</strong>
+                at it, and — when its cooldown expires — <strong>fire</strong>. Two ideas matter here.
+                First, <em>range</em> is a circle, and "is this creep in range?" is a distance check we do with
+                <strong>squared</strong> distances (no <code>Math.sqrt</code> — comparing against the squared
+                radius gives the same answer for less work). Second, <em>fire-rate</em> is a cooldown: a tower
+                that fires twice a second resets a <code>1/2 = 0.5&nbsp;s</code> timer after each shot.
+            </p>
+            <p>
+                Which creep does it pick? The classic default — the one <strong>furthest along the lane</strong>
+                (closest to the goal), the most urgent threat. In this demo each shot is an instant
+                <em>hitscan</em> beam so you can focus on range and rate; the next section gives the shot a
+                body. <strong>Click a green tile</strong> to move the tower and feel how range interacts with
+                the lane's bends.
+            </p>
+
+            <div class="diagram">
+                <canvas id="tdTowerCanvas" class="td-canvas" width="760" height="360"></canvas>
+            </div>
+            <div class="controls">
+                <label class="td-slider">Range <input id="tdTowerRange" type="range" min="60" max="220" value="120"> <span class="val" id="tdTowerRangeVal">120 px</span></label>
+                <label class="td-slider">Fire rate <input id="tdTowerRate" type="range" min="0.5" max="6" step="0.1" value="2"> <span class="val" id="tdTowerRateVal">2.0/s</span></label>
+            </div>
+
+            <details class="code-block">
+                <summary>📝 Show the code: range, acquisition &amp; cooldown</summary>
+                <pre><code class="language-javascript">// in range? compare SQUARED distances (skip the sqrt)
+inRange(e) { return this.pos.distanceSquared(e.pos) &lt;= this.range * this.range; }
+
+// the "first" targeting mode: of the creeps in range, the one furthest along
+function tdPickTarget(tower, enemies) {
+  let best = null, bestProgress = -Infinity;
+  for (const e of enemies) {
+    if (e.alive &amp;&amp; tower.inRange(e) &amp;&amp; e.dist &gt; bestProgress) {
+      bestProgress = e.dist; best = e;
+    }
+  }
+  return best;
+}
+
+// fire-rate is a cooldown of 1 / fireRate seconds
+this.cooldown -= dt;
+if (this.cooldown &lt;= 0) { this.cooldown = 1 / this.fireRate; /* FIRE */ }</code></pre>
+            </details>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- PROJECTILE -->
+        <!-- ============================================ -->
+        <div id="projectile" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>💥 The projectile — giving the shot a body</h2>
+            <p>
+                A hitscan beam hits instantly. A <em>projectile</em> is a moving point that chases the
+                target's current position at a finite speed — which makes the game feel physical and
+                introduces two honest consequences. A <strong>slow shot can be outrun</strong> by a fast
+                creep (watch the orange ones), and if the target dies mid-flight the shot <strong>fizzles</strong>
+                (overkill is real). The first problem is exactly what the Intermediate tier's
+                <em>lead-the-target</em> math fixes — aiming where the creep <em>will be</em>.
+            </p>
+            <p>
+                The hit test uses the <strong>sub-step reach</strong> (<code>speed × dt + targetRadius</code>):
+                checking "did I get close enough this step?" rather than "am I exactly on it?" so a fast shot
+                can't tunnel straight through a creep between frames.
+            </p>
+
+            <div class="diagram">
+                <canvas id="tdProjectileCanvas" class="td-canvas" width="760" height="360"></canvas>
+            </div>
+            <div class="controls">
+                <label class="td-slider">Shot speed <input id="tdProjSpeed" type="range" min="90" max="500" value="220"> <span class="val" id="tdProjSpeedVal">220 px/s</span></label>
+            </div>
+
+            <details class="code-block">
+                <summary>📝 Show the code: TDProjectile.update</summary>
+                <pre><code class="language-javascript">update(dt) {
+  if (!this.target || !this.target.alive) { this.alive = false; return; } // fizzle
+
+  // a FRESH vector toward the target (subtract returns new — no mutation)
+  const toward = this.target.pos.subtract(this.pos);
+  const reach = this.speed * dt + this.target.radius;   // sub-step hit window
+  if (toward.lengthSquared() &lt;= reach * reach) {        // close enough → hit
+    this.target.damage(this.damage);
+    this.alive = false;
+  } else {
+    this.pos.add(toward.normalize().multiply(this.speed * dt)); // step toward it
+  }
+}</code></pre>
+            </details>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- MINI-PROJECT -->
+        <!-- ============================================ -->
+        <div id="mini-project" class="section">
+            <span class="level-indicator level-beginner">BEGINNER</span>
+            <h2>🛡️ Mini-Project: "First Line of Defense"</h2>
+            <p>
+                Everything together. You have <strong>120 gold</strong> and <strong>10 lives</strong>. Click
+                buildable tiles to place towers (<strong>40 gold</strong> each), then start the wave. Each
+                kill pays gold you can spend on more towers mid-wave; each creep that leaks costs a life.
+                Clear the wave to win; lose all your lives and the base falls. Hover a tower to see its range.
+            </p>
+
+            <div class="diagram">
+                <canvas id="tdMiniCanvas" class="td-canvas" width="760" height="360"></canvas>
+            </div>
+            <div class="controls">
+                <button id="tdMiniStart">▶ Start Wave</button>
+                <button id="tdMiniReset">↺ Reset</button>
+            </div>
+
+            <div class="concept-box">
+                <h4>🧩 What you just built</h4>
+                <ul>
+                    <li>A <strong>map</strong> with buildable tiles and a lane (<code>TDGrid</code> + <code>TDPath</code>)</li>
+                    <li>A <strong>spawner</strong> turning a wave spec into a stream of <code>TDEnemy</code>s</li>
+                    <li><strong>Towers</strong> that acquire the first-in-range target, aim, and fire on a cooldown</li>
+                    <li><strong>Projectiles</strong> that travel, hit, and deal damage — with kills paying gold and leaks costing lives</li>
+                </ul>
+                <p style="margin-bottom:0;">That's a complete, playable tower defense. The whole rest of the track makes each
+                    of these pieces deeper.</p>
+            </div>
+        </div>
+
+        <!-- Next tier -->
+        <div class="section" style="text-align:center;">
+            <h2>➡️ Next: Intermediate — Tower Types &amp; Targeting</h2>
+            <p style="color:#c9d1d9;">
+                One tower and one targeting rule is just the start. Next we make placement a real puzzle:
+                data-driven tower kinds, the targeting <em>modes</em> (first / last / closest / strongest), the
+                trig that <strong>leads</strong> a moving target, splash and slow towers, and smooth spline
+                lanes. <em>(Landing soon — the tiers ship one at a time.)</em>
+            </p>
+            <div class="nav" style="justify-content:center;">
+                <a href="index.html" class="nav-button">← Back to Track Index</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scroll to Top Button -->
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <!-- Dependencies, then the engine, then this tier's demos. Order matters. -->
+    <script src="../shared/utils.js"></script>
+    <script src="../shared/code-tabs.js"></script>
+    <script src="engine/loop.js"></script>
+    <script src="engine/render.js"></script>
+    <script src="engine/world.js"></script>
+    <script src="beginner-demos.js"></script>
+
+    <script>
+        // Scroll-to-top behavior — identical to every other tier page.
+        const scrollToTopBtn = document.getElementById('scrollToTop');
+        scrollToTopBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+        window.addEventListener('scroll', () => { scrollToTopBtn.style.opacity = window.pageYOffset > 300 ? '1' : '0'; });
+        scrollToTopBtn.style.opacity = '0';
+        scrollToTopBtn.style.transition = 'opacity 0.3s';
+    </script>
+</body>
+</html>

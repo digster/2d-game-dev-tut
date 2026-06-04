@@ -249,8 +249,15 @@ sub-tile steps** so every crossed cell is blocked (a Bresenham-style line walk).
 **scaffold self-check** (globals present, arc-length correctness, a creep walking a known distance,
 buildability rejecting the lane + occupied tiles, and two seeded mini-waves matching bit-for-bit — the
 determinism the Simulations balancing tier rests on). Demos will be pointer/keyboard-driven so (like
-platformer/roguelike/physics-puzzle/bullet-hell) they omit `data-demo-id`. **Status: SCAFFOLDED — engine
-core (loop, render, world) + landing page live; the 5 tiers land iteratively.**
+platformer/roguelike/physics-puzzle/bullet-hell) they omit `data-demo-id`. The **Beginner tier ("The Path
+& The Tower", 6 demos)** is live: it teaches the inline entity model (`TDEnemy` — path-following as one
+scalar `dist += speed·dt`; `TDTower` — squared-range check + `tdPickTarget` "first/furthest-along" mode +
+a `1/fireRate` cooldown, returning the creep it fired at so the demo decides hitscan-beam vs projectile;
+`TDProjectile` — a travelling shot with a sub-step reach hit test that fizzles on overkill), all top-level
+and console-testable, **awaiting promotion to `engine/entities.js` when the Intermediate tier becomes
+their 2nd consumer**. Its capstone "First Line of Defense" composes map + spawner + towers + projectiles +
+a gold/lives economy. **Status: Beginner live (engine core loop/render/world + Beginner's 6 demos);
+Intermediate→Simulations land iteratively.**
 
 **Why tiers are separate files:** content is split beginner → intermediate →
 expert → raymarching → stylization → distortion → advanced → simulations so each
