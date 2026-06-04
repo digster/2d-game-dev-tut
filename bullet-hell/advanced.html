@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced — Bullet Hell / Danmaku Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+    <style>
+        canvas.bh-canvas { outline: none; background: #070a1c; border-radius: 8px; display: block; margin: 0 auto; touch-action: none; }
+        canvas.bh-canvas:focus { box-shadow: 0 0 0 2px #4fc3f7; }
+        .bh-key { font-family: monospace; background: #0d1117; border: 1px solid #2d3354; border-radius: 4px; padding: 1px 6px; color: #7CF2C8; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌸 Advanced — The Boss Fight</h1>
+        <p class="subtitle">Patterns become a fight. We give an enemy HP and movement, write its attacks as data-driven <em>spell cards</em>, switch cards at HP thresholds, nest emitters inside bullets, arm the player with a defensive bomb, and tie it together into a scored two-phase duel.</p>
+
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="intermediate.html" class="nav-button">← Intermediate</a>
+            <a href="advanced.html" class="nav-button active">Advanced</a>
+        </div>
+
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#intro">From a pattern to a fight</a></li>
+                <li><a href="#boss">The boss entity — HP, movement, a health bar</a></li>
+                <li><a href="#script">Attack scripts — a spell card as <em>data</em></a></li>
+                <li><a href="#phases">Phases — HP thresholds &amp; screen-clear transitions</a></li>
+                <li><a href="#sub">Sub-emitters — bullets that spawn bullets</a></li>
+                <li><a href="#bomb">The bomb — clear the screen, on a stock</a></li>
+                <li><a href="#mini-project">Mini-Project: "Spell Card Duel"</a></li>
+            </ul>
+        </div>
+
+        <!-- INTRO -->
+        <div id="intro" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🧩 From a pattern to a fight</h2>
+            <p>
+                The Intermediate tier ended with an enemy cycling three patterns on a hand-written timeline.
+                That timeline was a hint: a <em>boss</em> is just a richer version of it. In this tier we add the
+                four things that turn "a pretty pattern" into "a fight you can win or lose":
+            </p>
+            <ul>
+                <li><strong>An entity with HP</strong> that moves and can be shot down — so there's a goal.</li>
+                <li><strong>Attack scripts as data</strong> — a "spell card" is a list of timed instructions,
+                    not a tangle of <code>if</code>s. Data is editable, swappable, and (later) authorable in a
+                    visual editor.</li>
+                <li><strong>Phases</strong> — cross an HP threshold and the boss changes its whole attack.</li>
+                <li><strong>The player's bomb</strong> — a panic button that clears the screen at a cost, the
+                    risk/reward dial the whole genre balances around.</li>
+            </ul>
+            <div class="key-point">
+                <strong>💡 The emitter graduated to the engine.</strong> The <code>BHEmitter</code> you built in
+                the Intermediate tier now lives in <code>engine/emitter.js</code> — promoted the moment this tier
+                became its second consumer. Spell cards drive it by swapping its <code>fire</code> callback and
+                <code>interval</code> on a schedule.
+            </div>
+        </div>
+
+        <!-- BOSS -->
+        <div id="boss" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>👾 The boss entity — HP, movement, a health bar</h2>
+            <p>
+                A boss is a position that sweeps the top of the field (a Lissajous figure — two sines at
+                different rates), plus HP and an emitter riding along with it. <strong>Click, dodge its fan, and
+                hold <span class="bh-key">Z</span> to shoot it down</strong> — the health bar drains as your
+                shots land.
+            </p>
+            <div class="diagram"><canvas id="bhBossCanvas" class="bh-canvas" width="420" height="440"></canvas></div>
+            <div class="controls"><button id="bhBossReset">↻ Restart</button></div>
+            <div id="bhBossHud" class="info-display" style="font-family:monospace;">click the playfield · Z to shoot…</div>
+
+            <details>
+                <summary>📝 Click to see: the boss entity</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class BHBoss {
+  constructor(x, y, opts = {}) {
+    this.pos = new Vector2D(x, y);
+    this.radius = opts.radius ?? 22;
+    this.maxHp = opts.maxHp ?? 800; this.hp = this.maxHp;
+    this.t = 0;
+  }
+  move(dt, bounds) {                       // a Lissajous sweep: two sines, different rates
+    this.t += dt;
+    const cx = bounds.x + bounds.w / 2;
+    this.pos.x = cx + Math.sin(this.t * 0.8) * (bounds.w * 0.30);
+    this.pos.y = bounds.y + 74 + Math.sin(this.t * 1.6) * 20;
+  }
+  get alive() { return this.hp &gt; 0; }
+  get hpFrac() { return Math.max(0, this.hp) / this.maxHp; }
+}
+// the emitter rides the boss: em.pos.set(boss.pos.x, boss.pos.y) each frame.</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">class BHBoss {
+  pos: Vector2D; radius: number; maxHp: number; hp: number; t = 0;
+  constructor(x: number, y: number, opts: { radius?: number; maxHp?: number } = {}) {
+    this.pos = new Vector2D(x, y);
+    this.radius = opts.radius ?? 22;
+    this.maxHp = opts.maxHp ?? 800; this.hp = this.maxHp;
+  }
+  move(dt: number, bounds: Rect): void { /* …two-sine sweep… */ }
+  get alive(): boolean { return this.hp &gt; 0; }
+  get hpFrac(): number { return Math.max(0, this.hp) / this.maxHp; }
+}</code></pre>
+                </div>
+            </details>
+            <div class="key-point">
+                <strong>Two sines make organic movement.</strong> One sine on X and a faster one on Y traces a
+                figure-eight-ish path that never sits still — far more alive than a straight slide, and trivial
+                to author. Boss movement is mostly "pick two frequencies."
+            </div>
+        </div>
+
+        <!-- SCRIPT -->
+        <div id="script" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>📜 Attack scripts — a spell card as <em>data</em></h2>
+            <p>
+                An attack shouldn't be a pile of timers and <code>if</code>s. A <strong>spell card</strong> is a
+                list of timed <em>steps</em>; each step reconfigures the emitter (its <code>fire</code> callback,
+                <code>interval</code>, <code>spin</code>) when the card's clock reaches it. The card below runs a
+                ring burst, then a spiral, then an aimed fan, then loops — and it's pure data. <strong>Click and
+                dodge</strong> while it plays itself.
+            </p>
+            <div class="diagram"><canvas id="bhScriptCanvas" class="bh-canvas" width="420" height="440"></canvas></div>
+            <div id="bhScriptHud" class="info-display" style="font-family:monospace;">click the playfield…</div>
+
+            <details>
+                <summary>📝 Click to see: the spell-card runtime + a card</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class BHSpellCard {
+  constructor(def) { this.steps = def.steps; this.duration = def.duration ?? Infinity; this.reset(); }
+  reset() { this.t = 0; this.idx = 0; }
+  step(dt, em, field) {                     // apply every step that's now due
+    this.t += dt;
+    while (this.idx &lt; this.steps.length &amp;&amp; this.t &gt;= this.steps[this.idx].at) {
+      const s = this.steps[this.idx++];
+      if (s.set) Object.assign(em, s.set);   // swap fire / interval / spin
+      if (s.set &amp;&amp; 'fire' in s.set) em.timer = 0;
+      if (s.burst) s.burst(em, field);        // one-shot volley
+    }
+    return this.t &gt;= this.duration;          // true → card finished
+  }
+}
+
+// THE ATTACK, as data:
+const card = new BHSpellCard({ name: 'Three-Act Opener', duration: 8, steps: [
+  { at: 0,   set: { spin: 0,   interval: 0.5,  fire: (e,f) =&gt; ring(f, e, 22, 110) } },
+  { at: 2.6, set: { spin: 2.2, interval: 0.05, fire: (e,f) =&gt; spiral(f, e, 3) } },
+  { at: 5.2, set: { spin: 0,   interval: 0.22, fire: (e,f) =&gt; aimedFan(f, e, player) } },
+]});</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface Step { at: number; set?: Partial&lt;BHEmitter&gt;; burst?: (em: BHEmitter, f: BHField) =&gt; void; }
+interface CardDef { name: string; duration?: number; steps: Step[]; }
+class BHSpellCard {
+  steps: Step[]; duration: number; t = 0; idx = 0;
+  constructor(def: CardDef) { this.steps = def.steps; this.duration = def.duration ?? Infinity; }
+  step(dt: number, em: BHEmitter, field: BHField): boolean { /* …apply due steps… */ return this.t &gt;= this.duration; }
+}</code></pre>
+                </div>
+            </details>
+            <div class="key-point">
+                <strong>Why data beats code.</strong> Because a card is a plain list, you can store it, diff it,
+                hot-swap it, generate it — and, in the Simulations tier, <em>author it in a visual editor</em>
+                that emits exactly this structure. "Attacks are data" is the single decision that makes a real
+                bullet-hell content pipeline possible.
+            </div>
+        </div>
+
+        <!-- PHASES -->
+        <div id="phases" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🔀 Phases — HP thresholds &amp; screen-clear transitions</h2>
+            <p>
+                A boss with one attack is a target; a boss with <em>phases</em> is a fight. When its HP crosses a
+                threshold, we swap the active spell card and <strong>clear the screen</strong> so the new pattern
+                starts clean (and the player gets a breath). <strong>Shoot the bar down past 50%</strong> to
+                trigger phase two.
+            </p>
+            <div class="diagram"><canvas id="bhPhaseCanvas" class="bh-canvas" width="420" height="440"></canvas></div>
+            <div class="controls"><button id="bhPhaseReset">↻ Restart</button></div>
+            <div id="bhPhaseHud" class="info-display" style="font-family:monospace;">click the playfield · Z to shoot…</div>
+
+            <details>
+                <summary>📝 Click to see: a threshold-driven phase swap</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">const cards = [phase1Card, phase2Card];
+let phase = 0;
+
+// in update(): swap card + screen-clear when HP crosses 50%
+if (phase === 0 &amp;&amp; boss.hp &lt;= boss.maxHp * 0.5) {
+  phase = 1;
+  enemy.clear();      // wipe the screen so phase 2 starts fresh
+  flash = 0.4;        // a white flash sells the transition
+}
+cards[phase].step(dt, em, enemy);
+em.step(dt, enemy);</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const cards: BHSpellCard[] = [phase1Card, phase2Card];
+let phase = 0;
+if (phase === 0 &amp;&amp; boss.hp &lt;= boss.maxHp * 0.5) { phase = 1; enemy.clear(); flash = 0.4; }
+cards[phase].step(dt, em, enemy);
+em.step(dt, enemy);</code></pre>
+                </div>
+            </details>
+            <div class="key-point">
+                <strong>The screen-clear is a free design tool.</strong> Wiping bullets at a phase change isn't
+                just mercy — it's punctuation. It tells the player "that was a movement; here comes the next,"
+                and it stops leftover bullets from the old pattern making the new one unfair.
+            </div>
+        </div>
+
+        <!-- SUB-EMITTERS -->
+        <div id="sub" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🎆 Sub-emitters — bullets that spawn bullets</h2>
+            <p>
+                The richest patterns come from <em>nesting</em>. A <strong>carrier</strong> bullet drifts out,
+                and after a short fuse <strong>airbursts</strong> into a ring at wherever it happens to be — a
+                bullet that spawns bullets. Add a second emitter <em>orbiting</em> the boss (a turret) and one
+                source produces a layered, composite barrage. <strong>Click and weave.</strong>
+            </p>
+            <div class="diagram"><canvas id="bhSubCanvas" class="bh-canvas" width="420" height="440"></canvas></div>
+            <div id="bhSubHud" class="info-display" style="font-family:monospace;">click the playfield…</div>
+
+            <details>
+                <summary>📝 Click to see: the airburst (a fuse + a ring)</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// carriers are tagged + big; BHBullet.age (from the engine) is the fuse clock.
+const FUSE = 0.85;
+for (let i = field.bullets.length - 1; i &gt;= 0; i--) {
+  const b = field.bullets[i];
+  if (b.tag === 'carrier' &amp;&amp; b.age &gt;= FUSE) {
+    // a one-off emitter at the carrier's position → a ring
+    ring(field, { pos: b.pos, angle: Math.random() * Math.PI * 2 }, 10, 130);
+    field.bullets.splice(i, 1);    // the carrier is consumed by its burst
+  }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const FUSE = 0.85;
+for (let i = field.bullets.length - 1; i &gt;= 0; i--) {
+  const b = field.bullets[i];
+  if (b.tag === 'carrier' &amp;&amp; b.age &gt;= FUSE) {
+    bhFireRing(field, { pos: b.pos, angle: Math.random() * Math.PI * 2 } as BHEmitter, 10, 130);
+    field.bullets.splice(i, 1);
+  }
+}</code></pre>
+                </div>
+            </details>
+            <div class="key-point">
+                <strong><code>bhFireRing</code> only needs <code>{ pos, angle }</code>.</strong> Because the
+                pattern helpers read just those two fields, you can fire a ring from <em>anything</em> — a boss,
+                an orbiting turret, or a dying bullet — by handing them an ad-hoc object. Small, duck-typed
+                interfaces make composition cheap.
+            </div>
+        </div>
+
+        <!-- BOMB -->
+        <div id="bomb" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>💣 The bomb — clear the screen, on a stock</h2>
+            <p>
+                Every danmaku gives the player a panic button. The <strong>bomb</strong> clears every bullet on
+                screen, grants a second of invulnerability, and costs one of your limited stocks. It's the
+                risk/reward dial of the genre: bomb too early and you waste it; too late and you're already dead.
+                <strong>Click, let the spiral fill the screen, then press <span class="bh-key">X</span>.</strong>
+            </p>
+            <div class="diagram"><canvas id="bhBombCanvas" class="bh-canvas" width="420" height="440"></canvas></div>
+            <div class="controls"><button id="bhBombReset">↻ Refill bombs</button></div>
+            <div id="bhBombHud" class="info-display" style="font-family:monospace;">click the playfield · X to bomb…</div>
+
+            <details>
+                <summary>📝 Click to see: the bomb is a field operation</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">function bomb() {
+  if (bombs &lt;= 0) return;
+  bombs--;                                   // costs a stock
+  invuln = 1.6;                              // i-frames: ignore hits for a moment
+  enemy.clear();                             // the screen-clear — one field op
+  fx = { x: player.pos.x, y: player.pos.y, r: 0 };  // an expanding shockwave to sell it
+}
+
+// in update(): hits only count while not invulnerable
+if (invuln &lt;= 0 &amp;&amp; bhHitTest(player, b)) { /* you got hit */ }
+invuln = Math.max(0, invuln - dt);</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">function bomb(): void {
+  if (bombs &lt;= 0) return;
+  bombs--; invuln = 1.6; enemy.clear();
+  fx = { x: player.pos.x, y: player.pos.y, r: 0 };
+}</code></pre>
+                </div>
+            </details>
+            <div class="key-point">
+                <strong>Invulnerability windows are everywhere.</strong> The same "ignore collisions for N
+                seconds" trick powers the bomb, the moment after you respawn, and the dash in other genres. It's
+                a tiny timer guarding a collision check — but it's most of what makes a game feel <em>fair</em>.
+            </div>
+        </div>
+
+        <!-- MINI PROJECT -->
+        <div id="mini-project" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🏆 Mini-Project: "Spell Card Duel"</h2>
+            <p>
+                Everything at once: a two-phase boss, each phase its own spell card, against the full player kit
+                — move, focus, shoot (<span class="bh-key">Z</span>), bomb (<span class="bh-key">X</span>) — with
+                three lives. Graze for points; <strong>capture</strong> a phase (beat it without being hit and
+                without bombing) for a big bonus. Defeat both phases to win. This is a complete, if compact,
+                bullet-hell boss fight.
+            </p>
+            <div class="diagram"><canvas id="bhDuelCanvas" class="bh-canvas" width="420" height="440"></canvas></div>
+            <div class="controls"><button id="bhDuelReset">↻ Rematch</button></div>
+            <div id="bhDuelHud" class="info-display" style="font-family:monospace;">click the playfield to begin…</div>
+
+            <details>
+                <summary>📝 Click to see: the capture bonus</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">let faulted = false;                 // got hit OR bombed during this phase?
+
+// a hit or a bomb "faults" the current phase
+function onHit()  { lives--; faulted = true; invuln = 1.5; enemy.clear(); }
+function bomb()   { bombs--; faulted = true; invuln = 1.6; enemy.clear(); }
+
+// clearing a phase awards the capture bonus only if you stayed clean
+function clearPhase() { if (!faulted) { score += 10000; captures++; } }
+
+// reset `faulted` at the start of each phase; graze still scores throughout
+if (!b.grazed &amp;&amp; bhGrazeTest(player, b)) { b.grazed = true; score += 100; }</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">let faulted = false;
+function clearPhase(): void { if (!faulted) { score += 10000; captures++; } }
+// faulted = true on hit or bomb; reset to false when a new phase begins.</code></pre>
+                </div>
+            </details>
+
+            <div class="example-box">
+                <h4>🚀 Make it yours</h4>
+                <ul>
+                    <li>Add a third phase with your rose-curve pattern and a faster sweep.</li>
+                    <li>Make the capture bonus scale with how little time the phase took.</li>
+                    <li>Give the boss a brief "desperation" attack in the last 10% of each phase's HP.</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- RECAP -->
+        <div class="section">
+            <h2>✅ Recap &amp; what's next</h2>
+            <ul>
+                <li><strong>The boss</strong> — HP + a two-sine sweep + an emitter that rides along.</li>
+                <li><strong>Spell cards</strong> — attacks as a list of timed, data-driven steps.</li>
+                <li><strong>Phases</strong> — HP thresholds swap cards, with a screen-clear transition.</li>
+                <li><strong>Sub-emitters</strong> — carriers that airburst; an orbiting turret.</li>
+                <li><strong>The bomb</strong> — a screen-clear + i-frames on a limited stock.</li>
+                <li><strong>Scoring</strong> — graze points and a capture bonus for a clean phase.</li>
+            </ul>
+            <div class="key-point">
+                <strong>Next — <a href="expert.html">Expert: Ten Thousand Bullets</a>.</strong> Our fights run a
+                few hundred bullets on a plain array — fine here, a slideshow at danmaku density. Next we make it
+                scale: object pooling, Struct-of-Arrays in flat <code>Float32Array</code>s, spatial-hash hit
+                detection, culling and batched rendering — 10,000 bullets at 60&nbsp;fps. <em>(Lands in the next
+                iteration.)</em>
+            </div>
+        </div>
+    </div>
+
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <!-- Dependencies, then the engine, then this tier's demos. Order matters. -->
+    <script src="../shared/utils.js"></script>
+    <script src="../shared/code-tabs.js"></script>
+    <script src="engine/loop.js"></script>
+    <script src="engine/render.js"></script>
+    <script src="engine/field.js"></script>
+    <script src="engine/emitter.js"></script>
+    <script src="advanced-demos.js"></script>
+
+    <script>
+        const scrollToTopBtn = document.getElementById('scrollToTop');
+        scrollToTopBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+        window.addEventListener('scroll', () => { scrollToTopBtn.style.opacity = window.pageYOffset > 300 ? '1' : '0'; });
+        scrollToTopBtn.style.opacity = '0';
+        scrollToTopBtn.style.transition = 'opacity 0.3s';
+    </script>
+</body>
+</html>

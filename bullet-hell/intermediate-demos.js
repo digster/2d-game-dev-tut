@@ -50,65 +50,12 @@ function bhFocusHint(ctx, bounds, focused, msg) {
 }
 
 // =============================================================================
-// THE TIER'S CORE LESSON — the emitter + the pattern primitives.
-// (Inline now; promoted to engine/emitter.js when Advanced reuses them.)
+// THE TIER'S CORE LESSON — BHEmitter + bhFireRing/bhFireFan — now lives in
+// engine/emitter.js (PROMOTED when the Advanced tier became its 2nd consumer).
+// This page loads engine/emitter.js, so they're available here as globals and
+// are NOT re-declared (two top-level `class BHEmitter` on one page would throw).
+// The collapsible code blocks above still teach the source.
 // =============================================================================
-
-// A BHEmitter separates the PATTERN (a `fire` callback) from the CADENCE (an
-// `interval`), and carries a base `angle` it can `spin` over time. Every pattern
-// in this tier is the same emitter with a different `fire`.
-class BHEmitter {
-    constructor(x, y, opts = {}) {
-        this.pos = new Vector2D(x, y);
-        this.interval = opts.interval ?? 0.25;   // seconds between volleys
-        this.angle = opts.angle ?? 0;            // base aim, radians
-        this.spin = opts.spin ?? 0;              // added to angle each second (rad/s)
-        this.fire = opts.fire || (() => {});     // (emitter, field) => void
-        this.enabled = opts.enabled ?? true;
-        this.timer = 0;                          // counts down to the next volley
-        this.volleys = 0;                        // how many volleys fired (for HUDs)
-    }
-    step(dt, field) {
-        this.angle += this.spin * dt;            // rotate the base aim (spirals)
-        if (!this.enabled) return;
-        const iv = Math.max(0.001, this.interval); // guard against a 0-interval lock
-        this.timer -= dt;
-        // `while` + carried remainder: fire every bullet we owe this step, and
-        // keep the cadence exact regardless of the timestep (the loop's trick).
-        while (this.timer <= 0) {
-            this.timer += iv;
-            this.fire(this, field);
-            this.volleys++;
-        }
-    }
-}
-
-// A full RING: n bullets spaced evenly around the circle. The whole pattern
-// vocabulary starts here — a velocity is a polar coordinate (angle, speed).
-function bhFireRing(field, em, n, speed, opts = {}) {
-    for (let i = 0; i < n; i++) {
-        const a = em.angle + (i / n) * BH.TAU;   // i/n, NOT i/(n-1): no doubled bullet at 0 & 2π
-        const v = Vector2D.fromAngle(a, speed);
-        field.spawn(em.pos.x, em.pos.y, v.x, v.y, {
-            radius: opts.radius ?? 4, color: opts.color ?? BH.bullet,
-            turn: opts.turn ?? 0, accel: opts.accel ?? 0,
-        });
-    }
-}
-
-// A FAN: n bullets spread across `arc` radians, centered on `center`. (n/(n-1)
-// here, because we DO want a bullet at each end of the arc.)
-function bhFireFan(field, em, n, arc, center, speed, opts = {}) {
-    for (let i = 0; i < n; i++) {
-        const t = n === 1 ? 0.5 : i / (n - 1);
-        const a = center + (t - 0.5) * arc;
-        const v = Vector2D.fromAngle(a, speed);
-        field.spawn(em.pos.x, em.pos.y, v.x, v.y, {
-            radius: opts.radius ?? 4, color: opts.color ?? BH.bullet,
-            turn: opts.turn ?? 0, accel: opts.accel ?? 0,
-        });
-    }
-}
 
 // =============================================================================
 // 1) emitterDemo — what vs. when

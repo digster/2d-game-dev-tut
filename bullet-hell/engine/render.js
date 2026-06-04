@@ -187,6 +187,52 @@ function bhDrawBullet(ctx, b, fill) {
     ctx.fill();
 }
 
+// --- bhDrawBoss -----------------------------------------------------
+// Draw a boss as a menacing, slowly-rotating polygon with a pulsing core. Reads
+// `boss.t` (its age in seconds) for the animation, so a still frame still looks
+// alive. Added with the Advanced tier (its first consumer); reused by Expert and
+// the Simulations boss-rush. boss: { pos:Vector2D, radius, t }.
+function bhDrawBoss(ctx, boss) {
+    const x = boss.pos.x, y = boss.pos.y, r = boss.radius;
+    const t = boss.t || 0;
+    // outer glow
+    ctx.beginPath(); ctx.arc(x, y, r * 1.3, 0, BH.TAU);
+    ctx.fillStyle = 'rgba(239,83,80,0.12)'; ctx.fill();
+    // rotating hexagonal hull
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+        const a = t * 0.8 + (i / 6) * BH.TAU;
+        const px = x + Math.cos(a) * r, py = y + Math.sin(a) * r;
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fillStyle = BH.bad; ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = '#b53b39'; ctx.stroke();
+    // pulsing bright core
+    const pulse = 0.6 + 0.4 * Math.sin(t * 4);
+    ctx.beginPath(); ctx.arc(x, y, r * 0.45 * pulse, 0, BH.TAU);
+    ctx.fillStyle = '#ffd1d1'; ctx.fill();
+    ctx.beginPath(); ctx.arc(x, y, r * 0.18, 0, BH.TAU);
+    ctx.fillStyle = '#fff'; ctx.fill();
+}
+
+// --- bhDrawHpBar ----------------------------------------------------
+// A boss health bar pinned to the top of the playfield, with a name label.
+// `frac` is 0..1; clamp() comes from shared/utils.js. Wrapped in save/restore so
+// it can't leak text/align state onto the rest of the scene.
+function bhDrawHpBar(ctx, bounds, frac, name, opts = {}) {
+    ctx.save();
+    frac = clamp(frac, 0, 1);
+    const m = 10, x = bounds.x + m, y = bounds.y + 14, w = bounds.w - 2 * m, h = 8;
+    ctx.fillStyle = BH.text; ctx.font = '12px monospace';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText(name || 'BOSS', x, y - 3);
+    ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = opts.color || BH.bad; ctx.fillRect(x, y, w * frac, h);
+    ctx.lineWidth = 1; ctx.strokeStyle = BH.fieldEdge; ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+    ctx.restore();
+}
+
 // Expose on window (no ES modules; scripts load via <script src>).
 if (typeof window !== 'undefined') {
     window.BH = BH;
@@ -196,4 +242,6 @@ if (typeof window !== 'undefined') {
     window.bhDrawField = bhDrawField;
     window.bhDrawPlayer = bhDrawPlayer;
     window.bhDrawBullet = bhDrawBullet;
+    window.bhDrawBoss = bhDrawBoss;
+    window.bhDrawHpBar = bhDrawHpBar;
 }
