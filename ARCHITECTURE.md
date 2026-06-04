@@ -185,17 +185,27 @@ bullet flies straight — which the Intermediate "curved paths" lesson simply sw
 way `PZBody`'s `angle`/`angularVel` sat inert until the Advanced rigid tier. The same
 **Vector2D-mutates-in-place footgun** applies (a bullet owns its `pos`/`vel`, so mutating those is
 safe, but the integrator still `.copy()`s `vel` before scaling it for the position update).
-**Planned promotions (on the genuine 2nd consumer, never on a guess):** the Intermediate
-`BHEmitter` + pattern primitives → `engine/emitter.js` when Advanced (boss) consumes them; the
-Advanced spell-card/timeline runtime → `engine/script.js` when Simulations consumes it; the Expert
-tier **upgrades `field.js` in place** to a pooled / Struct-of-Arrays store for 10k bullets (an
-upgrade-promote, like the rigid engine gaining `body.impact`); a seeded `BHRng` + spatial hash
-promote if Simulations is a true 2nd consumer (it is, for replay + dense hit-tests). The track
-`index.html` carries a **scaffold self-check** that proves integration (a bullet falls a known
-distance), off-screen culling, and **bit-for-bit determinism** across two identically-seeded runs
-— the guarantee the Simulations replay tier rests on. Demos are keyboard/pointer-driven so they
-omit `data-demo-id` (opt out of the Export button), like platformer/roguelike/physics-puzzle.
-**Status: scaffolded — engine core + track index live; tiers land iteratively (Beginner next).**
+**Promotions (on the genuine 2nd consumer, never on a guess):** the Intermediate `BHEmitter` +
+`bhFireRing`/`bhFireFan` pattern primitives were **moved** to `engine/emitter.js` when the Advanced
+boss tier became their 2nd consumer (intermediate-demos.js no longer declares them; both pages load
+the engine copy). `engine/render.js` gained `bhDrawBoss`/`bhDrawHpBar` with the Advanced tier. The
+Advanced spell-card/timeline runtime (`BHSpellCard`) stays inline, earmarked for `engine/script.js`
+when the Simulations boss-rush reuses it. **A planned promotion that was correctly NOT taken:** the
+early plan said the Expert tier would "upgrade `field.js` in place" to a Struct-of-Arrays store —
+but that would shatter the **object API** (`field.bullets` as objects with `.pos`/`.grazed`) that
+Beginner→Advanced teach against and iterate. So the engine's `BHField` stays the object-based
+*teaching* store, and the Expert tier instead teaches the **production** stores **inline** as its
+lesson: `BHBulletPool` (free-list, plain-number fields, zero-alloc), `BHSoaBullets` (flat
+`Float32Array`s + O(1) swap-remove cull), `BHSpatialHash` (uniform grid; N hit-checks → ~k), plus
+batched rendering (one `beginPath`/`fill` for the whole store) — each with a live work-ms meter
+proving 10k+ bullets at 60 fps. This is the honest "promote-on-a-guess was wrong" correction the
+physics-puzzle ARCHITECTURE already documents; the SoA store + spatial hash would promote to
+`engine/` only if the Simulations capstone genuinely reuses them. The track `index.html` carries a
+**scaffold self-check** that proves integration, off-screen culling, and **bit-for-bit determinism**
+across two identically-seeded runs — the guarantee the Simulations replay tier rests on. Demos are
+keyboard/pointer-driven so they omit `data-demo-id` (opt out of the Export button), like
+platformer/roguelike/physics-puzzle. **Status: Beginner → Expert shipped (4 tiers, 25 demos, engine
+= loop/render/field/emitter); Simulations finale next.**
 
 **Why tiers are separate files:** content is split beginner → intermediate →
 expert → raymarching → stylization → distortion → advanced → simulations so each

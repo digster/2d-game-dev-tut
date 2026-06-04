@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expert — Bullet Hell / Danmaku Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+    <style>
+        canvas.bh-canvas { outline: none; background: #070a1c; border-radius: 8px; display: block; margin: 0 auto; touch-action: none; }
+        canvas.bh-canvas:focus { box-shadow: 0 0 0 2px #4fc3f7; }
+        .bh-slider { display: inline-flex; align-items: center; gap: 8px; color: #c9d1d9; font-size: 0.92em; }
+        .bh-slider input[type="range"] { width: 150px; }
+        .bh-slider .val { color: #4fc3f7; font-family: monospace; min-width: 3.6em; display: inline-block; }
+        .bh-key { font-family: monospace; background: #0d1117; border: 1px solid #2d3354; border-radius: 4px; padding: 1px 6px; color: #7CF2C8; }
+        .bh-diagram-svg { display: block; margin: 0 auto; background: #0c1024; border: 1px solid #2b3566; border-radius: 8px; }
+        .bh-diagram-svg text { fill: #c9d1d9; font: 11px monospace; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌸 Expert — Ten Thousand Bullets</h1>
+        <p class="subtitle">A boss fight runs a few hundred bullets — fine on a plain array. Danmaku at Cave density runs <em>thousands</em>, and the naive approach turns to slideshow. This tier makes it scale: object pooling, Struct-of-Arrays, spatial-hash hit detection, culling and batched rendering — 10,000 bullets at 60&nbsp;fps.</p>
+
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="advanced.html" class="nav-button">← Advanced</a>
+            <a href="expert.html" class="nav-button active">Expert</a>
+        </div>
+
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#intro">Why scale is its own problem</a></li>
+                <li><a href="#naive">The problem — allocations &amp; splice</a></li>
+                <li><a href="#pool">The object pool — reuse, don't garbage</a></li>
+                <li><a href="#soa">Struct-of-Arrays — flat <code>Float32Array</code>s</a></li>
+                <li><a href="#hash">Spatial hashing — N hit-checks → ~k</a></li>
+                <li><a href="#batch">Render batching — one fill, not thousands</a></li>
+                <li><a href="#mini-project">Mini-Project: "Stress Test"</a></li>
+            </ul>
+        </div>
+
+        <!-- INTRO -->
+        <div id="intro" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>📈 Why scale is its own problem</h2>
+            <p>
+                Everything so far used the engine's <code>BHField</code> — an array of bullet <em>objects</em>.
+                That's perfect for learning and fine for a few hundred bullets. But a real danmaku puts
+                <strong>thousands to tens of thousands</strong> of bullets on screen, and at that scale three
+                costs you ignored start to dominate every frame:
+            </p>
+            <ul>
+                <li><strong>Allocation &amp; garbage collection</strong> — making a new object (or even a temp
+                    <code>Vector2D</code>) per bullet per frame floods the GC, which then pauses your game.</li>
+                <li><strong>Per-item work</strong> — testing the player against <em>every</em> bullet, or issuing
+                    a draw call <em>per</em> bullet, is fine at 200 and fatal at 10,000.</li>
+                <li><strong>Memory layout</strong> — scattered objects thrash the CPU cache; packed arrays scream.</li>
+            </ul>
+            <div class="key-point">
+                <strong>💡 The engine stays simple; the lessons go inline.</strong> We deliberately do
+                <em>not</em> rewrite the engine's friendly object-based <code>BHField</code> — Beginner→Advanced
+                teach against its object API. Instead these demos build the <em>production</em> store (a pool, a
+                Struct-of-Arrays, a spatial hash) inline, so you can compare them head to head with a live
+                frame-time meter. "Make it work, then make it fast" — in that order.
+            </div>
+        </div>
+
+        <!-- NAIVE -->
+        <div id="naive" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🐌 The problem — allocations &amp; splice</h2>
+            <p>
+                Here's the naive store: an array of bullet objects, each holding <code>Vector2D</code> position
+                and velocity. Every step allocates a <em>temporary</em> vector per bullet (the
+                <code>vel.copy().multiply(dt)</code> you've used all track), and culling uses
+                <code>splice</code>. Drag the count up and watch the work-ms meter (top-right) climb and spike —
+                those spikes are the garbage collector.
+            </p>
+            <div class="diagram"><canvas id="bhNaiveCanvas" class="bh-canvas" width="440" height="440"></canvas></div>
+            <div class="controls">
+                <span class="bh-slider">bullets
+                    <input type="range" id="bhNaiveN" min="0" max="3500" step="100" value="1500">
+                    <span class="val" id="bhNaiveNVal">1500</span>
+                </span>
+            </div>
+            <div id="bhNaiveHud" class="info-display" style="font-family:monospace;">drag the slider up…</div>
+
+            <details>
+                <summary>📝 Click to see: the two villains (alloc + splice)</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">for (let i = naive.length - 1; i &gt;= 0; i--) {
+  const b = naive[i];
+  b.pos.add(b.vel.copy().multiply(dt));  // ⚠️ a NEW Vector2D every bullet, every frame
+  if (offscreen(b)) naive.splice(i, 1);  // ⚠️ splice shifts every element after i (O(n))
+}
+// 3000 bullets → 3000 short-lived objects/frame → the GC runs → frame spikes.</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">for (let i = naive.length - 1; i &gt;= 0; i--) {
+  const b = naive[i];
+  b.pos.add(b.vel.copy().multiply(dt));  // temp allocation per bullet
+  if (offscreen(b)) naive.splice(i, 1);  // O(n) removal
+}</code></pre>
+                </div>
+            </details>
+            <div class="key-point">
+                <strong>Garbage you never see is still garbage.</strong> <code>vel.copy()</code> looks innocent,
+                but at 10k bullets it's 10k allocations <em>per frame</em> — 600k/second. The GC eventually
+                stops the world to clean up, and that's the stutter. The fix is to stop allocating in the hot
+                loop at all.
+            </div>
+        </div>
+
+        <!-- POOL -->
+        <div id="pool" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>♻️ The object pool — reuse, don't garbage</h2>
+            <p>
+                An <strong>object pool</strong> keeps a free-list of dead bullets and hands them back out instead
+                of allocating new ones. Pair it with <em>plain number</em> fields (<code>x/y/vx/vy</code>, no
+                <code>Vector2D</code>) integrated in place, and the hot loop allocates <strong>nothing</strong>.
+                Same count as before — watch "new allocations last second" sit at zero, and the meter flatten.
+            </p>
+            <div class="diagram"><canvas id="bhPoolCanvas" class="bh-canvas" width="440" height="440"></canvas></div>
+            <div class="controls">
+                <span class="bh-slider">bullets
+                    <input type="range" id="bhPoolN" min="0" max="3500" step="100" value="1500">
+                    <span class="val" id="bhPoolNVal">1500</span>
+                </span>
+            </div>
+            <div id="bhPoolHud" class="info-display" style="font-family:monospace;">drag the slider up…</div>
+
+            <details>
+                <summary>📝 Click to see: the free-list pool</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class BHBulletPool {
+  constructor() { this.live = []; this.free = []; }
+  spawn(x, y, vx, vy, r) {
+    const b = this.free.pop() || { x:0, y:0, vx:0, vy:0, r:0 };  // reuse, or make ONE
+    b.x = x; b.y = y; b.vx = vx; b.vy = vy; b.r = r;
+    this.live.push(b); return b;
+  }
+  step(dt) {
+    for (let i = this.live.length - 1; i &gt;= 0; i--) {
+      const b = this.live[i];
+      b.x += b.vx * dt; b.y += b.vy * dt;          // in place — no temp objects
+      if (offscreen(b)) {
+        this.live[i] = this.live[this.live.length - 1]; this.live.pop(); // swap-remove
+        this.free.push(b);                          // recycle for the next spawn
+      }
+    }
+  }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">interface PBullet { x:number; y:number; vx:number; vy:number; r:number; }
+class BHBulletPool {
+  live: PBullet[] = []; free: PBullet[] = [];
+  spawn(x:number,y:number,vx:number,vy:number,r:number): PBullet {
+    const b = this.free.pop() ?? { x:0,y:0,vx:0,vy:0,r:0 };
+    b.x=x; b.y=y; b.vx=vx; b.vy=vy; b.r=r; this.live.push(b); return b;
+  }
+  step(dt:number): void { /* in-place integrate + swap-remove → free list */ }
+}</code></pre>
+                </div>
+            </details>
+            <div class="key-point">
+                <strong>Pool + plain numbers = a flat steady state.</strong> Two changes killed the GC: reusing
+                objects (no <code>new</code> in the loop) and dropping <code>Vector2D</code> for raw fields (no
+                temp vectors). The pool's memory grows to the peak bullet count once, then never again.
+            </div>
+        </div>
+
+        <!-- SOA -->
+        <div id="soa" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🧮 Struct-of-Arrays — flat <code>Float32Array</code>s</h2>
+            <p>
+                The pool removed allocations, but the data is still scattered objects. The fastest layout is
+                <strong>Struct-of-Arrays</strong>: instead of an array of <code>{x,y,vx,vy}</code> objects, keep
+                <em>separate</em> flat <code>Float32Array</code>s — all the x's together, all the y's together.
+                The CPU streams contiguous memory, and culling becomes an O(1) <strong>swap-remove</strong>. Push
+                this to <strong>10,000</strong> bullets and the step still costs a fraction of a millisecond.
+            </p>
+
+            <svg class="bh-diagram-svg" width="440" height="150" viewBox="0 0 440 150" role="img" aria-label="Array-of-Structs versus Struct-of-Arrays memory layout">
+                <text x="8" y="20">Array-of-Structs (objects, scattered):</text>
+                <g>
+                    <rect x="10" y="28" width="78" height="22" fill="#252b4a" stroke="#3a4570"/><text x="16" y="43">x y vx vy</text>
+                    <rect x="96" y="28" width="78" height="22" fill="#252b4a" stroke="#3a4570"/><text x="102" y="43">x y vx vy</text>
+                    <rect x="182" y="28" width="78" height="22" fill="#252b4a" stroke="#3a4570"/><text x="188" y="43">x y vx vy</text>
+                    <text x="268" y="43">… (each a heap object + header)</text>
+                </g>
+                <text x="8" y="82">Struct-of-Arrays (flat typed arrays, contiguous):</text>
+                <g>
+                    <rect x="10" y="90" width="200" height="16" fill="#16321f" stroke="#2e6b46"/><text x="14" y="102">x:  Float32Array [x0 x1 x2 x3 …]</text>
+                    <rect x="10" y="110" width="200" height="16" fill="#16263f" stroke="#2b5a8a"/><text x="14" y="122">y:  Float32Array [y0 y1 y2 y3 …]</text>
+                    <rect x="220" y="90" width="200" height="16" fill="#312a16" stroke="#6b5a2e"/><text x="224" y="102">vx: Float32Array [..]</text>
+                    <rect x="220" y="110" width="200" height="16" fill="#2a1630" stroke="#5a2e6b"/><text x="224" y="122">vy: Float32Array [..]</text>
+                </g>
+                <text x="220" y="140" style="fill:#66bb6a;">cull = copy last live → slot i, count-- (O(1))</text>
+            </svg>
+
+            <div class="diagram"><canvas id="bhSoaCanvas" class="bh-canvas" width="440" height="440"></canvas></div>
+            <div class="controls">
+                <span class="bh-slider">bullets
+                    <input type="range" id="bhSoaN" min="0" max="10000" step="250" value="6000">
+                    <span class="val" id="bhSoaNVal">6000</span>
+                </span>
+            </div>
+            <div id="bhSoaHud" class="info-display" style="font-family:monospace;">drag toward 10,000…</div>
+
+            <details>
+                <summary>📝 Click to see: the SoA step + swap-remove cull</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class BHSoaBullets {
+  constructor(cap) {
+    this.x = new Float32Array(cap); this.y = new Float32Array(cap);
+    this.vx = new Float32Array(cap); this.vy = new Float32Array(cap);
+    this.r = new Float32Array(cap); this.count = 0;
+  }
+  step(dt) {
+    let n = this.count;
+    for (let i = 0; i &lt; n; i++) {
+      this.x[i] += this.vx[i] * dt; this.y[i] += this.vy[i] * dt;
+      if (offscreen(this.x[i], this.y[i])) {
+        n--;                                  // O(1) swap-remove: last live → slot i
+        this.x[i] = this.x[n]; this.y[i] = this.y[n];
+        this.vx[i] = this.vx[n]; this.vy[i] = this.vy[n]; this.r[i] = this.r[n];
+        i--;                                  // re-test the bullet we just moved in
+      }
+    }
+    this.count = n;
+  }
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">class BHSoaBullets {
+  x: Float32Array; y: Float32Array; vx: Float32Array; vy: Float32Array; r: Float32Array;
+  count = 0;
+  constructor(cap: number) { this.x = new Float32Array(cap); /* …y, vx, vy, r… */ }
+  step(dt: number): void { /* integrate in place; swap-remove on cull */ }
+}</code></pre>
+                </div>
+            </details>
+            <div class="key-point">
+                <strong>Order doesn't matter, so swap-remove is free.</strong> Bullets have no meaningful order,
+                so to delete index <code>i</code> we copy the <em>last</em> live bullet into <code>i</code> and
+                shrink the count — no shifting, no allocation. <code>splice</code> would shift everything after
+                <code>i</code> down by one; at 10k that's the difference between smooth and stutter.
+            </div>
+        </div>
+
+        <!-- HASH -->
+        <div id="hash" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🗂️ Spatial hashing — N hit-checks → ~k</h2>
+            <p>
+                Even storage solved, one thing is still O(N): checking the player against <em>every</em> bullet
+                each frame. A <strong>uniform spatial hash</strong> buckets bullets by grid cell, so the hit test
+                only looks at the 3×3 cells around you — a couple dozen candidates instead of thousands.
+                <strong>Click, move, and toggle the hash</strong> to watch "checks this frame" collapse.
+            </p>
+            <div class="diagram"><canvas id="bhHashCanvas" class="bh-canvas" width="440" height="440"></canvas></div>
+            <div class="controls">
+                <label class="bh-slider"><input type="checkbox" id="bhHashOn" checked> use spatial hash</label>
+            </div>
+            <div id="bhHashHud" class="info-display" style="font-family:monospace;">click the playfield and move…</div>
+
+            <details>
+                <summary>📝 Click to see: bucket by cell, query the 3×3</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">class BHSpatialHash {
+  constructor(cell) { this.cell = cell; this.map = new Map(); }
+  clear() { this.map.clear(); }
+  insert(i, x, y) {
+    const k = Math.floor(x/this.cell) + ',' + Math.floor(y/this.cell);
+    (this.map.get(k) || this.map.set(k, []).get(k)).push(i);
+  }
+  queryNear(x, y, out) {                       // 3x3 cells around (x, y)
+    out.length = 0;
+    const cx = Math.floor(x/this.cell), cy = Math.floor(y/this.cell);
+    for (let gx = cx-1; gx &lt;= cx+1; gx++)
+      for (let gy = cy-1; gy &lt;= cy+1; gy++) {
+        const a = this.map.get(gx + ',' + gy);
+        if (a) for (const idx of a) out.push(idx);
+      }
+    return out;
+  }
+}
+// per frame: hash.clear(); insert all bullets; only test hash.queryNear(player).</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">class BHSpatialHash {
+  cell: number; map = new Map&lt;string, number[]&gt;();
+  constructor(cell: number) { this.cell = cell; }
+  insert(i: number, x: number, y: number): void { /* bucket by cell key */ }
+  queryNear(x: number, y: number, out: number[]): number[] { /* gather 3x3 */ return out; }
+}</code></pre>
+                </div>
+            </details>
+            <div class="key-point">
+                <strong>Be honest about the build cost.</strong> Rebuilding the hash is itself O(N), so for a
+                <em>single</em> query point (one player) it's roughly break-even. The big win comes when you do
+                <em>many</em> queries against it — bullet-vs-bullet, several players, or homing enemies — where
+                you pay O(N) to build once and save on every query after.
+            </div>
+        </div>
+
+        <!-- BATCH -->
+        <div id="batch" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🎨 Render batching — one fill, not thousands</h2>
+            <p>
+                The last cost is drawing. Each <code>beginPath</code>/<code>fill</code> has fixed overhead, so
+                doing one <em>per bullet</em> is thousands of state changes a frame. Instead, add every bullet's
+                arc to <strong>one</strong> path and <code>fill()</code> once (a second pass for the white cores).
+                <strong>Toggle batching</strong> and watch the draw-ms meter.
+            </p>
+            <div class="diagram"><canvas id="bhBatchCanvas" class="bh-canvas" width="440" height="440"></canvas></div>
+            <div class="controls">
+                <span class="bh-slider">bullets
+                    <input type="range" id="bhBatchN" min="0" max="5000" step="100" value="3000">
+                    <span class="val" id="bhBatchNVal">3000</span>
+                </span>
+                <label class="bh-slider"><input type="checkbox" id="bhBatchOn" checked> batched rendering</label>
+            </div>
+            <div id="bhBatchHud" class="info-display" style="font-family:monospace;">toggle batching…</div>
+
+            <details>
+                <summary>📝 Click to see: many arcs, one fill</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">// BATCHED: one path for every coloured rim, one for every white core → 2 fills total.
+ctx.fillStyle = color; ctx.beginPath();
+for (let i = 0; i &lt; S.count; i++) {
+  ctx.moveTo(S.x[i] + S.r[i], S.y[i]);     // moveTo before arc → no connecting line
+  ctx.arc(S.x[i], S.y[i], S.r[i], 0, Math.PI * 2);
+}
+ctx.fill();
+
+// UNBATCHED (the slow way): state change + fill PER bullet → 2·N fills.
+for (let i = 0; i &lt; S.count; i++) {
+  ctx.beginPath(); ctx.arc(S.x[i], S.y[i], S.r[i], 0, Math.PI*2);
+  ctx.fillStyle = color; ctx.fill();
+}</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">ctx.fillStyle = color; ctx.beginPath();
+for (let i = 0; i &lt; S.count; i++) {
+  ctx.moveTo(S.x[i] + S.r[i], S.y[i]);
+  ctx.arc(S.x[i], S.y[i], S.r[i], 0, Math.PI * 2);
+}
+ctx.fill();   // one fill for the whole store</code></pre>
+                </div>
+            </details>
+            <div class="key-point">
+                <strong>The <code>moveTo</code> before each <code>arc</code> matters.</strong> Without it, the
+                path draws a thin line connecting the end of one circle to the start of the next. <code>moveTo</code>
+                lifts the "pen" so each arc is its own sub-path — thousands of separate circles in a single fill.
+            </div>
+        </div>
+
+        <!-- MINI PROJECT -->
+        <div id="mini-project" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🏆 Mini-Project: "Stress Test"</h2>
+            <p>
+                Everything on at once: a SoA store at pool capacity, a spinning five-arm spiral cranked to
+                <strong>10,000+ bullets</strong>, spatial-hash hit/graze, off-screen culling, and batched
+                rendering — with a live fps + work-ms readout. <strong>Click, crank the slider, and dodge.</strong>
+                The meter should stay under the green 60&nbsp;fps line the whole way up.
+            </p>
+            <div class="diagram"><canvas id="bhStressCanvas" class="bh-canvas" width="440" height="440"></canvas></div>
+            <div class="controls">
+                <span class="bh-slider">fire rate
+                    <input type="range" id="bhStressRate" min="1" max="24" step="1" value="12">
+                    <span class="val" id="bhStressRateVal">12</span> /arm/frame
+                </span>
+            </div>
+            <div id="bhStressHud" class="info-display" style="font-family:monospace;">click the playfield and crank it up…</div>
+
+            <details>
+                <summary>📝 Click to see: every optimization, wired together</summary>
+                <div class="code-container" data-code-tabs>
+                    <div class="code-tabs" role="tablist">
+                        <button class="code-tab active" data-lang="js" role="tab" aria-selected="true">JavaScript</button>
+                        <button class="code-tab" data-lang="ts" role="tab" aria-selected="false">TypeScript</button>
+                    </div>
+                    <pre class="code-pane active" data-lang="js"><code class="language-javascript">const S = new BHSoaBullets(12000, bounds);   // flat arrays, fixed capacity
+const hash = new BHSpatialHash(36);
+
+function update(dt) {
+  // fire a spinning 5-arm spiral straight into the SoA store
+  for (let arm = 0; arm &lt; 5; arm++)
+    for (let s = 0; s &lt; rate; s++)
+      S.spawn(cx, cy, /* polar velocity */ );
+  S.step(dt);                                 // integrate + O(1) cull
+
+  hash.clear();                               // rebuild the hash from the store
+  for (let i = 0; i &lt; S.count; i++) hash.insert(i, S.x[i], S.y[i]);
+  for (const i of hash.queryNear(player.x, player.y, cand)) testHitGraze(i);
+}
+function render() { bhDrawSoa(ctx, S, rim, core); }  // 2 fills for 10k bullets</code></pre>
+                    <pre class="code-pane" data-lang="ts"><code class="language-typescript">const S = new BHSoaBullets(12000, bounds);
+const hash = new BHSpatialHash(36);
+// update: spawn spiral → S.step(dt) → rebuild hash → queryNear(player) → hit/graze
+// render: bhDrawSoa(ctx, S, rim, core)  // batched</code></pre>
+                </div>
+            </details>
+
+            <div class="example-box">
+                <h4>🚀 Make it yours</h4>
+                <ul>
+                    <li>Add a per-bullet colour channel (a <code>Uint8Array</code>) and batch one fill per colour.</li>
+                    <li>Cull bullet-vs-bullet too, using the hash — now the build cost pays off.</li>
+                    <li>Profile in DevTools: the flame chart should show no GC sawtooth at all.</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- RECAP -->
+        <div class="section">
+            <h2>✅ Recap &amp; what's next</h2>
+            <ul>
+                <li><strong>The problem</strong> — per-bullet allocations + <code>splice</code> = GC stutter.</li>
+                <li><strong>Object pool</strong> — reuse dead bullets; plain-number fields; zero allocations.</li>
+                <li><strong>Struct-of-Arrays</strong> — flat <code>Float32Array</code>s + O(1) swap-remove cull.</li>
+                <li><strong>Spatial hash</strong> — hit-checks from N down to the ~dozen bullets near you.</li>
+                <li><strong>Culling &amp; batching</strong> — drop off-screen bullets; one fill, not thousands.</li>
+            </ul>
+            <div class="key-point">
+                <strong>Next — <a href="simulations.html">Simulations: The Whole Game</a>.</strong> With patterns,
+                a boss, and the performance to run them, the finale adds the <em>tooling</em> — deterministic
+                seeded replay and a visual pattern editor that emits spell-card data — plus hitstop and juice,
+                and ties everything into a complete multi-phase boss rush: <strong>"Danmaku"</strong>.
+                <em>(Lands in the next iteration.)</em>
+            </div>
+        </div>
+    </div>
+
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <!-- Dependencies + engine. (No field.js/emitter.js: this tier builds its own
+         stores — that's the lesson.) -->
+    <script src="../shared/utils.js"></script>
+    <script src="../shared/code-tabs.js"></script>
+    <script src="engine/loop.js"></script>
+    <script src="engine/render.js"></script>
+    <script src="expert-demos.js"></script>
+
+    <script>
+        const scrollToTopBtn = document.getElementById('scrollToTop');
+        scrollToTopBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+        window.addEventListener('scroll', () => { scrollToTopBtn.style.opacity = window.pageYOffset > 300 ? '1' : '0'; });
+        scrollToTopBtn.style.opacity = '0';
+        scrollToTopBtn.style.transition = 'opacity 0.3s';
+    </script>
+</body>
+</html>
