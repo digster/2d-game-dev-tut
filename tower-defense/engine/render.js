@@ -263,6 +263,21 @@ function tdDrawHUD(ctx, area, info = {}) {
     ctx.restore();
 }
 
+// --- tdDrawPop ------------------------------------------------------
+// A small fading ring for kill / leak / blast feedback (purely cosmetic). The
+// Simulations tier teaches a real pooled particle system; this is the cheap stand-in
+// every tier reuses. pop: { x, y, r, life, max, color? } — `life` counts down to 0.
+function tdDrawPop(ctx, pop) {
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, pop.life / pop.max);
+    ctx.beginPath();
+    ctx.arc(pop.x, pop.y, pop.r * (1.6 - pop.life / pop.max), 0, TD.TAU);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = pop.color || TD.proj;
+    ctx.stroke();
+    ctx.restore();
+}
+
 // rounded-rect path helper (module-local)
 function roundRect(ctx, x, y, w, h, r) {
     ctx.beginPath();
@@ -285,4 +300,5 @@ if (typeof window !== 'undefined') {
     window.tdDrawEnemy = tdDrawEnemy;
     window.tdDrawProjectile = tdDrawProjectile;
     window.tdDrawHUD = tdDrawHUD;
+    window.tdDrawPop = tdDrawPop;
 }

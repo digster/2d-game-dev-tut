@@ -1485,7 +1485,10 @@ Build passes (each verified in-browser, console clean, with a commit message at 
   crosses, not just its vertices). memory 2026-06-04.
 - Pass 2 — Beginner ("The Path & The Tower", 6 demos; TDTower/TDEnemy/TDProjectile +
   tdPickTarget inline, console-tested; capstone "First Line of Defense"). memory 2026-06-04 pass 2.
-- Pass 3 — Intermediate ("Tower Types & Targeting"; entities → engine/entities.js). [next]
-- Pass 4 — Advanced ("Mazing, Flow Fields & Sight"; A*/flow-field/LOS inline, console-testable).
+- Pass 3 — Intermediate ("Tower Types & Targeting", 7 demos; entities + tdDrawPop PROMOTED →
+  engine/entities.js + engine/render.js; lead-the-target intercept quadratic; capstone "Choke
+  Point"). memory 2026-06-04 pass 3.
+- Pass 4 — Advanced ("Mazing, Flow Fields & Sight"; A*/flow-field/LOS inline, console-testable;
+  promote to engine/nav.js at Expert). [next]
 - Pass 5 — Expert ("Ten Thousand Creeps"; nav → engine/nav.js; pool/SoA/hash inline).
 - Pass 6 — Simulations FINALE ("The Last Stand"; waves/economy/upgrades + balancing dashboards).

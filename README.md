@@ -602,8 +602,8 @@ per-tier file structure mirroring the Fundamentals layout.
   spell-card JSON, hitstop/trauma-shake/particle juice, Cave-style bullet-cancel) and the grand
   capstone **"Danmaku"** — a deterministic, replayable two-phase boss rush composing every system.
 
-- `tower-defense/` — **Beginner tier live (engine core + landing page + Beginner's 6 demos);
-  Intermediate→Simulations land iteratively.** Build a Kingdom Rush / Bloons-style tower defense, from one lane and one
+- `tower-defense/` — **Beginner + Intermediate tiers live (engine core + entities module + 13
+  demos); Advanced→Simulations land iteratively.** Build a Kingdom Rush / Bloons-style tower defense, from one lane and one
   tower up to a balanced, multi-wave game. This is the **applied home for the Fundamentals'
   flow fields and A*** (`advanced.html#flow-fields` / `#pathfinding`), which today are only
   isolated demos — a TD makes them *gameplay-critical*: a flow field routes a crowd, A*
@@ -645,7 +645,18 @@ per-tier file structure mirroring the Fundamentals layout.
   as a `1/fireRate` cooldown, click-to-relocate), a projectile tower (the shot travels and can
   be outrun by fast creeps — motivating the Intermediate lead-the-target lesson — and fizzles
   on overkill), and the capstone **"First Line of Defense"** (place towers on a 120-gold budget,
-  survive a wave, kills pay gold and leaks cost lives). Demo IDs reserve the `td_` namespace;
+  survive a wave, kills pay gold and leaks cost lives). **The Intermediate tier ("Tower Types &
+  Targeting", 7 demos) is the entity model's 2nd consumer**, so `TDEnemy`/`TDTower`/`TDProjectile`
+  + `tdPickTarget` were **promoted** (a *move*) from `beginner-demos.js` into `engine/entities.js`
+  (both pages load it; neither demos file re-declares the classes), and the classes grew optional
+  powers behind defaults: a timed slow on `TDEnemy`, data-driven specs + a `targeting` mode + lead
+  aiming + splash/slow on `TDTower`, and a ballistic flight mode on `TDProjectile`. Demos: "a tower
+  is data" (swap one tower's spec live), the targeting strategy slot (first/last/closest/strongest/
+  weakest, shown as a reticle), **lead-the-target** (the intercept quadratic `tdInterceptTime`/
+  `tdLeadPoint` — ballistic shots that hit a moving creep only when leading), splash/AoE towers,
+  frost towers (a timed slow + the slow→DPS synergy), draggable **Catmull-Rom spline lanes**, and
+  the capstone **"Choke Point"** (a shop of kinds + targeting modes, a mixed wave of fast runners
+  and slow tanks on a curved lane). Demo IDs reserve the `td_` namespace;
   demos are pointer/keyboard-driven so they omit `data-demo-id` (opt out of the Export button).
 
 ## Shared assets

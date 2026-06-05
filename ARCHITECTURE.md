@@ -254,10 +254,20 @@ platformer/roguelike/physics-puzzle/bullet-hell) they omit `data-demo-id`. The *
 scalar `dist += speed·dt`; `TDTower` — squared-range check + `tdPickTarget` "first/furthest-along" mode +
 a `1/fireRate` cooldown, returning the creep it fired at so the demo decides hitscan-beam vs projectile;
 `TDProjectile` — a travelling shot with a sub-step reach hit test that fizzles on overkill), all top-level
-and console-testable, **awaiting promotion to `engine/entities.js` when the Intermediate tier becomes
-their 2nd consumer**. Its capstone "First Line of Defense" composes map + spawner + towers + projectiles +
-a gold/lives economy. **Status: Beginner live (engine core loop/render/world + Beginner's 6 demos);
-Intermediate→Simulations land iteratively.**
+and console-testable. Its capstone "First Line of Defense" composes map + spawner + towers + projectiles +
+a gold/lives economy. The **Intermediate tier ("Tower Types & Targeting", 7 demos)** is the entity model's
+genuine 2nd consumer, so `TDEnemy`/`TDTower`/`TDProjectile` + `tdPickTarget` were **promoted** (a *move*,
+the `actors.js`/`PlayerBody` rule) into **`engine/entities.js`** — both `beginner.html` and
+`intermediate.html` load it, and neither demos file re-declares the classes (a 2nd `class TDTower` on a page
+is a redeclaration error). On promotion the classes gained optional powers behind defaults (the inert-knob
+pattern, so the Beginner calls keep working): a timed SLOW on `TDEnemy` (+ a `velocity()` for lead), a
+`targeting` mode + `lead` aiming + `splash`/`slow` on `TDTower`, and a BALLISTIC flight mode on
+`TDProjectile`. The lead-the-target MATH (`tdInterceptTime`/`tdLeadPoint` — the intercept quadratic) and the
+targeting selection live in the engine; the tower ROSTER (gun/sniper/splash/frost stats) stays as CONTENT in
+the tier demos. The cosmetic `tdDrawPop` likewise moved to `engine/render.js`. (The remaining planned
+promotion is the Advanced tier's `tdAStar`/`tdFlowField`/`tdLineOfSight` → `engine/nav.js` on the Expert
+scale tier.) **Status: Beginner + Intermediate live (engine = 4 modules — loop, render, world, entities;
+13 demos); Advanced→Simulations land iteratively.**
 
 **Why tiers are separate files:** content is split beginner → intermediate →
 expert → raymarching → stylization → distortion → advanced → simulations so each

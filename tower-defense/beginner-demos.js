@@ -11,23 +11,20 @@
 //   6. miniProject    — "First Line of Defense": place towers, survive a wave
 //
 // DEPENDENCIES (loaded BEFORE this file):
-//   ../shared/utils.js — Vector2D, clamp, clearCanvas (globals)
-//   engine/loop.js     — tdLoop, tdInstallPointer (window)
-//   engine/render.js   — TD palette + tdDraw* (window)
-//   engine/world.js    — TDGrid, TDPath (window)
+//   ../shared/utils.js   — Vector2D, clamp, clearCanvas (globals)
+//   engine/loop.js       — tdLoop, tdInstallPointer (window)
+//   engine/render.js     — TD palette + tdDraw* + tdDrawPop (window)
+//   engine/world.js      — TDGrid, TDPath (window)
+//   engine/entities.js   — TDEnemy, TDTower, TDProjectile, tdPickTarget (window)
 //
-// THE ENTITY MODEL (TDEnemy / TDTower / TDProjectile + tdPickTarget) is declared
-// TOP-LEVEL here, on purpose: these are the tier's *lesson*, and being top-level
-// means you can build & poke them straight from the DevTools console
-// (`new TDEnemy(...)`). They are NOT attached to `window` — that's reserved for
-// the moment the Intermediate tier becomes their 2nd consumer and they're
-// promoted to `engine/entities.js` (the repo's "promote on the 2nd consumer"
-// rule). Until then they live here.
+// THE ENTITY MODEL was taught inline in this tier originally; once the Intermediate
+// tier became its 2nd consumer it was PROMOTED to engine/entities.js (the repo's
+// "promote on the 2nd consumer" rule), so this file consumes it rather than
+// declaring it. The classes still read exactly as this tier needs them — a plain
+// tower is the Beginner gun; the later tiers switch on its optional knobs.
 //
 // ⚠️  Vector2D mutates in place: `add`/`multiply`/`normalize`/`set` change `this`;
-//   only `subtract`/`copy` return new. An entity OWNS its `pos`, so mutating that
-//   is fine — but `subtract` is used to get a fresh "toward target" vector without
-//   corrupting anyone's position.
+//   only `subtract`/`copy` return new.
 // =============================================================================
 
 // The standard Beginner lane, as [col,row] cells (the ends sit off-grid so creeps
@@ -56,158 +53,13 @@ function tdRunWhenVisible(canvas, loop) {
     return loop;
 }
 
-// =============================================================================
-// THE ENTITY MODEL
-// =============================================================================
-
-// --- TDEnemy: a creep that walks the lane -----------------------------------
-// The whole of "path following" is one idea: a creep stores a single scalar
-// `dist` — how far along the lane it has travelled — and each step advances it by
-// `speed * dt`. The lane's arc-length table turns that scalar back into an (x,y).
-// Speed is px/s (frame-rate independent); when `dist` reaches the lane's length
-// the creep has reached the goal and "leaks".
-class TDEnemy {
-    constructor(path, opts = {}) {
-        this.path = path;
-        this.dist = opts.dist ?? 0;            // arc-length progress along the lane
-        this.speed = opts.speed ?? 60;         // px/s
-        this.maxHp = opts.hp ?? 5;
-        this.hp = this.maxHp;
-        this.radius = opts.radius ?? 9;
-        this.color = opts.color || TD.enemy;
-        this.bounty = opts.bounty ?? 5;        // gold awarded when killed
-        this.alive = true;
-        this.leaked = false;                   // reached the goal (cost a life)
-        const p = path.pointAt(this.dist);
-        this.pos = new Vector2D(p.x, p.y);     // a creep's position IS a 2D vector
-    }
-    // x/y getters so a TDEnemy can be handed straight to tdDrawEnemy.
-    get x() { return this.pos.x; }
-    get y() { return this.pos.y; }
-
-    update(dt) {
-        this.dist += this.speed * dt;          // advance along the lane
-        if (this.dist >= this.path.length) {   // reached the goal
-            this.dist = this.path.length;
-            this.leaked = true;
-            this.alive = false;
-        }
-        const p = this.path.pointAt(this.dist);
-        this.pos.set(p.x, p.y);                 // set() mutates in place (this.pos is ours)
-    }
-    damage(amount) {
-        this.hp -= amount;
-        if (this.hp <= 0) { this.hp = 0; this.alive = false; }
-    }
-}
-
-// --- tdPickTarget: the "first" targeting mode (top-level, console-testable) ---
-// The classic TD default: of the creeps in range, shoot the one FURTHEST along
-// the lane (closest to the goal) — it's the most urgent threat. The Intermediate
-// tier generalizes this into swappable modes (last / closest / strongest / lead);
-// here it's a single clear rule. Range uses SQUARED distance (no Math.sqrt).
-function tdPickTarget(tower, enemies) {
-    let best = null, bestProgress = -Infinity;
-    const r2 = tower.range * tower.range;
-    for (const e of enemies) {
-        if (!e.alive) continue;
-        if (tower.pos.distanceSquared(e.pos) > r2) continue;  // out of range
-        if (e.dist > bestProgress) { bestProgress = e.dist; best = e; }
-    }
-    return best;
-}
-
-// --- TDTower: range + acquisition + fire-rate -------------------------------
-// A tower is a fixed point with a `range`, a `fireRate` (shots/second → a cooldown
-// of 1/fireRate seconds between shots), and a `damage` per shot. Its update does
-// three things: keep/clear its target, aim its barrel at it, and — when the
-// cooldown expires — FIRE. It returns the creep it fired at this step (or null).
-// Crucially it does NOT decide what a "shot" looks like: the hitscan demo turns
-// the return into an instant beam, the projectile demo into a traveling shot. One
-// tower, two lessons.
-class TDTower {
-    constructor(x, y, opts = {}) {
-        this.pos = new Vector2D(x, y);
-        this.range = opts.range ?? 110;
-        this.damage = opts.damage ?? 2;
-        this.fireRate = opts.fireRate ?? 1.5;  // shots per second
-        this.projSpeed = opts.projSpeed ?? 280;
-        this.cost = opts.cost ?? 40;
-        this.color = opts.color || TD.tower;
-        this.cooldown = 0;                      // seconds until the next shot is ready
-        this.angle = -Math.PI / 2;              // barrel heading (starts pointing up)
-        this.target = null;
-    }
-    get x() { return this.pos.x; }
-    get y() { return this.pos.y; }
-
-    inRange(enemy) { return this.pos.distanceSquared(enemy.pos) <= this.range * this.range; }
-
-    update(dt, enemies) {
-        if (this.cooldown > 0) this.cooldown -= dt;
-        // Drop a target that died or walked out of range, then re-acquire.
-        if (this.target && (!this.target.alive || !this.inRange(this.target))) this.target = null;
-        if (!this.target) this.target = tdPickTarget(this, enemies);
-        if (!this.target) return null;
-        // Aim the barrel at the target's CURRENT position (Beginner aims at "now";
-        // the Intermediate tier leads the target to where it WILL be).
-        this.angle = Math.atan2(this.target.pos.y - this.pos.y, this.target.pos.x - this.pos.x);
-        if (this.cooldown <= 0) {
-            this.cooldown = 1 / this.fireRate;  // reset the cooldown
-            return this.target;                 // "I fired at this creep this step"
-        }
-        return null;
-    }
-}
-
-// --- TDProjectile: a shot that travels to its target ------------------------
-// Unlike a hitscan beam (instant), a projectile is a moving point that chases the
-// target's CURRENT position at `speed` px/s. Two honest consequences the demo
-// surfaces: a slow shot can be outrun by a fast creep (→ the Intermediate "lead
-// the target" lesson), and if the target dies mid-flight the shot fizzles
-// (overkill is real). It "hits" when it gets within the target's radius this step
-// — checked with the sub-step reach so a fast shot can't tunnel past a creep.
-class TDProjectile {
-    constructor(x, y, target, opts = {}) {
-        this.pos = new Vector2D(x, y);
-        this.target = target;
-        this.speed = opts.speed ?? 280;
-        this.damage = opts.damage ?? 2;
-        this.radius = opts.radius ?? 4;
-        this.color = opts.color || TD.proj;
-        this.alive = true;
-    }
-    get x() { return this.pos.x; }
-    get y() { return this.pos.y; }
-
-    update(dt) {
-        if (!this.target || !this.target.alive) { this.alive = false; return; } // fizzle
-        // Fresh vector from us toward the target (subtract returns NEW — target.pos
-        // is untouched), normalized to a one-step move.
-        const toward = this.target.pos.subtract(this.pos);
-        const step = this.speed * dt;
-        const reach = step + this.target.radius;            // sub-step hit window
-        if (toward.lengthSquared() <= reach * reach) {      // arrived this step
-            this.target.damage(this.damage);
-            this.alive = false;
-            return;
-        }
-        this.pos.add(toward.normalize().multiply(step));    // mutate our own pos
-    }
-}
-
-// A tiny fading "pop" ring for kill/leak feedback (purely cosmetic). Kept trivial;
-// the Simulations tier teaches a real particle pool.
-function tdDrawPop(ctx, pop) {
-    ctx.save();
-    ctx.globalAlpha = Math.max(0, pop.life / pop.max);
-    ctx.beginPath();
-    ctx.arc(pop.x, pop.y, pop.r * (1.6 - pop.life / pop.max), 0, TD.TAU);
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = pop.color || TD.proj;
-    ctx.stroke();
-    ctx.restore();
-}
+// THE ENTITY MODEL (TDEnemy / TDTower / TDProjectile + tdPickTarget) was taught
+// inline here originally; the Intermediate tier became its 2nd consumer, so it was
+// PROMOTED to engine/entities.js (loaded above) and is no longer declared in this
+// file — a 2nd `class TDTower` on the page would be a redeclaration error. The
+// cosmetic tdDrawPop likewise lives in engine/render.js now. The classes work
+// exactly as this tier uses them (a plain tower is a Beginner gun); the engine copy
+// just *adds* optional capabilities (slow, lead, splash) the later tiers switch on.
 
 // =============================================================================
 // 1) mapDemo — the grid, the lane, and what you can build on
@@ -435,7 +287,7 @@ function tdDrawPop(ctx, pop) {
         }
         for (const c of creeps) c.update(dt);
         const fired = tower.update(dt, creeps);
-        if (fired) shots.push(new TDProjectile(tower.x, tower.y, fired, { speed: projSpeed, damage: tower.damage }));
+        if (fired) shots.push(new TDProjectile(tower.x, tower.y, { target: fired, speed: projSpeed, damage: tower.damage }));
         for (const s of shots) {
             const targetWasAlive = s.target && s.target.alive;
             s.update(dt);
@@ -512,7 +364,7 @@ function tdDrawPop(ctx, pop) {
                 if (spawner.timer <= 0) { spawner.timer = spawner.interval; spawner.remaining--; creeps.push(new TDEnemy(path, { speed: spawner.speed, hp: 6, bounty: 6 })); }
             }
             for (const c of creeps) c.update(dt);
-            for (const t of towers) { const fired = t.update(dt, creeps); if (fired) shots.push(new TDProjectile(t.x, t.y, fired, { speed: t.projSpeed, damage: t.damage, color: t.color })); }
+            for (const t of towers) { const fired = t.update(dt, creeps); if (fired) shots.push(new TDProjectile(t.x, t.y, { target: fired, speed: t.projSpeed, damage: t.damage, color: t.color })); }
             for (const s of shots) s.update(dt);
 
             // resolve deaths & leaks → gold & lives
