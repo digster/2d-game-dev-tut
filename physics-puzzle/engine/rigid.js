@@ -293,6 +293,22 @@ function pzStepWorld(bodies, joints, gx, gy, dt, opts = {}) {
     return manifolds;
 }
 
+// Drive a body toward a target point by setting VELOCITY ONLY; the next
+// pzStepWorld then integrates `pos += vel*dt` and lands the body exactly there.
+// Do NOT also set `pos` directly — that double-applies the move (the world step
+// adds it a second time) and makes a dragged body jitter, badly so on frames
+// where the fixed-step loop runs two sub-steps and the velocity sign flips.
+// Driving via velocity also lets collisions stop the body at walls instead of
+// teleporting it through them. `maxSpeed` caps a laggy frame's huge cursor jump
+// so the body can't tunnel a thin wall and explode the solver. Used to drag a
+// body with the mouse.
+function pzDragTo(body, tx, ty, dt, maxSpeed = 2500) {
+    let vx = (tx - body.pos.x) / dt, vy = (ty - body.pos.y) / dt;
+    const sp = Math.hypot(vx, vy);
+    if (sp > maxSpeed) { vx = (vx / sp) * maxSpeed; vy = (vy / sp) * maxSpeed; }
+    body.vel.set(vx, vy);
+}
+
 // Draw a polygon body: fill, outline, and a tick from centre to the first vertex.
 function pzDrawPoly(ctx, body, fill, stroke) {
     const wv = body.worldVerts();
@@ -332,6 +348,7 @@ if (typeof window !== 'undefined') {
     window.pzSolveManifold = pzSolveManifold;
     window.PZJoint = PZJoint;
     window.pzStepWorld = pzStepWorld;
+    window.pzDragTo = pzDragTo;
     window.pzDrawPoly = pzDrawPoly;
     window.pzArenaBodies = pzArenaBodies;
 }

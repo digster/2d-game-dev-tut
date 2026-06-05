@@ -423,11 +423,9 @@ function pzMakeRagdoll(cx, cy) {
             }
         }
         if (pointer.justReleased) grab = null;
-        if (grab && pointer.isDown) {
-            const nx = pointer.pos.x + off.x, ny = pointer.pos.y + off.y;
-            grab.vel.set((nx - grab.pos.x) / dt, (ny - grab.pos.y) / dt);
-            grab.pos.set(nx, ny);
-        }
+        // drag via velocity only — the world step integrates it to the cursor
+        // (setting pos too would double-apply the move and make the body jitter).
+        if (grab && pointer.isDown) pzDragTo(grab, pointer.pos.x + off.x, pointer.pos.y + off.y, dt);
         pzStepWorld(bodies, joints, 0, 1100, dt, { iterations: 16 });
         pointer.endFrame();
     }
@@ -483,6 +481,9 @@ function pzMakeRagdoll(cx, cy) {
         if (pointer.justPressed && Math.hypot(pointer.pos.x - duck.pos.x, pointer.pos.y - duck.pos.y) < duck.r + 12) grab = true;
         if (pointer.justReleased) grab = false;
         pzFluidStep(parts, hash, basin, h, dt, 1100, 0.3, 0.2);
+        // the duck is integrated MANUALLY here (not by pzStepWorld), and the grab branch skips
+        // the else integration — so set pos directly (pzDragTo would leave it stationary). vel is
+        // kept so a release throws it. No double-step here, so no jitter to fix.
         if (grab && pointer.isDown) { duck.vel.set((pointer.pos.x - duck.pos.x) / dt, (pointer.pos.y - duck.pos.y) / dt); duck.pos.set(pointer.pos.x, pointer.pos.y); }
         else { duck.vel.y += 1100 * dt * 0.5; duck.pos.x += duck.vel.x * dt; duck.pos.y += duck.vel.y * dt; duck.vel.x *= 0.98; duck.vel.y *= 0.98; }
         pzFluidFloat(duck, parts, dt);

@@ -274,11 +274,9 @@
             if (best) { grab = best; off = { x: best.pos.x - pointer.pos.x, y: best.pos.y - pointer.pos.y }; }
         }
         if (pointer.justReleased) grab = null;
-        if (grab && pointer.isDown) {
-            const nx = pointer.pos.x + off.x, ny = pointer.pos.y + off.y;
-            grab.vel.set((nx - grab.pos.x) / dt, (ny - grab.pos.y) / dt);
-            grab.pos.set(nx, ny);
-        }
+        // drag via velocity only — the world step integrates it to the cursor
+        // (setting pos too would double-apply the move and make the body jitter).
+        if (grab && pointer.isDown) pzDragTo(grab, pointer.pos.x + off.x, pointer.pos.y + off.y, dt);
         pzStepWorld(bodies, joints, 0, 1200, dt, { iterations: 12 });
         pointer.endFrame();
     }
@@ -341,9 +339,10 @@
         }
         if (pointer.justReleased) grab = null;
         if (grab && pointer.isDown) {
-            const nx = pointer.pos.x + off.x, ny = pointer.pos.y + off.y;
-            grab.vel.set((nx - grab.pos.x) / dt, (ny - grab.pos.y) / dt);
-            grab.pos.set(nx, ny); grab.angularVel = 0; grab.angle = 0;
+            // drag via velocity only (the world step integrates it to the cursor);
+            // setting pos too would double-apply the move and make it jitter.
+            pzDragTo(grab, pointer.pos.x + off.x, pointer.pos.y + off.y, dt);
+            grab.angularVel = 0; grab.angle = 0;   // keep the weight upright
         }
         pzStepWorld(bodies, joints, 0, 1200, dt, { iterations: 14 });
         if (ball.pos.x > zone.x0 && ball.pos.x < zone.x1 && ball.pos.y > zone.y0 && ball.pos.y < zone.y1) won = true;

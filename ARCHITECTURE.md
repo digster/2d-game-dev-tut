@@ -139,14 +139,19 @@ grand-capstone slingshot for circles; soft-bodies/ragdolls for Verlet → a futu
 `engine/constraints.js`). So `engine/` is now **4 modules** (world, loop, render, rigid).
 This is the honest application of "promote on the 2nd consumer" — never promote on a
 guess (the earlier "promotes in the next tier" notes were wrong twice because each tier
-brings its own collision family). Two
+brings its own collision family). Three
 track-specific footguns are load-bearing here: (1)
 `Vector2D` **mutates in place** (`add`/`multiply`/`divide`/`normalize`/`limit` change
 `this`; only `subtract`/`copy` return new), so all engine maths `.copy()`s a shared
 vector before mutating — corrupting the shared `gravity` vector is the classic bug
 this avoids; (2) launch speed is clamped so a fast shot still steps less than its
 radius, honouring the per-step resolver's sub-tile contract (high-speed tunneling is a
-deferred Simulations topic). Demos are pointer-driven, so (like platformer/roguelike)
+deferred Simulations topic); (3) a mouse-dragged body is driven by **velocity only**
+via the shared `pzDragTo` helper (`vel=(target−pos)/dt`, then the world step integrates
+it onto the cursor) — *also* writing `pos` directly double-applies the move (the
+integrator adds it a second time) and makes the body jitter, worst on frames the fixed
+loop runs two sub-steps and the velocity sign-flips; the helper also speed-clamps so a
+laggy cursor jump can't tunnel a thin wall. Demos are pointer-driven, so (like platformer/roguelike)
 they omit `data-demo-id`. The **Simulations** tier (the finale) is the Verlet core's 2nd
 consumer, so `PZVerletPoint`/`PZConstraint`/`pzStepRope`/`pzVerletArena` were **promoted**
 (a *move*) from `intermediate-demos.js` into **`engine/constraints.js`** — so the engine

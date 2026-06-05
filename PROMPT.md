@@ -1514,3 +1514,19 @@ Done (8 tier pages, B→I→A→E, simulations excluded as terminal):
   `.nav` (was "← Back to Track Index" only); its plain `<h2>Next:…</h2>` is now backed by a button.
 - Bullet Hell bottom left as-is (existing inline recap link). physics-puzzle and all simulations
   pages untouched. Verified in-browser: console clean, click chains B→I, links resolve. memory 2026-06-05.
+
+# 2026-06-05 (pass 2) — Fix jittery dragged rigid bodies (Physics Puzzle)
+
+"The red block acts very jittery when picked." (Advanced "Contraption" mini-project, with
+screenshot.)
+
+Root cause (in 3 pzStepWorld-driven draggable demos): the drag handler set `vel=(target−pos)/dt`
+AND teleported `pos=target` each step, so `pzStepWorld`'s `pos += vel*dt` applied the move a second
+time (overshoot); on frames where the fixed-step loop sub-steps twice the velocity sign-flips →
+the body buzzes. Fixed by adding a shared `pzDragTo(body,tx,ty,dt,maxSpeed=2500)` engine helper
+(velocity-only drag; the world step integrates it onto the cursor; speed-clamped so a laggy jump
+can't tunnel) at the 3 pzStepWorld sites (advanced Contraption + joint-break, simulations ragdoll).
+A 4th grep match — the fluid "duck" — is integrated manually (no pzStepWorld), so velocity-only
+would freeze it: left as its direct-pos drag (it never double-stepped). Verified deterministically
+(rAF was paused in the backgrounded preview): real loaded `pzDragTo` gives monotonic
+`258→217→175→133→100→100` vs the old `-100,300,-100,300,…` jitter. memory 2026-06-05 pass 2.
