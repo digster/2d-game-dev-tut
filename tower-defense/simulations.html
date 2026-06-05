@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulations — Tower Defense Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+    <style>
+        canvas.td-canvas { display: block; margin: 0 auto; max-width: 100%; background: #070a1c; border-radius: 8px; touch-action: none; cursor: crosshair; }
+        .td-slider { display: inline-flex; align-items: center; gap: 8px; color: #c9d1d9; font-size: 0.92em; }
+        .td-slider input[type="range"] { width: 150px; }
+        .td-slider .val { color: #4fc3f7; font-family: monospace; min-width: 5em; display: inline-block; }
+        .td-seed { font-family: monospace; width: 90px; background: #0d1117; border: 1px solid #2d3354; border-radius: 4px; padding: 5px 8px; color: #7CF2C8; }
+        .td-info { text-align: center; color: #c9d1d9; font-family: monospace; margin-top: 10px; min-height: 1.2em; font-size: 0.95em; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏰 Simulations — The Whole Game &amp; Balancing</h1>
+        <p class="subtitle">It runs, and it runs fast — now we make it a <em>tunable</em> game. A wave generator turns difficulty into a curve, an economy turns gold into decisions, upgrades and synergies turn towers into builds, and balancing dashboards (DPS-per-gold, time-to-kill, a threat heatmap over a deterministic seed) turn design into numbers — culminating in the grand capstone, "The Last Stand".</p>
+
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="advanced.html" class="nav-button">Advanced</a>
+            <a href="expert.html" class="nav-button">← Expert</a>
+            <a href="simulations.html" class="nav-button active">Simulations</a>
+        </div>
+
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#waves">Wave generation — difficulty as a curve</a></li>
+                <li><a href="#economy">Economy — income, interest &amp; ROI</a></li>
+                <li><a href="#upgrades">Upgrades &amp; the slow→DPS synergy</a></li>
+                <li><a href="#dps">Balancing dashboard — DPS-per-gold &amp; time-to-kill</a></li>
+                <li><a href="#heatmap">Threat heatmap &amp; deterministic replay</a></li>
+                <li><a href="#mini-project">Grand Capstone: "The Last Stand"</a></li>
+            </ul>
+        </div>
+
+        <div id="intro" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>📊 From "it works" to "it's balanced"</h2>
+            <p>
+                A tower defense is two curves in tension: the <strong>threat</strong> the waves throw at you, and
+                the <strong>power</strong> your gold can buy. Fun lives in the narrow band where they nearly meet.
+                This finale builds the tools to <em>see</em> that band — generate the threat curve, model the
+                economy, price upgrades, and chart which tower is efficient against which enemy — and the one
+                guarantee they all rest on: <strong>determinism</strong>. A seeded run reproduces exactly, so a
+                measurement means something. Then we put it all into one complete game.
+            </p>
+            <div class="key-point">
+                <strong>💡 Determinism is the foundation of balancing.</strong> If a wave plays out differently
+                each time, "can I beat it with this build?" has no answer. A seeded <code>tdRng</code> (mulberry32
+                — the same PRNG the bullet-hell and roguelike tracks use) makes a run a pure function of its seed,
+                so two runs match bit-for-bit. The threat heatmap below proves it.
+            </div>
+        </div>
+
+        <!-- WAVES -->
+        <div id="waves" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>🌊 Wave generation — difficulty as a curve</h2>
+            <p>
+                A wave isn't hand-placed; it's <em>generated</em> from the wave number. Count and HP grow each
+                wave, fast creeps appear partway in, and every fifth wave ends with a tanky boss. The generator is
+                <strong>pure</strong> — wave N is always the same — so the difficulty <em>curve</em> is the design
+                you tune, not a list you write. Drag the growth rates and watch the threat curve bend.
+            </p>
+            <div class="diagram"><canvas id="tdWaveCanvas" class="td-canvas" width="760" height="270"></canvas></div>
+            <div class="controls">
+                <label class="td-slider">Count growth <input id="tdWaveGrowth" type="range" min="0.05" max="0.5" step="0.01" value="0.20"> <span class="val" id="tdWaveGrowthVal">+20%/wave</span></label>
+                <label class="td-slider">HP growth <input id="tdWaveHp" type="range" min="0.05" max="0.5" step="0.01" value="0.22"> <span class="val" id="tdWaveHpVal">+22%/wave</span></label>
+                <label class="td-slider">Preview wave <input id="tdWaveN" type="range" min="1" max="15" step="1" value="8"> <span class="val" id="tdWaveNVal">wave 8</span></label>
+            </div>
+            <details class="code-block">
+                <summary>📝 Show the code: a pure wave generator</summary>
+                <pre><code class="language-javascript">function tdGenerateWave(n) {
+  const count = Math.round(6 * (1 + 0.20 * (n - 1)));       // grows each wave
+  const hp = 5 * Math.pow(1.22, n - 1);                      // compounding HP
+  const q = [];
+  for (let i = 0; i &lt; count; i++) {
+    if (n % 5 === 0 &amp;&amp; i === count - 1) q.push(boss(hp));   // boss every 5th wave
+    else if (n &gt;= 3 &amp;&amp; i % 4 === 0)     q.push(fast(hp));   // fast creeps mixed in
+    else                                 q.push(normal(hp));
+  }
+  return q;   // pure: wave N is always identical → the CURVE is the design
+}</code></pre>
+            </details>
+        </div>
+
+        <!-- ECONOMY -->
+        <div id="economy" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>💰 Economy — income, interest &amp; ROI</h2>
+            <p>
+                Gold is the real resource, and the deepest decision in many TDs is <em>when</em> to spend it.
+                Add <strong>interest</strong> (a percentage of your banked gold each wave) and saving compounds —
+                but you have to survive while under-defended to reap it. That tension between spending now (safety)
+                and banking (power later) is the whole eco game. The curve shows banked-with-interest pulling away.
+            </p>
+            <div class="diagram"><canvas id="tdEcoCanvas" class="td-canvas" width="760" height="240"></canvas></div>
+            <div class="controls">
+                <label class="td-slider">Interest <input id="tdEcoInterest" type="range" min="0" max="0.3" step="0.01" value="0.10"> <span class="val" id="tdEcoInterestVal">10%/wave</span></label>
+                <label class="td-slider">Income <input id="tdEcoIncome" type="range" min="10" max="80" step="5" value="30"> <span class="val" id="tdEcoIncomeVal">●30/wave</span></label>
+            </div>
+            <div class="td-info" id="tdEcoInfo"></div>
+        </div>
+
+        <!-- UPGRADES -->
+        <div id="upgrades" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>⬆️ Upgrades &amp; the slow→DPS synergy</h2>
+            <p>
+                Spending gold on a tower you own is often better than a new one — upgrades scale its damage and
+                range, and the dashboard tracks the DPS you're buying per gold. The deepest payoff is
+                <strong>synergy</strong>: a frost tower barely scratches anything, but a creep slowed to half speed
+                spends <em>twice</em> as long in every other tower's range — so frost <em>doubles</em> their
+                effective DPS. Toggle it and watch the effective number jump.
+            </p>
+            <div class="diagram"><canvas id="tdUpgradeCanvas" class="td-canvas" width="760" height="220"></canvas></div>
+            <div class="controls">
+                <button id="tdUpgradeBtn">Upgrade (●30)</button>
+                <button id="tdUpgradeSynergy">Frost synergy: OFF</button>
+                <button id="tdUpgradeReset">↺ Reset</button>
+            </div>
+            <div class="td-info" id="tdUpgradeInfo"></div>
+            <details class="code-block">
+                <summary>📝 Show the code: the synergy math</summary>
+                <pre><code class="language-javascript">// a creep slowed to `slowFactor` speed spends 1/slowFactor longer in range,
+// so it eats 1/slowFactor as many shots → effective DPS is multiplied:
+const dps = damage * fireRate;
+const effectiveDps = slowed ? dps / slowFactor : dps;   // 0.5 speed → 2× DPS
+
+// that's why a low-damage Frost tower is a force multiplier, not a damage dealer.</code></pre>
+            </details>
+        </div>
+
+        <!-- DPS DASHBOARD -->
+        <div id="dps" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>📈 Balancing dashboard — DPS-per-gold &amp; time-to-kill</h2>
+            <p>
+                Balance is a table, not a feeling. <strong>DPS-per-gold</strong> ranks towers by cost-efficiency;
+                <strong>time-to-kill</strong> (enemy HP ÷ DPS) ranks them against a specific enemy. Pick an enemy
+                and the picture flips — the cheap spray that shreds a swarm is hopeless against a tank, where the
+                expensive sniper wins. This is the lens a designer tunes the roster through.
+            </p>
+            <div class="diagram"><canvas id="tdDpsCanvas" class="td-canvas" width="760" height="220"></canvas></div>
+            <div class="controls">
+                <span style="color:#9e9e9e; font-size:0.9em;">Time-to-kill vs:</span>
+                <button id="tdDpsNormal">Normal</button>
+                <button id="tdDpsFast">Fast</button>
+                <button id="tdDpsTank">Tank</button>
+            </div>
+            <div class="td-info" id="tdDpsInfo"></div>
+            <details class="code-block">
+                <summary>📝 Show the code: the balancing metrics</summary>
+                <pre><code class="language-javascript">const dps = tower.damage * tower.fireRate * (tower.splash ? 3 : 1); // ~3 hit by splash
+const dpsPerGold = dps / tower.cost;          // cost-efficiency
+const timeToKill = enemy.hp / dps;            // seconds to drop this enemy
+// rank the roster by these to balance it — no playtesting required to spot outliers</code></pre>
+            </details>
+        </div>
+
+        <!-- HEATMAP -->
+        <div id="heatmap" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>🔥 Threat heatmap &amp; deterministic replay</h2>
+            <p>
+                Where should you build? A <strong>threat heatmap</strong> answers it: simulate one wave and color
+                each cell by the creep-HP-seconds that pass through it — the hottest cell is the highest-value tower
+                spot (the white box). And because the sim is driven by a seeded <code>tdRng</code>, it's
+                <strong>deterministic</strong>: re-run the same seed and you get a bit-for-bit identical heatmap
+                (the badge proves it). Same seed, same run — the bedrock of every measurement on this page.
+            </p>
+            <div class="diagram"><canvas id="tdHeatCanvas" class="td-canvas" width="760" height="360"></canvas></div>
+            <div class="controls">
+                <label style="color:#c9d1d9; font-size:0.92em;">Seed <input id="tdHeatSeed" class="td-seed" type="number" value="1337"></label>
+                <button id="tdHeatRun">↻ Re-run</button>
+            </div>
+            <div class="td-info" id="tdHeatInfo"></div>
+            <details class="code-block">
+                <summary>📝 Show the code: determinism = reproducibility</summary>
+                <pre><code class="language-javascript">// drive the whole sim from a seeded PRNG → a run is a pure function of its seed
+const a = simulateWave(seed);
+const b = simulateWave(seed);
+// a and b are bit-for-bit identical — which is the ONLY reason a balancing
+// measurement (or a "watch replay") means anything at all.</code></pre>
+            </details>
+        </div>
+
+        <!-- GRAND CAPSTONE -->
+        <div id="mini-project" class="section">
+            <span class="level-indicator level-expert">SIMULATIONS</span>
+            <h2>🏆 Grand Capstone: "The Last Stand"</h2>
+            <p>
+                Everything, in one game. Open ground from <strong>S</strong> to <strong>G</strong>; a seeded run of
+                <strong>12 generated waves</strong> of escalating threat. Buy from the tower shop, pick a targeting
+                mode, place towers to <em>build a maze</em> (the connectivity guard keeps the goal reachable), and
+                <strong>click a tower to upgrade it</strong>. Each cleared wave pays a bonus plus 10% interest.
+                Survive all twelve and the Last Stand holds.
+            </p>
+            <div class="diagram"><canvas id="tdLastStandCanvas" class="td-canvas" width="760" height="360"></canvas></div>
+            <div class="controls">
+                <button id="tdLsGun">Gun ●40</button>
+                <button id="tdLsSniper">Sniper ●70</button>
+                <button id="tdLsSplash">Splash ●60</button>
+                <button id="tdLsFrost">Frost ●55</button>
+            </div>
+            <div class="controls" style="margin-top:8px;">
+                <span style="color:#9e9e9e; font-size:0.9em;">Targeting:</span>
+                <button id="tdLsFirst">First</button>
+                <button id="tdLsClose">Closest</button>
+                <button id="tdLsStrong">Strongest</button>
+                <button id="tdLsStart">▶ Start Wave</button>
+                <label style="color:#c9d1d9; font-size:0.9em;">Seed <input id="tdLsSeed" class="td-seed" type="number" value="1337"></label>
+                <button id="tdLsReset">↺ Reset</button>
+            </div>
+            <div class="td-info" id="tdLsInfo"></div>
+            <div class="concept-box">
+                <h4>🧩 The whole track, in one game</h4>
+                <ul>
+                    <li><strong>Beginner</strong>: the loop — spawner, towers, projectiles, lives</li>
+                    <li><strong>Intermediate</strong>: tower kinds, targeting modes, splash &amp; frost</li>
+                    <li><strong>Advanced</strong>: A* maze re-routing &amp; the connectivity guard</li>
+                    <li><strong>Expert</strong>: the engine fast enough to run it all</li>
+                    <li><strong>Simulations</strong>: generated waves, economy, upgrades &amp; a deterministic seed</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Track complete -->
+        <div class="section" style="text-align:center;">
+            <h2>🎉 Track Complete</h2>
+            <p style="color:#c9d1d9;">
+                From one creep on one lane to a balanced, deterministic, multi-wave maze defense at thousands of
+                creeps per frame — you've built a complete tower defense and the engine under it. Every Fundamental
+                this track leans on (A*, flow fields, raycasting, trig, pooling, spatial hashing) is now a
+                <em>mechanic</em> you've shipped, not a demo you've watched.
+            </p>
+            <div class="nav" style="justify-content:center;">
+                <a href="index.html" class="nav-button">← Track Index</a>
+                <a href="../index.html" class="nav-button">Home</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <!-- Dependencies, then the engine, then this tier's demos. Order matters. -->
+    <script src="../shared/utils.js"></script>
+    <script src="../shared/code-tabs.js"></script>
+    <script src="engine/loop.js"></script>
+    <script src="engine/render.js"></script>
+    <script src="engine/world.js"></script>
+    <script src="engine/entities.js"></script>
+    <script src="engine/nav.js"></script>
+    <script src="simulations-demos.js"></script>
+
+    <script>
+        const scrollToTopBtn = document.getElementById('scrollToTop');
+        scrollToTopBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+        window.addEventListener('scroll', () => { scrollToTopBtn.style.opacity = window.pageYOffset > 300 ? '1' : '0'; });
+        scrollToTopBtn.style.opacity = '0';
+        scrollToTopBtn.style.transition = 'opacity 0.3s';
+    </script>
+</body>
+</html>

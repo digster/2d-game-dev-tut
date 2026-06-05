@@ -602,8 +602,7 @@ per-tier file structure mirroring the Fundamentals layout.
   spell-card JSON, hitstop/trauma-shake/particle juice, Cave-style bullet-cancel) and the grand
   capstone **"Danmaku"** — a deterministic, replayable two-phase boss rush composing every system.
 
-- `tower-defense/` — **Beginner→Expert tiers live (engine = 5 modules — loop/render/world/
-  entities/nav — + 25 demos); Simulations finale lands next.** Build a Kingdom Rush / Bloons-style tower defense, from one lane and one
+- `tower-defense/` — **fully shipped — all 5 tiers, 31 demos, 5 engine modules.** Build a Kingdom Rush / Bloons-style tower defense, from one lane and one
   tower up to a balanced, multi-wave game. This is the **applied home for the Fundamentals'
   flow fields and A*** (`advanced.html#flow-fields` / `#pathfinding`), which today are only
   isolated demos — a TD makes them *gameplay-critical*: a flow field routes a crowd, A*
@@ -682,7 +681,19 @@ per-tier file structure mirroring the Fundamentals layout.
   before/after meter — pooling (allocations plateau vs climb), AoS-vs-SoA update time, naive-vs-hashed
   pair-test counts, per-dot-vs-batched render time — then a thousands-of-creeps flow-field demo, and
   the capstone **"Swarm"** combining all of them (verified ~7,600 SoA creeps + 20 hash-targeting
-  towers + pooled sparks + batched draw at ~1.7 ms/frame). Demo IDs reserve the `td_` namespace;
+  towers + pooled sparks + batched draw at ~1.7 ms/frame). **The Simulations finale ("The Whole
+  Game & Balancing", 6 demos) is the terminal consumer** — it makes the working, fast TD a *tunable*
+  one. The throughline is **determinism**: a seeded mulberry32 `tdRng` (the BHRng/RogueRng family)
+  makes a run a pure function of its seed, so balancing measurements are real. A pure `tdGenerateWave`
+  turns difficulty into a curve (count/HP growth, fast creeps from wave 3, a boss every 5th); demos
+  cover the wave-threat curve, the economy (income + compounding interest, the eco-vs-rush tension),
+  upgrade scaling + the **slow→DPS synergy** (a creep at ½ speed eats 2× the shots → frost doubles
+  everyone's effective DPS), a balancing **dashboard** (DPS-per-gold + time-to-kill vs each enemy),
+  and a **threat heatmap** (creep-HP-seconds per cell → the best build spot, with a live "two seeded
+  runs identical ✓" determinism badge). The grand capstone **"The Last Stand"** composes every tier:
+  a seeded 12-wave maze-TD with the connectivity guard, a tower shop (gun/sniper/splash/frost) +
+  click-to-upgrade, targeting modes, A*-re-routing creeps, and a gold/lives/interest economy.
+  Demo IDs reserve the `td_` namespace;
   demos are pointer/keyboard-driven so they omit `data-demo-id` (opt out of the Export button).
 
 ## Shared assets

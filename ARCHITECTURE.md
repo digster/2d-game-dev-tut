@@ -288,8 +288,21 @@ allocate), `TDSwarm` (Struct-of-Arrays creeps in flat `Float32Array`s with O(1) 
 a before/after meter (allocations plateau-vs-climb, AoS-vs-SoA update time, naive-vs-hashed pair-tests,
 per-dot-vs-batched render); the capstone "Swarm" composes all of them on the open-field flow field (verified
 ~7,600 SoA creeps + 20 hash-targeting hitscan towers + pooled sparks + batched draw at ~1.7 ms/frame).
-**Status: Beginner→Expert live (engine = 5 modules — loop, render, world, entities, nav; 25 demos); the
-Simulations finale (waves, economy, balancing dashboards + grand capstone "The Last Stand") lands next.**
+The **Simulations finale ("The Whole Game & Balancing", 6 demos)** is the terminal consumer — all inline, no
+new engine module. Its through-line is **determinism**: a seeded mulberry32 `tdRng` (the `BHRng`/`RogueRng`
+family) makes a run a pure function of its seed, which is what makes a balancing measurement (or the threat
+heatmap's "two seeded runs identical ✓" badge) mean anything. A *pure* `tdGenerateWave(n)` makes difficulty a
+curve (the design you tune, not a list you write). Demos: the wave-threat curve, the economy (income +
+compounding interest → the eco-vs-rush tension), upgrade scaling + the **slow→DPS synergy** (a creep at
+`slowFactor` speed spends `1/slowFactor` longer in range → frost multiplies everyone's effective DPS), a
+balancing **dashboard** (`simDPS`/DPS-per-gold + time-to-kill vs each enemy type), and a **threat heatmap**
+(accumulate creep-HP-seconds per cell over a seeded sim → the hottest cell is the best build spot). The grand
+capstone **"The Last Stand"** composes every tier in one game: a seeded 12-wave maze-TD reusing the engine
+(`TDGrid`/`TDPath`/`TDEnemy`/`TDTower`/`TDProjectile`) + `nav.js` (`tdAStar`/`tdBlocksPath`, re-planned per
+creep on each placement) with a tower shop, click-to-upgrade, targeting modes, the connectivity guard, and a
+gold/lives/interest economy. **Status: the Tower Defense track is COMPLETE — 5 tiers, 31 demos
+(6/7/6/6/6), 5 engine modules (loop, render, world, entities, nav). From one creep on one lane to a
+deterministic 12-wave maze defense.**
 
 **Why tiers are separate files:** content is split beginner → intermediate →
 expert → raymarching → stylization → distortion → advanced → simulations so each
