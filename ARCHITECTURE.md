@@ -276,9 +276,20 @@ A*-derived `TDPath` (re-planned from the creep's exact position on every map cha
 cell centre), while **flow creeps are a separate inline open-field model** (`tdMakeFlowCreep`/
 `tdStepFlowCreep` — no path, just read the field vector at the current cell and steer) — the two navigation
 paradigms side by side, which is the tier's whole point. The capstone "Build Your Maze" makes a tower both a
-gun and a wall (placement reshapes the A* route). **Status: Beginner + Intermediate + Advanced live (engine =
-4 modules — loop, render, world, entities; A*/flow-field/LOS inline-top-level in advanced-demos.js pending
-`nav.js`; 19 demos); Expert→Simulations land iteratively.**
+gun and a wall (placement reshapes the A* route). The **Expert tier ("Ten Thousand Creeps", 6 demos)** is the
+navigation toolkit's 2nd consumer (the swarm steers thousands of creeps with `tdFlowField`), so
+`tdWalkable`/`tdAStar`/`tdBlocksPath`/`tdFlowField`/`tdLineOfSight` were **promoted** (a *move*, the
+`vision.js` rule) into **`engine/nav.js`** — `advanced.html` + `expert.html` both load it and
+`advanced-demos.js` no longer declares them — bringing the engine to **5 modules** (loop, render, world,
+entities, nav). The tier's production stores are taught **inline** as the *terminal* consumer (the
+bullet-hell-Expert pattern, deliberately NOT an engine rewrite): `TDPool` (free-list object pool, reuse vs
+allocate), `TDSwarm` (Struct-of-Arrays creeps in flat `Float32Array`s with O(1) swap-remove), and
+`TDSpatialHash` (uniform-grid range queries so a tower tests ~k nearby creeps, not all E). Each demo carries
+a before/after meter (allocations plateau-vs-climb, AoS-vs-SoA update time, naive-vs-hashed pair-tests,
+per-dot-vs-batched render); the capstone "Swarm" composes all of them on the open-field flow field (verified
+~7,600 SoA creeps + 20 hash-targeting hitscan towers + pooled sparks + batched draw at ~1.7 ms/frame).
+**Status: Beginner→Expert live (engine = 5 modules — loop, render, world, entities, nav; 25 demos); the
+Simulations finale (waves, economy, balancing dashboards + grand capstone "The Last Stand") lands next.**
 
 **Why tiers are separate files:** content is split beginner → intermediate →
 expert → raymarching → stylization → distortion → advanced → simulations so each

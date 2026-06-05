@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expert — Tower Defense Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+    <style>
+        canvas.td-canvas { display: block; margin: 0 auto; max-width: 100%; background: #070a1c; border-radius: 8px; touch-action: none; cursor: crosshair; }
+        .td-slider { display: inline-flex; align-items: center; gap: 8px; color: #c9d1d9; font-size: 0.92em; }
+        .td-slider input[type="range"] { width: 160px; }
+        .td-slider .val { color: #4fc3f7; font-family: monospace; min-width: 5em; display: inline-block; }
+        .td-info { text-align: center; color: #c9d1d9; font-family: monospace; margin-top: 10px; min-height: 1.2em; font-size: 0.95em; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏰 Expert — Ten Thousand Creeps</h1>
+        <p class="subtitle">At scale the question changes from "what's the smart move?" to "can it hold 60&nbsp;fps?". We kill the three throughput killers in turn — garbage collection (object pools), cache misses (Struct-of-Arrays), and the O(towers×creeps) targeting blow-up (a spatial hash) — batch the draw calls, and stand up a swarm of thousands on one shared flow field with a live frame-budget meter.</p>
+
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="beginner.html" class="nav-button">Beginner</a>
+            <a href="intermediate.html" class="nav-button">Intermediate</a>
+            <a href="advanced.html" class="nav-button">← Advanced</a>
+            <a href="expert.html" class="nav-button active">Expert</a>
+        </div>
+
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#pool">Object pooling — reuse, don't allocate</a></li>
+                <li><a href="#soa">Struct-of-Arrays — memory layout matters</a></li>
+                <li><a href="#hash">Spatial hashing — range queries without the blow-up</a></li>
+                <li><a href="#batch">Render batching — one path for the crowd</a></li>
+                <li><a href="#flowscale">Scale — thousands on one flow field</a></li>
+                <li><a href="#mini-project">Mini-Project: "Swarm"</a></li>
+            </ul>
+        </div>
+
+        <div id="intro" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>⚡ Throughput, not cleverness</h2>
+            <p>
+                A frame is <strong>16.7&nbsp;ms</strong> at 60&nbsp;fps. Everything — moving every creep, every
+                tower picking a target, every shot, the whole draw — has to fit inside it. The Advanced tier
+                already gave us the cheapest navigation possible (a flow field is O(1) per creep). This tier
+                attacks the other costs, one isolated demo at a time, then combines them into a swarm of
+                thousands. Each fix is small and mechanical, and each shows its own before/after meter.
+            </p>
+            <div class="key-point">
+                <strong>💡 The navigation toolkit moved to the engine.</strong> <code>tdAStar</code>,
+                <code>tdFlowField</code> and <code>tdLineOfSight</code> were taught inline in the Advanced
+                tier; now that this tier reuses <code>tdFlowField</code> for the swarm, they live in
+                <code>engine/nav.js</code> (loaded by both pages). The production stores below
+                (<code>TDPool</code>, <code>TDSwarm</code>, <code>TDSpatialHash</code>) stay <em>inline</em> —
+                they're this tier's lesson, and the swarm is their only consumer.
+            </div>
+        </div>
+
+        <!-- POOL -->
+        <div id="pool" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>♻️ Object pooling — reuse, don't allocate</h2>
+            <p>
+                Spawning thousands of short-lived objects (sparks, shots) hands the garbage collector a pile of
+                work, and a GC pause is a dropped frame. A <strong>pool</strong> recycles instead: dead objects
+                go on a free list and the next spawn reuses one, allocating only when the list runs dry. Watch
+                the counter: in <span style="color:#ef5350;">naive</span> mode "objects ever allocated" climbs
+                forever; <span style="color:#66bb6a;">pooled</span>, it plateaus once the pool is warm.
+            </p>
+            <div class="diagram"><canvas id="tdPoolCanvas" class="td-canvas" width="760" height="300"></canvas></div>
+            <div class="controls"><button id="tdPoolToggle">Mode: POOLED</button></div>
+            <div class="td-info" id="tdPoolInfo"></div>
+            <details class="code-block">
+                <summary>📝 Show the code: a free-list pool</summary>
+                <pre><code class="language-javascript">class TDPool {
+  spawn(init) {
+    let o = this.free.pop();                       // reuse a recycled object…
+    if (!o) { o = this.factory(); this.allocs++; } // …allocate ONLY when starved
+    init(o); this.live.push(o); return o;
+  }
+  sweep() { /* dead objects → the free list (O(1) swap-remove), never the GC */ }
+}</code></pre>
+            </details>
+        </div>
+
+        <!-- SOA -->
+        <div id="soa" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🧮 Struct-of-Arrays — memory layout matters</h2>
+            <p>
+                An <em>Array-of-Structs</em> (<code>[{x,y,vx,vy}, …]</code>) scatters each creep across the heap
+                — iterating chases a pointer per creep. A <em>Struct-of-Arrays</em> stores one flat
+                <code>Float32Array</code> per field, so all the x's sit contiguous in memory: the loop becomes a
+                linear walk over packed data, with no boxing and nothing for the GC to collect. Both stores run
+                the same N agents below; compare the update time (the gap widens with more fields and bigger N —
+                and SoA is what makes typed-array stores like the swarm's possible at all).
+            </p>
+            <div class="diagram"><canvas id="tdSoaCanvas" class="td-canvas" width="760" height="320"></canvas></div>
+            <div class="controls">
+                <label class="td-slider">Agents <input id="tdSoaCount" type="range" min="200" max="6000" step="100" value="3000"> <span class="val" id="tdSoaCountVal">3000 agents</span></label>
+            </div>
+            <div class="td-info" id="tdSoaInfo"></div>
+            <details class="code-block">
+                <summary>📝 Show the code: SoA + swap-remove</summary>
+                <pre><code class="language-javascript">// Array-of-Structs: a heap object (and a pointer chase) per creep
+const aos = [{ x, y, vx, vy }, /* … */];
+
+// Struct-of-Arrays: one flat typed array per field — packed, GC-free, cache-friendly
+const x = new Float32Array(N), y = new Float32Array(N);
+for (let i = 0; i &lt; N; i++) { x[i] += vx[i] * dt; y[i] += vy[i] * dt; }
+
+// death is O(1) swap-remove — copy the last creep over the gap, shrink the count
+function remove(i) { const last = --count; x[i] = x[last]; y[i] = y[last]; }</code></pre>
+            </details>
+        </div>
+
+        <!-- HASH -->
+        <div id="hash" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🗂️ Spatial hashing — range queries without the blow-up</h2>
+            <p>
+                "Which creeps can this tower hit?" asked naively is every tower against every creep —
+                <code>O(towers × creeps)</code>, which explodes. A <strong>spatial hash</strong> buckets each
+                creep into a grid cell once per frame; a tower then reads only the handful of cells its range
+                overlaps. Pick the cell size ≈ the range and a query touches a small, constant patch. The
+                counter shows the pair-tests saved (the highlighted cells are the first tower's query).
+            </p>
+            <div class="diagram"><canvas id="tdHashCanvas" class="td-canvas" width="760" height="360"></canvas></div>
+            <div class="controls">
+                <label class="td-slider">Creeps <input id="tdHashCount" type="range" min="100" max="4000" step="100" value="1200"> <span class="val" id="tdHashCountVal">1200 creeps</span></label>
+            </div>
+            <div class="td-info" id="tdHashInfo"></div>
+            <details class="code-block">
+                <summary>📝 Show the code: bucket &amp; query</summary>
+                <pre><code class="language-javascript">// bucket every creep once (cell size ≈ the largest query range)
+hash.clear();
+for (let i = 0; i &lt; creeps.length; i++) hash.insert(i, creeps[i].x, creeps[i].y);
+
+// a tower reads only the cells its range overlaps → ~k candidates, not E
+const near = hash.queryInto(tower.x, tower.y, tower.range, out);
+for (const i of near) { /* exact distance check on the few that matter */ }</code></pre>
+            </details>
+        </div>
+
+        <!-- BATCH -->
+        <div id="batch" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🖌️ Render batching — one path for the crowd</h2>
+            <p>
+                Drawing each creep with its own <code>beginPath</code>/<code>fill</code> means thousands of
+                separate draw calls — most of the cost is the calls, not the pixels. <strong>Batch</strong> them:
+                one <code>beginPath</code>, add every creep's arc with <code>moveTo</code>+<code>arc</code>, then a
+                single <code>fill</code>. Toggle the two and watch the render time.
+            </p>
+            <div class="diagram"><canvas id="tdBatchCanvas" class="td-canvas" width="760" height="320"></canvas></div>
+            <div class="controls">
+                <button id="tdBatchToggle">Render: BATCHED</button>
+                <label class="td-slider">Dots <input id="tdBatchCount" type="range" min="500" max="12000" step="500" value="4000"> <span class="val" id="tdBatchCountVal">4000 dots</span></label>
+            </div>
+            <div class="td-info" id="tdBatchInfo"></div>
+            <details class="code-block">
+                <summary>📝 Show the code: one path, one fill</summary>
+                <pre><code class="language-javascript">// SLOW — a beginPath + fill per dot (thousands of draw calls)
+for (const d of dots) { ctx.beginPath(); ctx.arc(d.x, d.y, 2, 0, TAU); ctx.fill(); }
+
+// FAST — one path for the whole crowd, one fill (same colour)
+ctx.fillStyle = colour; ctx.beginPath();
+for (const d of dots) { ctx.moveTo(d.x + 2, d.y); ctx.arc(d.x, d.y, 2, 0, TAU); }
+ctx.fill();</code></pre>
+            </details>
+        </div>
+
+        <!-- FLOWSCALE -->
+        <div id="flowscale" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🌊 Scale — thousands on one flow field</h2>
+            <p>
+                Put SoA storage and the engine's <code>tdFlowField</code> together: thousands of creeps, each a
+                row in a <code>Float32Array</code>, all steering by <em>one</em> field computed once. Adding a
+                creep costs a single array lookup per step — so the steer time barely moves as the crowd grows.
+                Crank the spawn rate; the pillars split the stream.
+            </p>
+            <div class="diagram"><canvas id="tdFlowScaleCanvas" class="td-canvas" width="760" height="360"></canvas></div>
+            <div class="controls">
+                <label class="td-slider">Spawn rate <input id="tdFlowScaleRate" type="range" min="20" max="800" step="10" value="250"> <span class="val" id="tdFlowScaleRateVal">250/s</span></label>
+            </div>
+            <div class="td-info" id="tdFlowScaleInfo"></div>
+        </div>
+
+        <!-- MINI-PROJECT -->
+        <div id="mini-project" class="section">
+            <span class="level-indicator level-expert">EXPERT</span>
+            <h2>🐝 Mini-Project: "Swarm"</h2>
+            <p>
+                Every system at once. SoA creeps flow across an open field; a lattice of towers finds its nearest
+                target through the <strong>spatial hash</strong> and hitscans it; each shot throws a
+                <strong>pooled</strong> spark; the whole crowd draws in <strong>one batched path</strong>. The
+                meter shows the per-frame budget — push the spawn rate up and watch it hold under
+                16.7&nbsp;ms. Click anywhere to add more towers.
+            </p>
+            <div class="diagram"><canvas id="tdSwarmCanvas" class="td-canvas" width="760" height="360"></canvas></div>
+            <div class="controls">
+                <label class="td-slider">Spawn rate <input id="tdSwarmRate" type="range" min="20" max="600" step="10" value="220"> <span class="val" id="tdSwarmRateVal">220/s</span></label>
+                <button id="tdSwarmReset">↺ Reset</button>
+            </div>
+            <div class="td-info" id="tdSwarmInfo"></div>
+            <div class="concept-box">
+                <h4>🧩 What you just composed</h4>
+                <ul>
+                    <li><strong>Pooling</strong> for the shots — zero per-frame allocation</li>
+                    <li><strong>Struct-of-Arrays</strong> creeps in flat <code>Float32Array</code>s, O(1) swap-remove</li>
+                    <li><strong>Spatial hashing</strong> so each tower tests a handful, not the whole swarm</li>
+                    <li>The engine's <strong>flow field</strong> (O(1)/creep) and <strong>batched</strong> rendering</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="section" style="text-align:center;">
+            <h2>➡️ Next: Simulations — The Whole Game &amp; Balancing</h2>
+            <p style="color:#c9d1d9;">
+                It runs, and it runs fast. The finale makes it a <em>tunable</em> game: a wave generator and an
+                economy, upgrades and synergies, and balancing dashboards (DPS-per-cost, time-to-kill, a
+                threat/leak heatmap) over a deterministic seed — culminating in the grand capstone, "The Last
+                Stand". <em>(Landing soon.)</em>
+            </p>
+            <div class="nav" style="justify-content:center;">
+                <a href="index.html" class="nav-button">← Back to Track Index</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <!-- Dependencies, then the engine, then this tier's demos. Order matters. -->
+    <script src="../shared/utils.js"></script>
+    <script src="../shared/code-tabs.js"></script>
+    <script src="engine/loop.js"></script>
+    <script src="engine/render.js"></script>
+    <script src="engine/world.js"></script>
+    <script src="engine/entities.js"></script>
+    <script src="engine/nav.js"></script>
+    <script src="expert-demos.js"></script>
+
+    <script>
+        const scrollToTopBtn = document.getElementById('scrollToTop');
+        scrollToTopBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+        window.addEventListener('scroll', () => { scrollToTopBtn.style.opacity = window.pageYOffset > 300 ? '1' : '0'; });
+        scrollToTopBtn.style.opacity = '0';
+        scrollToTopBtn.style.transition = 'opacity 0.3s';
+    </script>
+</body>
+</html>

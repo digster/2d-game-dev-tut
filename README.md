@@ -602,8 +602,8 @@ per-tier file structure mirroring the Fundamentals layout.
   spell-card JSON, hitstop/trauma-shake/particle juice, Cave-style bullet-cancel) and the grand
   capstone **"Danmaku"** — a deterministic, replayable two-phase boss rush composing every system.
 
-- `tower-defense/` — **Beginner + Intermediate + Advanced tiers live (engine core + entities
-  module + 19 demos); Expert→Simulations land iteratively.** Build a Kingdom Rush / Bloons-style tower defense, from one lane and one
+- `tower-defense/` — **Beginner→Expert tiers live (engine = 5 modules — loop/render/world/
+  entities/nav — + 25 demos); Simulations finale lands next.** Build a Kingdom Rush / Bloons-style tower defense, from one lane and one
   tower up to a balanced, multi-wave game. This is the **applied home for the Fundamentals'
   flow fields and A*** (`advanced.html#flow-fields` / `#pathfinding`), which today are only
   isolated demos — a TD makes them *gameplay-critical*: a flow field routes a crowd, A*
@@ -671,7 +671,18 @@ per-tier file structure mirroring the Fundamentals layout.
   Maze"** (towers are both gun and wall — place to carve a long corridor, creeps A*-re-plan, with
   economy + lives). Maze creeps reuse `TDEnemy` over an A*-derived `TDPath` (re-planned from the
   creep's exact position on each map change); flow creeps are a separate inline open-field model.
-  Demo IDs reserve the `td_` namespace;
+  **The Expert tier ("Ten Thousand Creeps", 6 demos) is the navigation toolkit's 2nd consumer**, so
+  `tdAStar`/`tdBlocksPath`/`tdFlowField`/`tdLineOfSight` (+ `tdWalkable`) were **promoted** (a *move*)
+  from `advanced-demos.js` into **`engine/nav.js`** (both `advanced.html` and `expert.html` load it) —
+  the engine reaches **5 modules** (loop, render, world, entities, nav). The tier's perf systems are
+  taught **inline** as terminal-consumer lessons (the bullet-hell-Expert pattern): `TDPool` (a
+  free-list object pool — reuse vs allocate, killing GC churn), `TDSwarm` (a Struct-of-Arrays creep
+  store in flat `Float32Array`s with O(1) swap-remove), and `TDSpatialHash` (a uniform-grid hash so a
+  tower tests a handful of nearby creeps, not all of them). Demos isolate each fix with a live
+  before/after meter — pooling (allocations plateau vs climb), AoS-vs-SoA update time, naive-vs-hashed
+  pair-test counts, per-dot-vs-batched render time — then a thousands-of-creeps flow-field demo, and
+  the capstone **"Swarm"** combining all of them (verified ~7,600 SoA creeps + 20 hash-targeting
+  towers + pooled sparks + batched draw at ~1.7 ms/frame). Demo IDs reserve the `td_` namespace;
   demos are pointer/keyboard-driven so they omit `data-demo-id` (opt out of the Export button).
 
 ## Shared assets

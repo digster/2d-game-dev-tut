@@ -1491,5 +1491,8 @@ Build passes (each verified in-browser, console clean, with a commit message at 
 - Pass 4 — Advanced ("Mazing, Flow Fields & Sight", 6 demos; tdAStar/tdBlocksPath/tdFlowField/
   tdLineOfSight inline top-level + console-tested; maze creeps reuse TDEnemy on A*-TDPath, flow
   creeps are an inline open-field model; capstone "Build Your Maze"). memory 2026-06-04 pass 4.
-- Pass 5 — Expert ("Ten Thousand Creeps"; nav → engine/nav.js; pool/SoA/hash inline). [next]
-- Pass 6 — Simulations FINALE ("The Last Stand"; waves/economy/upgrades + balancing dashboards).
+- Pass 5 — Expert ("Ten Thousand Creeps", 6 demos; nav → engine/nav.js [5th module]; TDPool/
+  TDSwarm-SoA/TDSpatialHash inline; capstone "Swarm" verified ~7,600 creeps @ 1.7ms/frame).
+  memory 2026-06-04 pass 5.
+- Pass 6 — Simulations FINALE ("The Last Stand"; waves/economy/upgrades + balancing dashboards +
+  seeded TDRng determinism; track COMPLETE after). [next]
