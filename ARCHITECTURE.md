@@ -264,10 +264,21 @@ pattern, so the Beginner calls keep working): a timed SLOW on `TDEnemy` (+ a `ve
 `targeting` mode + `lead` aiming + `splash`/`slow` on `TDTower`, and a BALLISTIC flight mode on
 `TDProjectile`. The lead-the-target MATH (`tdInterceptTime`/`tdLeadPoint` — the intercept quadratic) and the
 targeting selection live in the engine; the tower ROSTER (gun/sniper/splash/frost stats) stays as CONTENT in
-the tier demos. The cosmetic `tdDrawPop` likewise moved to `engine/render.js`. (The remaining planned
-promotion is the Advanced tier's `tdAStar`/`tdFlowField`/`tdLineOfSight` → `engine/nav.js` on the Expert
-scale tier.) **Status: Beginner + Intermediate live (engine = 4 modules — loop, render, world, entities;
-13 demos); Advanced→Simulations land iteratively.**
+the tier demos. The cosmetic `tdDrawPop` likewise moved to `engine/render.js`. The **Advanced tier ("Mazing, Flow Fields & Sight", 6 demos)** is the
+flagship — it makes the Fundamentals' A* and flow-field demos *gameplay*. Its navigation algorithms are
+taught **inline + top-level** (console-testable) in `advanced-demos.js`, **awaiting promotion to
+`engine/nav.js` when the Expert scale tier reuses them**: `tdAStar` (4-connected A*, Manhattan heuristic),
+`tdBlocksPath` (the connectivity guard — a *hypothetical* A* run on a tentatively-occupied cell, refusing
+any placement that seals the goal), `tdFlowField` (one BFS sweep from the goal → an integration field +
+per-cell downhill 8-neighbour vectors), and `tdLineOfSight` (a sub-cell raycast that fails at the first
+wall). A deliberate split in the creep movement model: **maze creeps reuse the engine `TDEnemy`** over an
+A*-derived `TDPath` (re-planned from the creep's exact position on every map change, so it doesn't snap to a
+cell centre), while **flow creeps are a separate inline open-field model** (`tdMakeFlowCreep`/
+`tdStepFlowCreep` — no path, just read the field vector at the current cell and steer) — the two navigation
+paradigms side by side, which is the tier's whole point. The capstone "Build Your Maze" makes a tower both a
+gun and a wall (placement reshapes the A* route). **Status: Beginner + Intermediate + Advanced live (engine =
+4 modules — loop, render, world, entities; A*/flow-field/LOS inline-top-level in advanced-demos.js pending
+`nav.js`; 19 demos); Expert→Simulations land iteratively.**
 
 **Why tiers are separate files:** content is split beginner → intermediate →
 expert → raymarching → stylization → distortion → advanced → simulations so each

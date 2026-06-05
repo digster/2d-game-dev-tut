@@ -1488,7 +1488,8 @@ Build passes (each verified in-browser, console clean, with a commit message at 
 - Pass 3 — Intermediate ("Tower Types & Targeting", 7 demos; entities + tdDrawPop PROMOTED →
   engine/entities.js + engine/render.js; lead-the-target intercept quadratic; capstone "Choke
   Point"). memory 2026-06-04 pass 3.
-- Pass 4 — Advanced ("Mazing, Flow Fields & Sight"; A*/flow-field/LOS inline, console-testable;
-  promote to engine/nav.js at Expert). [next]
-- Pass 5 — Expert ("Ten Thousand Creeps"; nav → engine/nav.js; pool/SoA/hash inline).
+- Pass 4 — Advanced ("Mazing, Flow Fields & Sight", 6 demos; tdAStar/tdBlocksPath/tdFlowField/
+  tdLineOfSight inline top-level + console-tested; maze creeps reuse TDEnemy on A*-TDPath, flow
+  creeps are an inline open-field model; capstone "Build Your Maze"). memory 2026-06-04 pass 4.
+- Pass 5 — Expert ("Ten Thousand Creeps"; nav → engine/nav.js; pool/SoA/hash inline). [next]
 - Pass 6 — Simulations FINALE ("The Last Stand"; waves/economy/upgrades + balancing dashboards).

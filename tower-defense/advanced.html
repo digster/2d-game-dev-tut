@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced — Tower Defense Track</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+    <style>
+        canvas.td-canvas { display: block; margin: 0 auto; max-width: 100%; background: #070a1c; border-radius: 8px; touch-action: none; cursor: crosshair; }
+        .td-slider { display: inline-flex; align-items: center; gap: 8px; color: #c9d1d9; font-size: 0.92em; }
+        .td-slider input[type="range"] { width: 150px; }
+        .td-slider .val { color: #4fc3f7; font-family: monospace; min-width: 4em; display: inline-block; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏰 Advanced — Mazing, Flow Fields &amp; Sight</h1>
+        <p class="subtitle">The creeps get a brain. We give them A* so your towers become a maze that re-routes them, a connectivity guard so you can't wall the goal off, flow fields so a whole crowd streams across open ground, and line-of-sight so a wall is real cover — then build a maze-TD where the route you carve is the strategy.</p>
+
+        <div class="nav">
+            <a href="../index.html" class="nav-button">← Home</a>
+            <a href="index.html" class="nav-button">Track Index</a>
+            <a href="beginner.html" class="nav-button">Beginner</a>
+            <a href="intermediate.html" class="nav-button">← Intermediate</a>
+            <a href="advanced.html" class="nav-button active">Advanced</a>
+        </div>
+
+        <div class="toc">
+            <div class="toc-title">📚 Topics in This Tier</div>
+            <ul>
+                <li><a href="#astar">A* pathfinding — the shortest route on a grid</a></li>
+                <li><a href="#maze">Maze TD — towers as obstacles &amp; the connectivity guard</a></li>
+                <li><a href="#los">Line-of-sight — a wall blocks the shot</a></li>
+                <li><a href="#flow">Flow fields — one sweep, every cell knows the way</a></li>
+                <li><a href="#crowd">The open field — one field, a whole crowd</a></li>
+                <li><a href="#mini-project">Mini-Project: "Build Your Maze"</a></li>
+            </ul>
+        </div>
+
+        <div id="intro" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🧠 Two ways to think about "the way to the goal"</h2>
+            <p>
+                Until now the lane was fixed — the creeps walked a path you didn't control. This tier hands
+                navigation to the creeps, and there are two classic answers, costed for two different swarms:
+            </p>
+            <ul>
+                <li><strong>A* pathfinding</strong> computes one shortest route <em>per creep</em> from where it
+                    is. Drop a tower and it re-plans around it — so your towers become a <strong>maze</strong>.
+                    Great for a few smart creeps (Kingdom Rush).</li>
+                <li><strong>Flow fields</strong> run a single sweep <em>from the goal</em> and tag every cell with
+                    a "downhill" arrow. A thousand creeps each do one lookup to steer — so a whole crowd flows
+                    across open ground (Bloons). Cheap at scale, shared by everyone.</li>
+            </ul>
+            <p>
+                Plus the tower's own version of "can I reach it?": a <strong>raycast</strong> for line-of-sight,
+                so a wall is real cover. These three — A*, flow fields, line-of-sight — are this tier's lessons,
+                written as top-level functions you can call straight from the console.
+            </p>
+            <div class="key-point">
+                <strong>💡 The same Dijkstra, two outputs.</strong> A flow field's first half is an
+                <em>integration field</em> — the distance from every cell to the goal (a BFS, since each step
+                costs 1). Its second half turns those distances into <em>vectors</em>: point each cell at its
+                lowest-distance neighbour. The first is "how far"; the second is "which way".
+            </div>
+        </div>
+
+        <!-- A* -->
+        <div id="astar" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🧭 A* — the shortest route on a grid</h2>
+            <p>
+                A* explores cells in order of <code>f = g + h</code>: <code>g</code> is the steps taken so far,
+                <code>h</code> is an optimistic guess of the steps remaining (here the <strong>Manhattan</strong>
+                distance, which can never overestimate on a 4-connected grid — so the first route A* completes is
+                guaranteed shortest). <strong>Drag to paint walls</strong> and watch the route bend around them;
+                wall it off completely and A* returns <code>null</code>.
+            </p>
+            <div class="diagram"><canvas id="tdAstarCanvas" class="td-canvas" width="760" height="360"></canvas></div>
+            <div class="controls"><button id="tdAstarClear">↺ Clear Walls</button></div>
+            <details class="code-block">
+                <summary>📝 Show the code: A* on a grid</summary>
+                <pre><code class="language-javascript">function tdAStar(grid, start, goal) {
+  const h = (c, r) =&gt; Math.abs(c - goal.col) + Math.abs(r - goal.row); // Manhattan
+  const open = [{ ...start, g: 0, f: h(start.col, start.row) }];
+  // pop the lowest-f node; if it's the goal, reconstruct via the came-from map.
+  // otherwise relax its 4 walkable neighbours: g+1, f = g+1 + h(neighbour).
+  // closed-set guards against re-expanding. Returns [{col,row}, …] or null.
+  return path;
+}
+// "walkable" = in-bounds AND not a wall AND not a tower (occupied)</code></pre>
+            </details>
+        </div>
+
+        <!-- MAZE -->
+        <div id="maze" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🧱 Maze TD — towers are the walls</h2>
+            <p>
+                If a tower blocks a cell, the creeps must go around it — so <em>where you build is how you
+                shape the route</em>. That's "mazing": stretch the path so creeps spend longer in your fire.
+                But there's a catch — you must never be allowed to wall the goal off completely. Before each
+                placement we run the <strong>connectivity guard</strong>: tentatively occupy the cell, ask A*
+                if a route still exists, and refuse the build if it doesn't. Click to place; try to seal the
+                goal and watch it reject you.
+            </p>
+            <div class="diagram"><canvas id="tdMazeCanvas" class="td-canvas" width="760" height="360"></canvas></div>
+            <div class="controls"><button id="tdMazeClear">↺ Clear Towers</button></div>
+            <details class="code-block">
+                <summary>📝 Show the code: the connectivity guard</summary>
+                <pre><code class="language-javascript">// would dropping a tower here seal the goal off? (run A* on a hypothetical)
+function tdBlocksPath(grid, col, row, start, goal) {
+  grid.occupy(col, row, true);                  // pretend we built here
+  const stillReachable = tdAStar(grid, start, goal) !== null;
+  grid.occupy(col, row, false);                 // undo the hypothetical
+  return !stillReachable;                        // true ⇒ refuse the placement
+}
+// on a real placement we re-plan every creep from its CURRENT cell to the goal</code></pre>
+            </details>
+        </div>
+
+        <!-- LOS -->
+        <div id="los" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>👁️ Line-of-sight — a wall blocks the shot</h2>
+            <p>
+                A tower with a creep in range still shouldn't fire <em>through a wall</em>. Line-of-sight is a
+                <strong>raycast</strong>: march the segment from tower to target and fail the instant it crosses
+                a wall cell. Below, the sight line glows <span style="color:#66bb6a;">green</span> when clear and
+                <span style="color:#ef5350;">red</span> when blocked — and the tower only fires on green.
+                <strong>Drag a wall</strong> between the tower and the lane.
+            </p>
+            <div class="diagram"><canvas id="tdLosCanvas" class="td-canvas" width="760" height="360"></canvas></div>
+            <div class="controls"><button id="tdLosClear">↺ Clear Walls</button></div>
+            <details class="code-block">
+                <summary>📝 Show the code: tdLineOfSight</summary>
+                <pre><code class="language-javascript">// march the segment in sub-cell steps; a wall anywhere on it blocks the shot
+function tdLineOfSight(grid, ax, ay, bx, by) {
+  const steps = Math.ceil(Math.hypot(bx - ax, by - ay) / (grid.tile * 0.33));
+  for (let i = 1; i &lt; steps; i++) {                  // skip the endpoints
+    const t = i / steps;
+    const c = grid.worldToCell(ax + (bx - ax) * t, ay + (by - ay) * t);
+    if (c &amp;&amp; grid.isBlocked(c.col, c.row)) return false;  // wall in the way
+  }
+  return true;                                         // clear shot
+}</code></pre>
+            </details>
+        </div>
+
+        <!-- FLOW -->
+        <div id="flow" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🌊 Flow fields — one sweep, every cell knows the way</h2>
+            <p>
+                A flow field is computed <em>once, from the goal</em>. A BFS sweep fills every cell with its
+                distance (the heatmap — bright near the goal, dim far away); then each cell points at its
+                lowest-distance neighbour (the arrows). Now any creep, anywhere, reads its cell's arrow and
+                walks — no per-creep search at all. <strong>Drag to paint walls</strong> and watch the whole
+                field re-flow around them.
+            </p>
+            <div class="diagram"><canvas id="tdFlowCanvas" class="td-canvas" width="760" height="360"></canvas></div>
+            <div class="controls">
+                <button id="tdFlowClear">↺ Clear Walls</button>
+                <button id="tdFlowToggle">Showing: Heatmap + Arrows</button>
+            </div>
+            <details class="code-block">
+                <summary>📝 Show the code: the integration field → flow field</summary>
+                <pre><code class="language-javascript">// 1) integration field: ONE BFS from the goal → distance for every cell
+cost[goal] = 0;
+for (let frontier = [goal]; frontier.length; frontier = next) {
+  const next = [];
+  for (const cur of frontier)
+    for (const nb of walkableNeighbours(grid, cur))
+      if (cost[nb] === Infinity) { cost[nb] = cost[cur] + 1; next.push(nb); }
+}
+// 2) flow field: each cell → a unit vector toward its lowest-cost neighbour
+//    (a creep reads ONE vector and steers — any number of creeps, O(1) each)</code></pre>
+            </details>
+        </div>
+
+        <!-- CROWD -->
+        <div id="crowd" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>👥 The open field — one field, a whole crowd</h2>
+            <p>
+                This is why flow fields exist. There's no lane and no per-creep pathfinding here — just one
+                field and a crowd of creeps, each reading the arrow under its feet. Crank the spawn rate to
+                hundreds and it stays smooth, because adding a creep costs a single array lookup per step.
+                <strong>Paint walls</strong> to split the stream into channels.
+            </p>
+            <div class="diagram"><canvas id="tdCrowdCanvas" class="td-canvas" width="760" height="360"></canvas></div>
+            <div class="controls">
+                <button id="tdCrowdClear">↺ Clear Walls</button>
+                <label class="td-slider">Spawn rate <input id="tdCrowdRate" type="range" min="2" max="40" value="14"> <span class="val" id="tdCrowdRateVal">14/s</span></label>
+            </div>
+            <details class="code-block">
+                <summary>📝 Show the code: open-field steering</summary>
+                <pre><code class="language-javascript">// no path — read the field at your cell and move along its vector
+function tdStepFlowCreep(c, field, grid, dt) {
+  const cell = grid.worldToCell(c.x, c.y);
+  const v = field.flow[cell.row * grid.cols + cell.col];   // precomputed
+  c.x += v.x * c.speed * dt;
+  c.y += v.y * c.speed * dt;
+}</code></pre>
+            </details>
+        </div>
+
+        <!-- MINI-PROJECT -->
+        <div id="mini-project" class="section">
+            <span class="level-indicator level-advanced">ADVANCED</span>
+            <h2>🏗️ Mini-Project: "Build Your Maze"</h2>
+            <p>
+                Now the route <em>is</em> the strategy. Open ground from <strong>S</strong> to
+                <strong>G</strong>, <strong>150 gold</strong>, <strong>12 lives</strong>. Each tower you place
+                is both a gun <em>and</em> a wall: place them to carve a long, winding corridor so creeps spend
+                as long as possible in your fire — but the connectivity guard won't let you seal the goal. Place,
+                then start the wave; creeps A*-re-route through whatever maze you've built.
+            </p>
+            <div class="diagram"><canvas id="tdMazeProjectCanvas" class="td-canvas" width="760" height="360"></canvas></div>
+            <div class="controls">
+                <button id="tdMazeStart">▶ Start Wave</button>
+                <button id="tdMazeReset">↺ Reset</button>
+            </div>
+            <div class="concept-box">
+                <h4>🧩 What you just composed</h4>
+                <ul>
+                    <li><strong>A*</strong> per creep, re-planned the moment a tower changes the map</li>
+                    <li>The <strong>connectivity guard</strong> (a hypothetical A*) keeping the goal reachable</li>
+                    <li>Towers that are <strong>both</strong> damage and geometry — placement shapes the route</li>
+                    <li>The whole Beginner/Intermediate combat loop riding on top (range, targeting, projectiles)</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="section" style="text-align:center;">
+            <h2>➡️ Next: Expert — Ten Thousand Creeps</h2>
+            <p style="color:#c9d1d9;">
+                The crowd demo already hinted at it: at scale, the bottleneck stops being <em>cleverness</em> and
+                becomes <em>throughput</em>. Next we make it fast — object pooling, Struct-of-Arrays creeps, and a
+                spatial hash so a tower doesn't test every creep — and promote A*/flow-field/LOS into
+                <code>engine/nav.js</code>. <em>(Landing soon.)</em>
+            </p>
+            <div class="nav" style="justify-content:center;">
+                <a href="index.html" class="nav-button">← Back to Track Index</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="scroll-to-top" id="scrollToTop">↑</div>
+
+    <!-- Dependencies, then the engine, then this tier's demos. Order matters. -->
+    <script src="../shared/utils.js"></script>
+    <script src="../shared/code-tabs.js"></script>
+    <script src="engine/loop.js"></script>
+    <script src="engine/render.js"></script>
+    <script src="engine/world.js"></script>
+    <script src="engine/entities.js"></script>
+    <script src="advanced-demos.js"></script>
+
+    <script>
+        const scrollToTopBtn = document.getElementById('scrollToTop');
+        scrollToTopBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+        window.addEventListener('scroll', () => { scrollToTopBtn.style.opacity = window.pageYOffset > 300 ? '1' : '0'; });
+        scrollToTopBtn.style.opacity = '0';
+        scrollToTopBtn.style.transition = 'opacity 0.3s';
+    </script>
+</body>
+</html>

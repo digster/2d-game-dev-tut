@@ -602,8 +602,8 @@ per-tier file structure mirroring the Fundamentals layout.
   spell-card JSON, hitstop/trauma-shake/particle juice, Cave-style bullet-cancel) and the grand
   capstone **"Danmaku"** — a deterministic, replayable two-phase boss rush composing every system.
 
-- `tower-defense/` — **Beginner + Intermediate tiers live (engine core + entities module + 13
-  demos); Advanced→Simulations land iteratively.** Build a Kingdom Rush / Bloons-style tower defense, from one lane and one
+- `tower-defense/` — **Beginner + Intermediate + Advanced tiers live (engine core + entities
+  module + 19 demos); Expert→Simulations land iteratively.** Build a Kingdom Rush / Bloons-style tower defense, from one lane and one
   tower up to a balanced, multi-wave game. This is the **applied home for the Fundamentals'
   flow fields and A*** (`advanced.html#flow-fields` / `#pathfinding`), which today are only
   isolated demos — a TD makes them *gameplay-critical*: a flow field routes a crowd, A*
@@ -656,7 +656,22 @@ per-tier file structure mirroring the Fundamentals layout.
   `tdLeadPoint` — ballistic shots that hit a moving creep only when leading), splash/AoE towers,
   frost towers (a timed slow + the slow→DPS synergy), draggable **Catmull-Rom spline lanes**, and
   the capstone **"Choke Point"** (a shop of kinds + targeting modes, a mixed wave of fast runners
-  and slow tanks on a curved lane). Demo IDs reserve the `td_` namespace;
+  and slow tanks on a curved lane). **The Advanced tier ("Mazing, Flow Fields & Sight", 6 demos)**
+  is the flagship — the creeps get a brain, and the Fundamentals' A* and flow-field demos become
+  gameplay. The navigation algorithms are taught **inline + top-level** (console-testable) in
+  `advanced-demos.js`, slated to promote to `engine/nav.js` when the Expert scale tier reuses them:
+  `tdAStar` (4-connected A*, Manhattan heuristic), `tdBlocksPath` (the connectivity guard — a
+  hypothetical A* that refuses any tower placement which would seal the goal), `tdFlowField` (one
+  BFS sweep from the goal → an integration field + per-cell downhill vectors), and `tdLineOfSight`
+  (a raycast that marches the segment and fails at the first wall). Demos: A* with drag-to-paint
+  walls (path re-routes, returns null when sealed); a maze-TD where towers re-route creeps with the
+  connectivity guard; line-of-sight towers that can't fire through a wall; a flow-field visualiser
+  (cost heatmap + arrows that re-flow around painted walls); an open-field **crowd** of hundreds
+  steering by one shared field (the Bloons style, O(1) per creep); and the capstone **"Build Your
+  Maze"** (towers are both gun and wall — place to carve a long corridor, creeps A*-re-plan, with
+  economy + lives). Maze creeps reuse `TDEnemy` over an A*-derived `TDPath` (re-planned from the
+  creep's exact position on each map change); flow creeps are a separate inline open-field model.
+  Demo IDs reserve the `td_` namespace;
   demos are pointer/keyboard-driven so they omit `data-demo-id` (opt out of the Export button).
 
 ## Shared assets
