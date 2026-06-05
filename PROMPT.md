@@ -1498,3 +1498,19 @@ Build passes (each verified in-browser, console clean, with a commit message at 
   tdGenerateWave curve + economy/upgrade/synergy/DPS-dashboard/threat-heatmap; grand capstone "The
   Last Stand" — seeded 12-wave maze-TD). memory 2026-06-04 pass 6.
 🎉 TRACK COMPLETE — 5 tiers, 31 demos (6/7/6/6/6), 5 engine modules (loop/render/world/entities/nav).
+
+# 2026-06-05 — Fix unlinked "next tier" navigation (Bullet Hell & Tower Defense)
+
+"In the Physics Puzzle, Bullet Hell and Tower Defense tracks, the next tiers mentioned at the
+bottom are not linked." Audit showed physics-puzzle was already fully linked (recap + top nav),
+so the user scoped it out: fix only Bullet Hell and Tower Defense, and also add the missing
+top-nav forward button. User additionally said to skip a bottom-nav addition for Bullet Hell
+(its inline recap link already covers the bottom).
+
+Done (8 tier pages, B→I→A→E, simulations excluded as terminal):
+- Top nav: added a forward `<a class="nav-button"><NextTier> →</a>` after the active-tier button
+  on every non-terminal page of both tracks (mirrors the physics-puzzle pattern).
+- Bottom nav: tower-defense only — added `Next: <NextTier> →` to the existing centered bottom
+  `.nav` (was "← Back to Track Index" only); its plain `<h2>Next:…</h2>` is now backed by a button.
+- Bullet Hell bottom left as-is (existing inline recap link). physics-puzzle and all simulations
+  pages untouched. Verified in-browser: console clean, click chains B→I, links resolve. memory 2026-06-05.
